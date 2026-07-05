@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイムチャットアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- ヘッダー -->
+        <div class="chat-header">
+            <h1>💬 チャットルーム</h1>
+            <div class="user-info">
+                <span id="current-username">ゲスト</span>
+                <span id="online-count">0人</span>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div class="chat-content">
+            <!-- ユーザー情報パネル -->
+            <div class="setup-panel" id="setup-panel">
+                <h2>ニックネームを入力してください</h2>
+                <input 
+                    type="text" 
+                    id="username-input" 
+                    placeholder="ニックネームを入力..." 
+                    maxlength="20"
+                >
+                <button id="join-btn" onclick="joinChat()">チャットに参加</button>
+            </div>
+
+            <!-- チャットエリア（非表示） -->
+            <div class="chat-main" id="chat-main" style="display: none;">
+                <!-- オンラインユーザーリスト -->
+                <div class="users-panel">
+                    <h3>オンラインユーザー</h3>
+                    <ul id="users-list"></ul>
+                </div>
+
+                <!-- メッセージエリア -->
+                <div class="messages-container">
+                    <div id="messages" class="messages"></div>
+                </div>
+
+                <!-- メッセージ入力エリア -->
+                <div class="input-area">
+                    <input 
+                        type="text" 
+                        id="message-input" 
+                        placeholder="メッセージを入力..." 
+                        onkeypress="handleKeyPress(event)"
+                    >
+                    <button id="send-btn" onclick="sendMessage()">送信</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.IOライブラリの読込 -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- クライアント側のJavaScript -->
+    <script src="client.js"></script>
+</body>
+</html>
