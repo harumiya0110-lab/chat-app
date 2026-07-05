@@ -13,6 +13,13 @@ const usersList = document.getElementById('users-list');
 const currentUsernameDisplay = document.getElementById('current-username');
 const onlineCountDisplay = document.getElementById('online-count');
 
+let autoScrollEnabled = true;
+
+messagesContainer.addEventListener('scroll', () => {
+    const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 80;
+    autoScrollEnabled = isNearBottom;
+});
+
 // チャットに参加する処理
 function joinChat() {
     const username = usernameInput.value.trim();
@@ -144,7 +151,11 @@ function updateUsersList(users) {
 }
 
 // メッセージコンテナを最下部にスクロール
-function scrollToBottom() {
+function scrollToBottom(force = false) {
+    if (!autoScrollEnabled && !force) {
+        return;
+    }
+
     setTimeout(() => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 0);
@@ -153,6 +164,7 @@ function scrollToBottom() {
 // ページロード時に入力フィールドをフォーカス
 window.addEventListener('load', () => {
     usernameInput.focus();
+    scrollToBottom(true);
 });
 
 // Enterキーでニックネーム入力も可能
