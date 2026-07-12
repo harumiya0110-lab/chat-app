@@ -48,6 +48,15 @@ messagesContainer.addEventListener('scroll', () => {
     autoScrollEnabled = isNearBottom;
 });
 
+function updateViewMode() {
+    const desktop = window.matchMedia('(min-width: 901px)').matches;
+    document.body.classList.toggle('desktop-mode', desktop);
+    document.body.classList.toggle('mobile-mode', !desktop);
+}
+
+window.addEventListener('resize', updateViewMode);
+window.addEventListener('load', updateViewMode);
+
 // チャットに参加する処理
 function joinChat() {
     const username = usernameInput.value.trim();
@@ -354,7 +363,15 @@ async function startCall(targetId, targetName, isVideo = true, providedCallId = 
     socket.emit('call-offer', { targetId, offer, callId });
 }
 
+function isDesktopView() {
+    return window.matchMedia('(min-width: 901px)').matches;
+}
+
 function scrollToBottom(force = false) {
+    if (isDesktopView() && !force) {
+        return;
+    }
+
     if (!autoScrollEnabled && !force) {
         return;
     }
