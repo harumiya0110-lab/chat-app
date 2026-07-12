@@ -168,7 +168,7 @@ io.on('connection', (socket) => {
 
   // 参加リクエスト: requester が既存の callId に参加希望を出す
   socket.on('request-join', (payload) => {
-    const { callId, requesterId, autoApprove } = payload || {};
+    const { callId, requesterId } = payload || {};
     if (!callId || !calls[callId]) {
       socket.emit('join-denied', { reason: '通話が存在しません' });
       return;
@@ -187,7 +187,7 @@ io.on('connection', (socket) => {
     callsPending[callId][requesterId] = { expected: expected.slice(), responses: {} };
     const requester = users[requesterId];
     expected.forEach(id => {
-      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明', autoApprove });
+      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明' });
     });
     // optional: set timeout to auto-deny
   });

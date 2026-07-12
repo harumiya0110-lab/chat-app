@@ -265,9 +265,7 @@ function updateUsersList(users) {
                 joinBtn.textContent = '参加';
                 joinBtn.style.marginLeft = '8px';
                 joinBtn.onclick = () => {
-                    // 自動承認設定を送信
-                    const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
-                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id, autoApprove });
+                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id });
                     alert('参加リクエストを送信しました。既存参加者の承認を待ってください。');
                 };
                 li.appendChild(joinBtn);
@@ -381,6 +379,24 @@ function endCall() {
 // シグナリング受信ハンドラ
 socket.on('incoming-call', async (data) => {
     const { from, username, offer, callId } = data || {};
+    // すでに同じ通話に参加している場合は自動応答
+    if (callId && currentCallId === callId && localStream && !peerConnection) {
+        try {
+            peerConnection = createPeerConnection(from);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            if (localVideo) localVideo.srcObject = localStream;
+            currentCallTarget = from;
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('call-answer', { targetId: from, answer, callId });
+            showCallUI('通話中');
+        } catch (err) {
+            console.error('自動応答に失敗しました', err);
+        }
+        return;
+    }
+
     // 着信UIを表示して応答を待つ
     showIncomingCallUI(username, from, offer, callId);
     // set currentCallId if not set
@@ -410,7 +426,8 @@ socket.on('call-ended', (data) => {
 
 // 他参加者からの参加リクエスト受信（既存参加者に届く）
 socket.on('join-request', (data) => {
-    const { callId, requesterId, requesterName, autoApprove } = data || {};
+    const { callId, requesterId, requesterName } = data || {};
+    const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
     if (autoApprove) {
         socket.emit('join-response', { callId, requesterId, accepted: true });
         return;

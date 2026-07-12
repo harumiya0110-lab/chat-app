@@ -10,30 +10,36 @@
     <div class="chat-container">
         <!-- ヘッダー -->
         <div class="chat-header">
-            <h1>💬 チャットルーム</h1>
+            <div class="header-title">
+                <h1>💬 チャットルーム</h1>
+                <p>リアルタイムでつながるビデオチャット</p>
+            </div>
             <div class="user-info">
                 <span id="current-username">ゲスト</span>
                 <span id="online-count">0人</span>
-                    <label class="auto-approve-label"><input type="checkbox" id="auto-approve-checkbox"> 自動承認</label>
-            <!-- ユーザー情報パネル -->
-            <div class="setup-panel" id="setup-panel">
-                <h2>ニックネームを入力してください</h2>
-                <input 
-                    type="text" 
-                    id="username-input" 
-                    placeholder="ニックネームを入力..." 
-                    maxlength="20"
-                >
-                <button id="join-btn" onclick="joinChat()">チャットに参加</button>
+                <label class="auto-approve-label"><input type="checkbox" id="auto-approve-checkbox"> 自動承認</label>
             </div>
+        </div>
 
-            <!-- チャットエリア（非表示） -->
-            <div class="chat-main" id="chat-main" style="display: none;">
-                <!-- オンラインユーザーリスト -->
-                <div class="users-panel">
-                    <h3>オンラインユーザー</h3>
-                    <ul id="users-list"></ul>
-                </div>
+        <!-- ユーザー情報パネル -->
+        <div class="setup-panel" id="setup-panel">
+            <h2>ニックネームを入力してください</h2>
+            <input 
+                type="text" 
+                id="username-input" 
+                placeholder="ニックネームを入力..." 
+                maxlength="20"
+            >
+            <button id="join-btn" onclick="joinChat()">チャットに参加</button>
+        </div>
+
+        <!-- チャットエリア（非表示） -->
+        <div class="chat-main" id="chat-main" style="display: none;">
+            <!-- オンラインユーザーリスト -->
+            <div class="users-panel">
+                <h3>オンラインユーザー</h3>
+                <ul id="users-list"></ul>
+            </div>
 
                 <!-- メッセージエリア -->
                 <div class="messages-container">
