@@ -81,6 +81,39 @@ io.on('connection', (socket) => {
     }
   });
 
+  // WebRTC シグナリング: 発信側からのオファーを相手に転送
+  socket.on('call-offer', (payload) => {
+    const { targetId, offer } = payload || {};
+    const caller = users[socket.id];
+    if (targetId && offer && caller) {
+      io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
+    }
+  });
+
+  // 相手からのアンサーを発信者に転送
+  socket.on('call-answer', (payload) => {
+    const { targetId, answer } = payload || {};
+    if (targetId && answer) {
+      io.to(targetId).emit('call-answered', { from: socket.id, answer });
+    }
+  });
+
+  // ICE candidate を相手に転送
+  socket.on('ice-candidate', (payload) => {
+    const { targetId, candidate } = payload || {};
+    if (targetId && candidate) {
+      io.to(targetId).emit('ice-candidate', { from: socket.id, candidate });
+    }
+  });
+
+  // 通話終了通知
+  socket.on('end-call', (payload) => {
+    const { targetId } = payload || {};
+    if (targetId) {
+      io.to(targetId).emit('call-ended', { from: socket.id });
+    }
+  });
+
   // ユーザーが切断したとき
   socket.on('disconnect', () => {
     const user = users[socket.id];

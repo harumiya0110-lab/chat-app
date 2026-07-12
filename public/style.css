@@ -316,6 +316,25 @@ body {
     background: white;
 }
 
+#image-btn {
+    width: 48px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.users-panel button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
 /* スクロールバーのスタイル */
 ::-webkit-scrollbar {
     width: 6px;
