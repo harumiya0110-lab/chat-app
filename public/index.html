@@ -17,7 +17,6 @@
             <div class="user-info">
                 <span id="current-username">ゲスト</span>
                 <span id="online-count">0人</span>
-                <label class="auto-approve-label"><input type="checkbox" id="auto-approve-checkbox"> 自動承認</label>
             </div>
         </div>
 
@@ -41,25 +40,24 @@
                 <ul id="users-list"></ul>
             </div>
 
-                <!-- メッセージエリア -->
-                <div class="messages-container">
-                    <div id="messages" class="messages"></div>
-                </div>
+            <!-- メッセージエリア -->
+            <div class="messages-container">
+                <div id="messages" class="messages"></div>
+            </div>
 
-                <!-- メッセージ入力エリア -->
-                <div class="input-area">
-                    <button id="image-btn" aria-label="画像を選択">📷</button>
-                    <input type="file" id="image-input" accept="image/*" style="display:none;" />
-                    <button id="video-btn" aria-label="動画を選択">🎞️</button>
-                    <input type="file" id="video-input" accept="video/*" style="display:none;" />
-                    <input 
-                        type="text" 
-                        id="message-input" 
-                        placeholder="メッセージを入力..." 
-                        onkeypress="handleKeyPress(event)"
-                    >
-                    <button id="send-btn" onclick="sendMessage()">送信</button>
-                </div>
+            <!-- メッセージ入力エリア -->
+            <div class="input-area">
+                <button id="image-btn" aria-label="画像を選択">📷</button>
+                <input type="file" id="image-input" accept="image/*" style="display:none;" />
+                <button id="video-btn" aria-label="動画を選択">🎞️</button>
+                <input type="file" id="video-input" accept="video/*" style="display:none;" />
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    placeholder="メッセージを入力..." 
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button id="send-btn" onclick="sendMessage()">送信</button>
             </div>
         </div>
     </div>

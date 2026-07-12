@@ -19,9 +19,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 const users = {};
 // 通話管理: callId -> {participants: Set}
 const calls = {};
-// 保留中の参加リクエスト: callsPending[callId][requesterId] = { expected: [...], responses: { socketId: bool }}
-const callsPending = {};
-
 function emitUserList() {
   // Build user list with inCall and callId info
   const list = Object.values(users).map(u => ({ ...u, inCall: false, callId: null }));
@@ -166,7 +163,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 参加リクエスト: requester が既存の callId に参加希望を出す
+  // 参加リクエスト: requester が既存の callId に通話に参加する
   socket.on('request-join', (payload) => {
     const { callId, requesterId } = payload || {};
     if (!callId || !calls[callId]) {
@@ -174,49 +171,13 @@ io.on('connection', (socket) => {
       return;
     }
     const participants = Array.from(calls[callId].participants);
-    const expected = participants.filter(id => id !== requesterId);
-    if (expected.length === 0) {
-      // no participants to approve -> approve by default
+    if (!participants.includes(requesterId)) {
       calls[callId].participants.add(requesterId);
       emitUserList();
-      socket.emit('join-approved', { callId, initiator: participants[0] || null });
-      return;
     }
-    // create pending
-    if (!callsPending[callId]) callsPending[callId] = {};
-    callsPending[callId][requesterId] = { expected: expected.slice(), responses: {} };
-    const requester = users[requesterId];
-    expected.forEach(id => {
-      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明' });
-    });
-    // optional: set timeout to auto-deny
-  });
-
-  // 参加応答ハンドラ
-  socket.on('join-response', (payload) => {
-    const { callId, requesterId, accepted } = payload || {};
-    if (!callId || !callsPending[callId] || !callsPending[callId][requesterId]) return;
-    const pending = callsPending[callId][requesterId];
-    pending.responses[socket.id] = !!accepted;
-
-    const responseCount = Object.keys(pending.responses).length;
-    const yesCount = Object.values(pending.responses).filter(v => v).length;
-    const noCount = responseCount - yesCount;
-    const total = pending.expected.length;
-
-    // すべての参加者が答えたら多数決
-    if (responseCount >= total) {
-      if (yesCount > noCount) {
-        calls[callId].participants.add(requesterId);
-        const reqSock = io.sockets.sockets.get(requesterId);
-        if (reqSock) reqSock.emit('join-approved', { callId, initiator: Array.from(calls[callId].participants)[0] });
-        emitUserList();
-      } else {
-        const reqSock = io.sockets.sockets.get(requesterId);
-        if (reqSock) reqSock.emit('join-denied', { callId, by: socket.id });
-      }
-      delete callsPending[callId][requesterId];
-    }
+    const initiator = participants[0] || socket.id;
+    const reqSock = io.sockets.sockets.get(requesterId);
+    if (reqSock) reqSock.emit('join-approved', { callId, initiator });
   });
 
   // ユーザーが切断したとき
