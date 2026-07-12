@@ -41,6 +41,7 @@ let peerConnection = null;
 let currentCallTarget = null;
 let isMuted = false;
 let isVideoOn = true;
+let currentCallId = null;
 
 messagesContainer.addEventListener('scroll', () => {
     const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 80;
@@ -257,11 +258,24 @@ function updateUsersList(users) {
             you.style.marginLeft = '6px';
             li.appendChild(you);
         } else {
-            const callBtn = document.createElement('button');
-            callBtn.textContent = '通話';
-            callBtn.style.marginLeft = '8px';
-            callBtn.onclick = () => { startCall(user.id, user.username, true); };
-            li.appendChild(callBtn);
+            // 通話参加中フラグがある場合は「参加」ボタンを表示
+            if (user.inCall) {
+                const joinBtn = document.createElement('button');
+                joinBtn.textContent = '参加';
+                joinBtn.style.marginLeft = '8px';
+                joinBtn.onclick = () => {
+                    // リクエスト送信
+                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id });
+                    alert('参加リクエストを送信しました。既存参加者の承認を待ってください。');
+                };
+                li.appendChild(joinBtn);
+            } else {
+                const callBtn = document.createElement('button');
+                callBtn.textContent = '通話';
+                callBtn.style.marginLeft = '8px';
+                callBtn.onclick = () => { startCall(user.id, user.username, true); };
+                li.appendChild(callBtn);
+            }
         }
         usersList.appendChild(li);
     });
@@ -296,7 +310,7 @@ function resizeImageFile(file, maxWidth = 1024, quality = 0.8) {
 }
 
 // 通話開始（発信）
-async function startCall(targetId, targetName) {
+async function startCall(targetId, targetName, isVideo = true, providedCallId = null) {
     if (currentCallTarget) {
         alert('既に通話中です。');
         return;
@@ -312,6 +326,9 @@ async function startCall(targetId, targetName) {
     // UI を表示
     showCallUI('発信中...');
 
+    // callId: 新規通話は自分のsocket.id を callId として使う（参加の場合は providedCallId を使う）
+    const callId = providedCallId || socket.id;
+    currentCallId = callId;
     peerConnection = createPeerConnection(targetId);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     // ローカルプレビュー
@@ -320,7 +337,7 @@ async function startCall(targetId, targetName) {
 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    socket.emit('call-offer', { targetId, offer });
+    socket.emit('call-offer', { targetId, offer, callId });
 }
 
 function createPeerConnection(targetId) {
@@ -361,9 +378,11 @@ function endCall() {
 
 // シグナリング受信ハンドラ
 socket.on('incoming-call', async (data) => {
-    const { from, username, offer } = data || {};
+    const { from, username, offer, callId } = data || {};
     // 着信UIを表示して応答を待つ
-    showIncomingCallUI(username, from, offer);
+    showIncomingCallUI(username, from, offer, callId);
+    // set currentCallId if not set
+    if (!currentCallId && callId) currentCallId = callId;
     // 着信バナーと着信音を開始
     startRingtone();
     showIncomingBanner(username);
@@ -385,6 +404,25 @@ socket.on('ice-candidate', async (data) => {
 
 socket.on('call-ended', (data) => {
     endCall();
+});
+
+// 他参加者からの参加リクエスト受信（既存参加者に届く）
+socket.on('join-request', (data) => {
+    const { callId, requesterId, requesterName } = data || {};
+    const allow = confirm(`${requesterName} さんが通話に参加したいです。許可しますか？`);
+    socket.emit('join-response', { callId, requesterId, accepted: !!allow });
+});
+
+// 参加が承認された（リクエスターに届く）
+socket.on('join-approved', (data) => {
+    const { callId, initiator } = data || {};
+    alert('通話参加が承認されました。通話に接続します。');
+    // 発信者（initiator）に対して接続を開始する
+    if (initiator) startCall(initiator, '参加先', true, callId);
+});
+
+socket.on('join-denied', (data) => {
+    alert('通話参加が拒否されました');
 });
 
 // 通話UI制御
@@ -441,7 +479,9 @@ function showIncomingCallUI(username, from, offer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        socket.emit('call-answer', { targetId: from, answer });
+        // include callId if provided by the offer wrapper
+        const callIdFromOffer = offer && offer.callId ? offer.callId : null;
+        socket.emit('call-answer', { targetId: from, answer, callId: callIdFromOffer || currentCallId });
         showCallUI('通話中');
         stopRingtone();
         hideIncomingBanner();
@@ -490,7 +530,7 @@ if (miniUnminimize) {
 
 if (miniEnd) {
     miniEnd.addEventListener('click', () => {
-        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget, callId: currentCallId });
         endCall();
     });
 }
@@ -609,7 +649,7 @@ if (camToggleBtn) {
 
 if (callEndBtn) {
     callEndBtn.addEventListener('click', () => {
-        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget, callId: currentCallId });
         endCall();
     });
 }

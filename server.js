@@ -17,6 +17,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ユーザー情報を保存
 const users = {};
+// 通話管理: callId -> {participants: Set}
+const calls = {};
+// 保留中の参加リクエスト: callsPending[callId][requesterId] = { expected: [...], responses: { socketId: bool }}
+const callsPending = {};
+
+function emitUserList() {
+  // Build user list with inCall and callId info
+  const list = Object.values(users).map(u => ({ ...u, inCall: false, callId: null }));
+  // mark users in calls
+  for (const [callId, info] of Object.entries(calls)) {
+    info.participants.forEach(id => {
+      const user = list.find(x => x.id === id);
+      if (user) { user.inCall = true; user.callId = callId; }
+    });
+  }
+  io.emit('update-users', list);
+}
 
 // WebSocket接続時の処理
 io.on('connection', (socket) => {
@@ -47,7 +64,7 @@ io.on('connection', (socket) => {
     });
 
     // オンラインユーザーリストを更新
-    io.emit('update-users', Object.values(users));
+    emitUserList();
   });
 
   // 画像メッセージの受信
@@ -98,19 +115,27 @@ io.on('connection', (socket) => {
 
   // WebRTC シグナリング: 発信側からのオファーを相手に転送
   socket.on('call-offer', (payload) => {
-    const { targetId, offer } = payload || {};
+    const { targetId, offer, callId } = payload || {};
     const caller = users[socket.id];
-    if (targetId && offer && caller) {
-      io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
-    }
+    if (!caller || !targetId || !offer) return;
+    const id = callId || socket.id;
+    // create call record if not exists
+    if (!calls[id]) calls[id] = { participants: new Set([socket.id]) };
+    // forward offer with callId
+    io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer, callId: id, initiator: socket.id });
   });
 
   // 相手からのアンサーを発信者に転送
   socket.on('call-answer', (payload) => {
-    const { targetId, answer } = payload || {};
-    if (targetId && answer) {
-      io.to(targetId).emit('call-answered', { from: socket.id, answer });
+    const { targetId, answer, callId } = payload || {};
+    if (!targetId || !answer) return;
+    // add responder to call participants if callId provided
+    if (callId && calls[callId]) {
+      calls[callId].participants.add(socket.id);
+      calls[callId].participants.add(targetId);
+      emitUserList();
     }
+    io.to(targetId).emit('call-answered', { from: socket.id, answer, callId });
   });
 
   // ICE candidate を相手に転送
@@ -123,9 +148,72 @@ io.on('connection', (socket) => {
 
   // 通話終了通知
   socket.on('end-call', (payload) => {
-    const { targetId } = payload || {};
+    const { targetId, callId } = payload || {};
+    if (callId && calls[callId]) {
+      // remove sender from participants
+      calls[callId].participants.delete(socket.id);
+      // notify remaining participants
+      calls[callId].participants.forEach(id => {
+        io.to(id).emit('call-ended', { from: socket.id, callId });
+      });
+      // if no participants left remove call
+      if (calls[callId].participants.size === 0) delete calls[callId];
+      emitUserList();
+      return;
+    }
     if (targetId) {
       io.to(targetId).emit('call-ended', { from: socket.id });
+    }
+  });
+
+  // 参加リクエスト: requester が既存の callId に参加希望を出す
+  socket.on('request-join', (payload) => {
+    const { callId, requesterId } = payload || {};
+    if (!callId || !calls[callId]) {
+      socket.emit('join-denied', { reason: '通話が存在しません' });
+      return;
+    }
+    const participants = Array.from(calls[callId].participants);
+    const expected = participants.filter(id => id !== requesterId);
+    if (expected.length === 0) {
+      // no participants to approve -> approve by default
+      calls[callId].participants.add(requesterId);
+      emitUserList();
+      socket.emit('join-approved', { callId, initiator: participants[0] || null });
+      return;
+    }
+    // create pending
+    if (!callsPending[callId]) callsPending[callId] = {};
+    callsPending[callId][requesterId] = { expected: expected.slice(), responses: {} };
+    const requester = users[requesterId];
+    expected.forEach(id => {
+      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明' });
+    });
+    // optional: set timeout to auto-deny
+  });
+
+  // 参加応答ハンドラ
+  socket.on('join-response', (payload) => {
+    const { callId, requesterId, accepted } = payload || {};
+    if (!callId || !callsPending[callId] || !callsPending[callId][requesterId]) return;
+    const pending = callsPending[callId][requesterId];
+    pending.responses[socket.id] = !!accepted;
+    // if any deny -> notify requester denied and cleanup
+    if (!accepted) {
+      const reqSock = io.sockets.sockets.get(requesterId);
+      if (reqSock) reqSock.emit('join-denied', { callId, by: socket.id });
+      delete callsPending[callId][requesterId];
+      return;
+    }
+    // check if all responded and all true
+    const allAnswered = pending.expected.every(id => pending.responses[id] === true);
+    if (allAnswered) {
+      // approve
+      calls[callId].participants.add(requesterId);
+      const reqSock = io.sockets.sockets.get(requesterId);
+      if (reqSock) reqSock.emit('join-approved', { callId, initiator: Array.from(calls[callId].participants)[0] });
+      delete callsPending[callId][requesterId];
+      emitUserList();
     }
   });
 
@@ -141,7 +229,12 @@ io.on('connection', (socket) => {
       });
 
       delete users[socket.id];
-      io.emit('update-users', Object.values(users));
+      // remove from any calls
+      for (const [callId, info] of Object.entries(calls)) {
+        info.participants.delete(socket.id);
+        if (info.participants.size === 0) delete calls[callId];
+      }
+      emitUserList();
     }
   });
 });
