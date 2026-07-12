@@ -524,6 +524,72 @@ textarea {
     border-radius: 999px;
 }
 
+@media (max-width: 900px) {
+    body {
+        padding: 12px;
+    }
+
+    .chat-container {
+        max-width: 100%;
+        min-height: calc(100vh - 24px);
+        border-radius: 20px;
+    }
+
+    .chat-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 18px 20px;
+    }
+
+    .header-title h1 {
+        font-size: 24px;
+    }
+
+    .header-title p {
+        font-size: 13px;
+    }
+
+    .chat-main {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "sidebar"
+            "messages";
+    }
+
+    .users-panel {
+        grid-area: sidebar;
+        border-right: none;
+        border-bottom: 1px solid #e5e9f2;
+        padding: 18px 16px;
+        max-height: 240px;
+    }
+
+    .users-panel ul {
+        gap: 8px;
+    }
+
+    .messages-container {
+        inset: 0 0 calc(20px + 96px) 0;
+    }
+
+    .input-area {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: calc(100% - 24px);
+    }
+
+    #message-input {
+        min-width: 0;
+    }
+
+    #send-btn {
+        min-width: 80px;
+        padding: 0 20px;
+    }
+}
+
 ::-webkit-scrollbar-thumb:hover {
     background: #8e96c2;
 }
