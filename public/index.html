@@ -10,56 +10,55 @@
     <div class="chat-container">
         <!-- ヘッダー -->
         <div class="chat-header">
-            <div class="header-title">
-                <h1>💬 チャットルーム</h1>
-                <p>リアルタイムでつながるビデオチャット</p>
-            </div>
+            <h1>💬 チャットルーム</h1>
             <div class="user-info">
                 <span id="current-username">ゲスト</span>
                 <span id="online-count">0人</span>
             </div>
         </div>
 
-        <!-- ユーザー情報パネル -->
-        <div class="setup-panel" id="setup-panel">
-            <h2>ニックネームを入力してください</h2>
-            <p class="setup-copy">あなたの名前でチャットルームに参加し、すぐにメッセージや通話を始めましょう。</p>
-            <input 
-                type="text" 
-                id="username-input" 
-                placeholder="ニックネームを入力..." 
-                maxlength="20"
-            >
-            <button id="join-btn" onclick="joinChat()">チャットに参加</button>
-        </div>
-
-        <!-- チャットエリア（非表示） -->
-        <div class="chat-main" id="chat-main" style="display: none;">
-            <!-- オンラインユーザーリスト -->
-            <div class="users-panel">
-                <h3>オンラインユーザー</h3>
-                <ul id="users-list"></ul>
+        <!-- メインコンテンツ -->
+        <div class="chat-content">
+            <!-- ユーザー情報パネル -->
+            <div class="setup-panel" id="setup-panel">
+                <h2>ニックネームを入力してください</h2>
+                <input 
+                    type="text" 
+                    id="username-input" 
+                    placeholder="ニックネームを入力..." 
+                    maxlength="20"
+                >
+                <button id="join-btn" onclick="joinChat()">チャットに参加</button>
             </div>
 
-            <div class="chat-column">
-                <!-- メッセージエリア -->
-                <div class="messages-container">
-                    <div id="messages" class="messages"></div>
+            <!-- チャットエリア（非表示） -->
+            <div class="chat-main" id="chat-main" style="display: none;">
+                <!-- オンラインユーザーリスト -->
+                <div class="users-panel">
+                    <h3>オンラインユーザー</h3>
+                    <ul id="users-list"></ul>
                 </div>
 
-                <!-- メッセージ入力エリア -->
-                <div class="input-area">
-                    <button id="image-btn" aria-label="画像を選択">📷</button>
-                    <input type="file" id="image-input" accept="image/*" style="display:none;" />
-                    <button id="video-btn" aria-label="動画を選択">🎞️</button>
-                    <input type="file" id="video-input" accept="video/*" style="display:none;" />
-                    <input 
-                        type="text" 
-                        id="message-input" 
-                        placeholder="メッセージを入力..." 
-                        onkeypress="handleKeyPress(event)"
-                    >
-                    <button id="send-btn" onclick="sendMessage()">送信</button>
+                <div class="chat-right">
+                    <!-- メッセージエリア -->
+                    <div class="messages-container">
+                        <div id="messages" class="messages"></div>
+                    </div>
+
+                    <!-- メッセージ入力エリア -->
+                    <div class="input-area">
+                        <button id="image-btn" aria-label="画像を選択">📷</button>
+                        <input type="file" id="image-input" accept="image/*" style="display:none;" />
+                        <button id="video-btn" aria-label="動画を選択">🎞️</button>
+                        <input type="file" id="video-input" accept="video/*" style="display:none;" />
+                        <input 
+                            type="text" 
+                            id="message-input" 
+                            placeholder="メッセージを入力..." 
+                            onkeypress="handleKeyPress(event)"
+                        >
+                        <button id="send-btn" onclick="sendMessage()">送信</button>
+                    </div>
                 </div>
             </div>
         </div>

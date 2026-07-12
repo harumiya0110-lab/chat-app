@@ -126,8 +126,15 @@ body {
     flex: 1;
     display: grid;
     grid-template-columns: 200px minmax(0, 1fr);
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr;
     gap: 0;
+    min-height: 0;
+}
+
+.chat-right {
+    display: flex;
+    flex-direction: column;
+    position: relative;
     min-height: 0;
 }
 
@@ -165,8 +172,7 @@ body {
 
 /* メッセージコンテナ */
 .messages-container {
-    grid-column: 2;
-    grid-row: 1;
+    flex: 1;
     position: relative;
     background: white;
     min-height: 0;
@@ -259,8 +265,6 @@ body {
 
 /* 入力エリア */
 .input-area {
-    grid-column: 2;
-    grid-row: 2;
     display: flex;
     gap: 10px;
     padding: 15px;
@@ -268,7 +272,8 @@ body {
     background: #f9f9f9;
     position: sticky;
     bottom: 0;
-    z-index: 1;
+    z-index: 3;
+    width: 100%;
 }
 
 #message-input {
