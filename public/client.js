@@ -28,6 +28,12 @@ const miniLocal = document.getElementById('mini-local');
 const miniRemote = document.getElementById('mini-remote');
 const miniUnminimize = document.getElementById('mini-unminimize');
 const miniEnd = document.getElementById('mini-end');
+const videoBtn = document.getElementById('video-btn');
+const videoInput = document.getElementById('video-input');
+const incomingBanner = document.createElement('div');
+incomingBanner.id = 'incoming-banner';
+incomingBanner.style.display = 'none';
+document.body.appendChild(incomingBanner);
 
 let autoScrollEnabled = true;
 let localStream = null;
@@ -113,6 +119,10 @@ socket.on('receive-image', (data) => {
     displayImage(data);
 });
 
+socket.on('receive-video', (data) => {
+    displayVideo(data);
+});
+
 // ユーザーが参加したときの通知
 socket.on('user-joined', (data) => {
     displaySystemMessage(data.message, 'joined');
@@ -188,6 +198,35 @@ function displayImage(data) {
     messageElement.appendChild(messageHeader);
     messageElement.appendChild(messageBubble);
 
+    messagesContainer.appendChild(messageElement);
+    scrollToBottom();
+}
+
+// 動画メッセージを表示
+function displayVideo(data) {
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message';
+    if (data.username === currentUsername) messageElement.classList.add('own');
+
+    const messageHeader = document.createElement('div');
+    messageHeader.className = 'message-header';
+    messageHeader.innerHTML = `
+        <span>${data.username}</span>
+        <span>${data.timestamp}</span>
+    `;
+
+    const messageBubble = document.createElement('div');
+    messageBubble.className = 'message-bubble';
+
+    const vid = document.createElement('video');
+    vid.controls = true;
+    vid.src = data.video;
+    vid.style.maxWidth = '60%';
+    vid.style.borderRadius = '8px';
+
+    messageBubble.appendChild(vid);
+    messageElement.appendChild(messageHeader);
+    messageElement.appendChild(messageBubble);
     messagesContainer.appendChild(messageElement);
     scrollToBottom();
 }
@@ -325,6 +364,9 @@ socket.on('incoming-call', async (data) => {
     const { from, username, offer } = data || {};
     // 着信UIを表示して応答を待つ
     showIncomingCallUI(username, from, offer);
+    // 着信バナーと着信音を開始
+    startRingtone();
+    showIncomingBanner(username);
 });
 
 socket.on('call-answered', async (data) => {
@@ -401,6 +443,8 @@ function showIncomingCallUI(username, from, offer) {
         await peerConnection.setLocalDescription(answer);
         socket.emit('call-answer', { targetId: from, answer });
         showCallUI('通話中');
+        stopRingtone();
+        hideIncomingBanner();
     };
 
     const declineHandler = () => {
@@ -408,6 +452,8 @@ function showIncomingCallUI(username, from, offer) {
         callDeclineBtn.removeEventListener('click', declineHandler);
         socket.emit('end-call', { targetId: from });
         hideCallUI();
+        stopRingtone();
+        hideIncomingBanner();
     };
 
     callAcceptBtn.addEventListener('click', acceptHandler);
@@ -446,6 +492,99 @@ if (miniEnd) {
     miniEnd.addEventListener('click', () => {
         if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
         endCall();
+    });
+}
+
+// 着信バナー表示
+function showIncomingBanner(username) {
+    if (!incomingBanner) return;
+    incomingBanner.textContent = `${username} さんから着信中...`; 
+    incomingBanner.style.position = 'fixed';
+    incomingBanner.style.top = '0';
+    incomingBanner.style.left = '50%';
+    incomingBanner.style.transform = 'translateX(-50%)';
+    incomingBanner.style.background = '#fffae6';
+    incomingBanner.style.color = '#333';
+    incomingBanner.style.padding = '8px 16px';
+    incomingBanner.style.borderRadius = '0 0 8px 8px';
+    incomingBanner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+    incomingBanner.style.zIndex = '10000';
+    incomingBanner.style.display = 'block';
+}
+
+function hideIncomingBanner() {
+    if (!incomingBanner) return;
+    incomingBanner.style.display = 'none';
+}
+
+// 着信音（WebAudioでループ）
+let audioCtx = null;
+let ringtoneOsc = null;
+function startRingtone() {
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        ringtoneOsc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        ringtoneOsc.type = 'sine';
+        ringtoneOsc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.value = 0.05;
+        ringtoneOsc.connect(gain);
+        gain.connect(audioCtx.destination);
+        ringtoneOsc.start();
+        // 簡易的なビープパターン
+        let t = audioCtx.currentTime;
+        function schedule() {
+            gain.gain.cancelScheduledValues(t);
+            gain.gain.setValueAtTime(0.05, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.25);
+            t += 0.6;
+            if (ringtoneOsc) setTimeout(schedule, 600);
+        }
+        schedule();
+    } catch (e) {
+        console.warn('Ringtone unsupported', e);
+    }
+}
+
+function stopRingtone() {
+    try {
+        if (ringtoneOsc) {
+            ringtoneOsc.stop();
+            ringtoneOsc.disconnect();
+            ringtoneOsc = null;
+        }
+        if (audioCtx) {
+            audioCtx.close();
+            audioCtx = null;
+        }
+    } catch (e) {}
+}
+
+// ドラッグ移動（miniCallBar）
+if (miniCallBar) {
+    let isDragging = false;
+    let startX = 0, startY = 0, origX = 0, origY = 0;
+    miniCallBar.style.position = 'fixed';
+    miniCallBar.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        startX = e.clientX; startY = e.clientY;
+        const rect = miniCallBar.getBoundingClientRect();
+        origX = rect.left; origY = rect.top;
+        miniCallBar.setPointerCapture(e.pointerId);
+    });
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        miniCallBar.style.left = (origX + dx) + 'px';
+        miniCallBar.style.top = (origY + dy) + 'px';
+        miniCallBar.style.right = 'auto';
+        miniCallBar.style.bottom = 'auto';
+    });
+    window.addEventListener('pointerup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        try { miniCallBar.releasePointerCapture(e.pointerId); } catch (e) {}
     });
 }
 
@@ -532,5 +671,30 @@ if (imageInput) {
             alert('画像の処理に失敗しました');
         }
         imageInput.value = '';
+    });
+}
+
+// 動画選択時の送信
+if (videoInput) {
+    if (videoBtn) videoBtn.addEventListener('click', () => videoInput.click());
+
+    videoInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const maxSize = 20 * 1024 * 1024; // 20MB
+        if (file.size > maxSize) {
+            alert('動画は20MB以下にしてください');
+            videoInput.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const dataURL = evt.target.result;
+            socket.emit('send-video', { video: dataURL, filename: file.name });
+        };
+        reader.onerror = function() { alert('動画の読み込みに失敗しました'); };
+        reader.readAsDataURL(file);
+        videoInput.value = '';
     });
 }

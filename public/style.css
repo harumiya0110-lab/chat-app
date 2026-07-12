@@ -416,6 +416,20 @@ body {
 .mini-call-bar .mini-controls button {
     padding: 6px 8px;
 }
+
+/* 着信バナー */
+#incoming-banner {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fffae6;
+    color: #333;
+    padding: 8px 16px;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 10000;
+}
 .call-header {
     display:flex;
     justify-content:space-between;

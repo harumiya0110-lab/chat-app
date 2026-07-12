@@ -65,6 +65,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 動画メッセージの受信
+  socket.on('send-video', (data) => {
+    const user = users[socket.id];
+    if (user && data && data.video) {
+      const videoData = {
+        username: user.username,
+        video: data.video, // data URL
+        filename: data.filename || null,
+        timestamp: new Date().toLocaleTimeString('ja-JP'),
+        userId: socket.id
+      };
+      io.emit('receive-video', videoData);
+    }
+  });
+
   // チャットメッセージの受信
   socket.on('send-message', (data) => {
     const user = users[socket.id];
