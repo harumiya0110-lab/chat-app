@@ -41,21 +41,11 @@ let peerConnection = null;
 let currentCallTarget = null;
 let isMuted = false;
 let isVideoOn = true;
-let currentCallId = null;
 
 messagesContainer.addEventListener('scroll', () => {
     const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 80;
     autoScrollEnabled = isNearBottom;
 });
-
-function updateViewMode() {
-    const desktop = window.matchMedia('(min-width: 901px)').matches;
-    document.body.classList.toggle('desktop-mode', desktop);
-    document.body.classList.toggle('mobile-mode', !desktop);
-}
-
-window.addEventListener('resize', updateViewMode);
-window.addEventListener('load', updateViewMode);
 
 // チャットに参加する処理
 function joinChat() {
@@ -267,23 +257,11 @@ function updateUsersList(users) {
             you.style.marginLeft = '6px';
             li.appendChild(you);
         } else {
-            // 通話参加中フラグがある場合は「参加」ボタンを表示
-            if (user.inCall) {
-                const joinBtn = document.createElement('button');
-                joinBtn.textContent = '参加';
-                joinBtn.style.marginLeft = '8px';
-                joinBtn.onclick = () => {
-                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id });
-                    alert('通話に参加します。');
-                };
-                li.appendChild(joinBtn);
-            } else {
-                const callBtn = document.createElement('button');
-                callBtn.textContent = '通話';
-                callBtn.style.marginLeft = '8px';
-                callBtn.onclick = () => { startCall(user.id, user.username, true); };
-                li.appendChild(callBtn);
-            }
+            const callBtn = document.createElement('button');
+            callBtn.textContent = '通話';
+            callBtn.style.marginLeft = '8px';
+            callBtn.onclick = () => { startCall(user.id, user.username, true); };
+            li.appendChild(callBtn);
         }
         usersList.appendChild(li);
     });
@@ -317,30 +295,15 @@ function resizeImageFile(file, maxWidth = 1024, quality = 0.8) {
     });
 }
 
-async function getLocalStream() {
-    try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    } catch (err) {
-        console.warn('ビデオ付き取得に失敗しました。音声のみで再試行します:', err);
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            alert('ビデオが利用できないため音声通話に切り替えます。');
-            return stream;
-        } catch (audioErr) {
-            console.error('音声のみ取得にも失敗しました:', audioErr);
-            throw err;
-        }
-    }
-}
-
 // 通話開始（発信）
-async function startCall(targetId, targetName, isVideo = true, providedCallId = null) {
+async function startCall(targetId, targetName) {
     if (currentCallTarget) {
         alert('既に通話中です。');
         return;
     }
+    // ビデオ＋音声で取得（モバイルではカメラを許可する）
     try {
-        localStream = await getLocalStream();
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     } catch (err) {
         alert('メディアデバイスにアクセスできませんでした: ' + err.message);
         return;
@@ -349,9 +312,6 @@ async function startCall(targetId, targetName, isVideo = true, providedCallId = 
     // UI を表示
     showCallUI('発信中...');
 
-    // callId: 新規通話は自分のsocket.id を callId として使う（参加の場合は providedCallId を使う）
-    const callId = providedCallId || socket.id;
-    currentCallId = callId;
     peerConnection = createPeerConnection(targetId);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     // ローカルプレビュー
@@ -360,25 +320,7 @@ async function startCall(targetId, targetName, isVideo = true, providedCallId = 
 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    socket.emit('call-offer', { targetId, offer, callId });
-}
-
-function isDesktopView() {
-    return window.matchMedia('(min-width: 901px)').matches;
-}
-
-function scrollToBottom(force = false) {
-    if (isDesktopView() && !force) {
-        return;
-    }
-
-    if (!autoScrollEnabled && !force) {
-        return;
-    }
-
-    requestAnimationFrame(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
+    socket.emit('call-offer', { targetId, offer });
 }
 
 function createPeerConnection(targetId) {
@@ -419,29 +361,9 @@ function endCall() {
 
 // シグナリング受信ハンドラ
 socket.on('incoming-call', async (data) => {
-    const { from, username, offer, callId } = data || {};
-    // すでに同じ通話に参加している場合は自動応答
-    if (callId && currentCallId === callId && localStream && !peerConnection) {
-        try {
-            peerConnection = createPeerConnection(from);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-            if (localVideo) localVideo.srcObject = localStream;
-            currentCallTarget = from;
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            socket.emit('call-answer', { targetId: from, answer, callId });
-            showCallUI('通話中');
-        } catch (err) {
-            console.error('自動応答に失敗しました', err);
-        }
-        return;
-    }
-
+    const { from, username, offer } = data || {};
     // 着信UIを表示して応答を待つ
-    showIncomingCallUI(username, from, offer, callId);
-    // set currentCallId if not set
-    if (!currentCallId && callId) currentCallId = callId;
+    showIncomingCallUI(username, from, offer);
     // 着信バナーと着信音を開始
     startRingtone();
     showIncomingBanner(username);
@@ -463,13 +385,6 @@ socket.on('ice-candidate', async (data) => {
 
 socket.on('call-ended', (data) => {
     endCall();
-});
-
-// 参加が承認された（リクエスターに届く）
-socket.on('join-approved', (data) => {
-    const { callId, initiator } = data || {};
-    alert('通話に参加します。');
-    if (initiator) startCall(initiator, '参加先', true, callId);
 });
 
 // 通話UI制御
@@ -526,9 +441,7 @@ function showIncomingCallUI(username, from, offer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        // include callId if provided by the offer wrapper
-        const callIdFromOffer = offer && offer.callId ? offer.callId : null;
-        socket.emit('call-answer', { targetId: from, answer, callId: callIdFromOffer || currentCallId });
+        socket.emit('call-answer', { targetId: from, answer });
         showCallUI('通話中');
         stopRingtone();
         hideIncomingBanner();
@@ -577,7 +490,7 @@ if (miniUnminimize) {
 
 if (miniEnd) {
     miniEnd.addEventListener('click', () => {
-        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget, callId: currentCallId });
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
         endCall();
     });
 }
@@ -614,7 +527,7 @@ function startRingtone() {
         const gain = audioCtx.createGain();
         ringtoneOsc.type = 'sine';
         ringtoneOsc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.value = 0.05;
+        gain.gain.value = 0.02;
         ringtoneOsc.connect(gain);
         gain.connect(audioCtx.destination);
         ringtoneOsc.start();
@@ -622,8 +535,8 @@ function startRingtone() {
         let t = audioCtx.currentTime;
         function schedule() {
             gain.gain.cancelScheduledValues(t);
-            gain.gain.setValueAtTime(0.05, t);
-            gain.gain.linearRampToValueAtTime(0, t + 0.25);
+            gain.gain.setValueAtTime(0.02, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.2);
             t += 0.6;
             if (ringtoneOsc) setTimeout(schedule, 600);
         }
@@ -696,7 +609,7 @@ if (camToggleBtn) {
 
 if (callEndBtn) {
     callEndBtn.addEventListener('click', () => {
-        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget, callId: currentCallId });
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
         endCall();
     });
 }
