@@ -308,15 +308,30 @@ function resizeImageFile(file, maxWidth = 1024, quality = 0.8) {
     });
 }
 
+async function getLocalStream() {
+    try {
+        return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } catch (err) {
+        console.warn('ビデオ付き取得に失敗しました。音声のみで再試行します:', err);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            alert('ビデオが利用できないため音声通話に切り替えます。');
+            return stream;
+        } catch (audioErr) {
+            console.error('音声のみ取得にも失敗しました:', audioErr);
+            throw err;
+        }
+    }
+}
+
 // 通話開始（発信）
 async function startCall(targetId, targetName, isVideo = true, providedCallId = null) {
     if (currentCallTarget) {
         alert('既に通話中です。');
         return;
     }
-    // ビデオ＋音声で取得（モバイルではカメラを許可する）
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        localStream = await getLocalStream();
     } catch (err) {
         alert('メディアデバイスにアクセスできませんでした: ' + err.message);
         return;
@@ -337,6 +352,16 @@ async function startCall(targetId, targetName, isVideo = true, providedCallId = 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     socket.emit('call-offer', { targetId, offer, callId });
+}
+
+function scrollToBottom(force = false) {
+    if (!autoScrollEnabled && !force) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
 }
 
 function createPeerConnection(targetId) {
