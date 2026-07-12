@@ -8,6 +8,7 @@ const setupPanel = document.getElementById('setup-panel');
 const chatMain = document.getElementById('chat-main');
 const usernameInput = document.getElementById('username-input');
 const messageInput = document.getElementById('message-input');
+const imageInput = document.getElementById('image-input');
 const messagesContainer = document.getElementById('messages');
 const usersList = document.getElementById('users-list');
 const currentUsernameDisplay = document.getElementById('current-username');
@@ -34,21 +35,30 @@ function joinChat() {
         return;
     }
 
-    currentUsername = username;
-    
+    // サーバーにニックネームを送信（サーバー側で重複チェック）
+    socket.emit('set-username', username);
+    // ボタンを無効化して重複応答を待つ
+    document.getElementById('join-btn').disabled = true;
+}
+
+// サーバーが名前を受理したとき
+socket.on('username-accepted', (data) => {
+    currentUsername = data.username;
     // UIを切り替え
     setupPanel.style.display = 'none';
     chatMain.style.display = 'grid';
-    
-    // ニックネームをサーバーに送信
-    socket.emit('set-username', username);
-    
     // 入力フィールドをフォーカス
     messageInput.focus();
-    
     // ユーザー表示を更新
-    currentUsernameDisplay.textContent = username;
-}
+    currentUsernameDisplay.textContent = currentUsername;
+    document.getElementById('join-btn').disabled = false;
+});
+
+// サーバーが重複を検出したとき
+socket.on('username-error', (data) => {
+    alert(data.message || 'この名前は使用できません');
+    document.getElementById('join-btn').disabled = false;
+});
 
 // メッセージ送信処理
 function sendMessage() {
@@ -76,6 +86,11 @@ function handleKeyPress(event) {
 // メッセージ受信時の処理
 socket.on('receive-message', (data) => {
     displayMessage(data);
+});
+
+// 画像受信
+socket.on('receive-image', (data) => {
+    displayImage(data);
 });
 
 // ユーザーが参加したときの通知
@@ -112,7 +127,7 @@ function displayMessage(data) {
 
     const messageBubble = document.createElement('div');
     messageBubble.className = 'message-bubble';
-    messageBubble.textContent = data.message;
+    messageBubble.textContent = data.message || '';
 
     messageElement.appendChild(messageHeader);
     messageElement.appendChild(messageBubble);
@@ -120,6 +135,40 @@ function displayMessage(data) {
     messagesContainer.appendChild(messageElement);
     
     // 最新メッセージまでスクロール
+    scrollToBottom();
+}
+
+// 画像メッセージを表示
+function displayImage(data) {
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message';
+    if (data.username === currentUsername) {
+        messageElement.classList.add('own');
+    }
+
+    const messageHeader = document.createElement('div');
+    messageHeader.className = 'message-header';
+    messageHeader.innerHTML = `
+        <span>${data.username}</span>
+        <span>${data.timestamp}</span>
+    `;
+
+    const messageBubble = document.createElement('div');
+    messageBubble.className = 'message-bubble';
+
+    const img = document.createElement('img');
+    img.src = data.image;
+    img.alt = data.filename || 'image';
+    img.style.maxWidth = '60%';
+    img.style.borderRadius = '8px';
+    img.style.display = 'block';
+
+    messageBubble.appendChild(img);
+
+    messageElement.appendChild(messageHeader);
+    messageElement.appendChild(messageBubble);
+
+    messagesContainer.appendChild(messageElement);
     scrollToBottom();
 }
 
@@ -173,3 +222,26 @@ usernameInput.addEventListener('keypress', (event) => {
         joinChat();
     }
 });
+
+// 画像選択時の送信
+if (imageInput) {
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        // サイズリミット（例: 5MB）
+        const maxSize = 5 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert('画像は5MB以下にしてください');
+            imageInput.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const dataURL = evt.target.result;
+            socket.emit('send-image', { image: dataURL, filename: file.name });
+            imageInput.value = '';
+        };
+        reader.readAsDataURL(file);
+    });
+}

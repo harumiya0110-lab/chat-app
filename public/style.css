@@ -228,6 +228,12 @@ body {
     line-height: 1.4;
 }
 
+.message-bubble img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
 .message:not(.own) .message-bubble {
     background: #e8eaf6;
     color: #333;
@@ -299,6 +305,15 @@ body {
 
 #send-btn:active {
     transform: translateY(0);
+}
+
+#image-input {
+    width: 48px;
+    height: 36px;
+    padding: 4px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
 }
 
 /* スクロールバーのスタイル */

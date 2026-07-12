@@ -24,11 +24,21 @@ io.on('connection', (socket) => {
 
   // ユーザーがニックネームを設定
   socket.on('set-username', (username) => {
+    // 重複チェック（大文字小文字を区別しない）
+    const isTaken = Object.values(users).some(u => u.username && u.username.toLowerCase() === username.toLowerCase());
+    if (isTaken) {
+      socket.emit('username-error', { message: 'この名前は既に使用されています。別の名前を選んでください。' });
+      return;
+    }
+
     users[socket.id] = {
       id: socket.id,
       username: username,
       timestamp: new Date()
     };
+
+    // クライアントに受理通知
+    socket.emit('username-accepted', { username });
 
     // 他のユーザーに通知
     io.emit('user-joined', {
@@ -38,6 +48,21 @@ io.on('connection', (socket) => {
 
     // オンラインユーザーリストを更新
     io.emit('update-users', Object.values(users));
+  });
+
+  // 画像メッセージの受信
+  socket.on('send-image', (data) => {
+    const user = users[socket.id];
+    if (user && data && data.image) {
+      const imageData = {
+        username: user.username,
+        image: data.image, // data URL
+        filename: data.filename || null,
+        timestamp: new Date().toLocaleTimeString('ja-JP'),
+        userId: socket.id
+      };
+      io.emit('receive-image', imageData);
+    }
   });
 
   // チャットメッセージの受信
