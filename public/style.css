@@ -82,10 +82,12 @@ textarea {
 }
 
 .setup-panel {
-    padding: 30px 36px;
+    flex: 1;
+    padding: 38px 40px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 18px;
     text-align: center;
     background: linear-gradient(180deg, #f7f9ff 0%, #eef2fb 100%);
@@ -94,7 +96,8 @@ textarea {
 
 .setup-panel h2 {
     color: #222;
-    font-size: 24px;
+    font-size: 28px;
+    line-height: 1.2;
     max-width: 520px;
 }
 
@@ -131,7 +134,14 @@ textarea {
 
 .setup-panel button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 12px 28px rgba(91, 109, 219, 0.22);
+    box-shadow: 0 12px 28px rgba(91, 109, 219, 0.25);
+}
+
+.setup-copy {
+    max-width: 520px;
+    color: #4c566b;
+    font-size: 15px;
+    line-height: 1.7;
 }
 
 .chat-main {
@@ -143,6 +153,7 @@ textarea {
         "sidebar messages"
         "sidebar input";
     min-height: 0;
+    overflow: hidden;
 }
 
 .users-panel {
@@ -154,13 +165,19 @@ textarea {
     min-height: 0;
 }
 
-.messages-container {
+.chat-column {
     grid-area: messages;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.messages-container {
+    flex: 1;
     overflow: hidden;
     min-height: 0;
-    height: 100%;
     background: #ffffff;
 }
 
@@ -287,7 +304,8 @@ textarea {
     background: #fafbff;
     position: sticky;
     bottom: 0;
-    z-index: 2;
+    z-index: 20;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.05);
 }
 
 #message-input {
