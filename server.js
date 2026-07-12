@@ -168,7 +168,7 @@ io.on('connection', (socket) => {
 
   // 参加リクエスト: requester が既存の callId に参加希望を出す
   socket.on('request-join', (payload) => {
-    const { callId, requesterId } = payload || {};
+    const { callId, requesterId, autoApprove } = payload || {};
     if (!callId || !calls[callId]) {
       socket.emit('join-denied', { reason: '通話が存在しません' });
       return;
@@ -187,7 +187,7 @@ io.on('connection', (socket) => {
     callsPending[callId][requesterId] = { expected: expected.slice(), responses: {} };
     const requester = users[requesterId];
     expected.forEach(id => {
-      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明' });
+      io.to(id).emit('join-request', { callId, requesterId, requesterName: requester ? requester.username : '不明', autoApprove });
     });
     // optional: set timeout to auto-deny
   });
@@ -198,22 +198,24 @@ io.on('connection', (socket) => {
     if (!callId || !callsPending[callId] || !callsPending[callId][requesterId]) return;
     const pending = callsPending[callId][requesterId];
     pending.responses[socket.id] = !!accepted;
-    // if any deny -> notify requester denied and cleanup
-    if (!accepted) {
-      const reqSock = io.sockets.sockets.get(requesterId);
-      if (reqSock) reqSock.emit('join-denied', { callId, by: socket.id });
+
+    const responseCount = Object.keys(pending.responses).length;
+    const yesCount = Object.values(pending.responses).filter(v => v).length;
+    const noCount = responseCount - yesCount;
+    const total = pending.expected.length;
+
+    // すべての参加者が答えたら多数決
+    if (responseCount >= total) {
+      if (yesCount > noCount) {
+        calls[callId].participants.add(requesterId);
+        const reqSock = io.sockets.sockets.get(requesterId);
+        if (reqSock) reqSock.emit('join-approved', { callId, initiator: Array.from(calls[callId].participants)[0] });
+        emitUserList();
+      } else {
+        const reqSock = io.sockets.sockets.get(requesterId);
+        if (reqSock) reqSock.emit('join-denied', { callId, by: socket.id });
+      }
       delete callsPending[callId][requesterId];
-      return;
-    }
-    // check if all responded and all true
-    const allAnswered = pending.expected.every(id => pending.responses[id] === true);
-    if (allAnswered) {
-      // approve
-      calls[callId].participants.add(requesterId);
-      const reqSock = io.sockets.sockets.get(requesterId);
-      if (reqSock) reqSock.emit('join-approved', { callId, initiator: Array.from(calls[callId].participants)[0] });
-      delete callsPending[callId][requesterId];
-      emitUserList();
     }
   });
 

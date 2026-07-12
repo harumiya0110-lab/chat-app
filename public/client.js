@@ -30,6 +30,7 @@ const miniUnminimize = document.getElementById('mini-unminimize');
 const miniEnd = document.getElementById('mini-end');
 const videoBtn = document.getElementById('video-btn');
 const videoInput = document.getElementById('video-input');
+const autoApproveCheckbox = document.getElementById('auto-approve-checkbox');
 const incomingBanner = document.createElement('div');
 incomingBanner.id = 'incoming-banner';
 incomingBanner.style.display = 'none';
@@ -264,8 +265,9 @@ function updateUsersList(users) {
                 joinBtn.textContent = '参加';
                 joinBtn.style.marginLeft = '8px';
                 joinBtn.onclick = () => {
-                    // リクエスト送信
-                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id });
+                    // 自動承認設定を送信
+                    const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
+                    socket.emit('request-join', { callId: user.callId, requesterId: socket.id, autoApprove });
                     alert('参加リクエストを送信しました。既存参加者の承認を待ってください。');
                 };
                 li.appendChild(joinBtn);
@@ -408,7 +410,11 @@ socket.on('call-ended', (data) => {
 
 // 他参加者からの参加リクエスト受信（既存参加者に届く）
 socket.on('join-request', (data) => {
-    const { callId, requesterId, requesterName } = data || {};
+    const { callId, requesterId, requesterName, autoApprove } = data || {};
+    if (autoApprove) {
+        socket.emit('join-response', { callId, requesterId, accepted: true });
+        return;
+    }
     const allow = confirm(`${requesterName} さんが通話に参加したいです。許可しますか？`);
     socket.emit('join-response', { callId, requesterId, accepted: !!allow });
 });
