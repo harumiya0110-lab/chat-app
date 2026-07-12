@@ -77,7 +77,18 @@
                 <button id="call-decline-btn">拒否</button>
                 <button id="mute-btn" style="display:none;">ミュート</button>
                 <button id="cam-toggle-btn" style="display:none;">カメラOFF</button>
+                <button id="minimize-btn" style="display:none;">最小化</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ミニ通話バー（最小化時に表示） -->
+    <div id="mini-call-bar" class="mini-call-bar" style="display:none;">
+        <video id="mini-local" autoplay muted playsinline></video>
+        <video id="mini-remote" autoplay playsinline></video>
+        <div class="mini-controls">
+            <button id="mini-unminimize">展開</button>
+            <button id="mini-end">終了</button>
         </div>
     </div>
 

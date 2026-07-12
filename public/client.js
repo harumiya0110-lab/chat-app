@@ -22,6 +22,12 @@ const callDeclineBtn = document.getElementById('call-decline-btn');
 const muteBtn = document.getElementById('mute-btn');
 const camToggleBtn = document.getElementById('cam-toggle-btn');
 const callEndBtn = document.getElementById('call-end-btn');
+const minimizeBtn = document.getElementById('minimize-btn');
+const miniCallBar = document.getElementById('mini-call-bar');
+const miniLocal = document.getElementById('mini-local');
+const miniRemote = document.getElementById('mini-remote');
+const miniUnminimize = document.getElementById('mini-unminimize');
+const miniEnd = document.getElementById('mini-end');
 
 let autoScrollEnabled = true;
 let localStream = null;
@@ -350,6 +356,8 @@ function showCallUI(statusText) {
     callEndBtn.style.display = 'inline-block';
     callAcceptBtn.style.display = 'none';
     callDeclineBtn.style.display = 'none';
+    if (minimizeBtn) minimizeBtn.style.display = 'inline-block';
+    if (miniCallBar) miniCallBar.style.display = 'none';
 }
 
 function hideCallUI() {
@@ -361,6 +369,8 @@ function hideCallUI() {
     callEndBtn.style.display = 'none';
     callAcceptBtn.style.display = 'inline-block';
     callDeclineBtn.style.display = 'inline-block';
+    if (minimizeBtn) minimizeBtn.style.display = 'none';
+    if (miniCallBar) miniCallBar.style.display = 'none';
 }
 
 function showIncomingCallUI(username, from, offer) {
@@ -402,6 +412,41 @@ function showIncomingCallUI(username, from, offer) {
 
     callAcceptBtn.addEventListener('click', acceptHandler);
     callDeclineBtn.addEventListener('click', declineHandler);
+}
+
+// 最小化処理
+if (minimizeBtn) {
+    minimizeBtn.addEventListener('click', () => {
+        minimizeCallUI();
+    });
+}
+
+function minimizeCallUI() {
+    if (!miniCallBar) return;
+    // 隠す
+    if (callModal) callModal.style.display = 'none';
+    // ミニバー表示
+    miniCallBar.style.display = 'flex';
+    // 小さいビデオにストリームを割当て
+    if (miniLocal && localStream) miniLocal.srcObject = localStream;
+    if (miniRemote && remoteVideo && remoteVideo.srcObject) miniRemote.srcObject = remoteVideo.srcObject;
+    // メッセージ入力にフォーカス
+    if (messageInput) messageInput.focus();
+}
+
+if (miniUnminimize) {
+    miniUnminimize.addEventListener('click', () => {
+        // ミニバー非表示、モーダル再表示
+        if (miniCallBar) miniCallBar.style.display = 'none';
+        if (callModal) callModal.style.display = 'block';
+    });
+}
+
+if (miniEnd) {
+    miniEnd.addEventListener('click', () => {
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+        endCall();
+    });
 }
 
 // ミュート／カメラ切替／通話終了ボタン動作
