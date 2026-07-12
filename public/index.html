@@ -60,6 +60,27 @@
         </div>
     </div>
 
+    <!-- 通話モーダル / パネル -->
+    <div id="call-modal" class="call-modal" style="display:none;">
+        <div class="call-backdrop"></div>
+        <div class="call-box">
+            <div class="call-header">
+                <span id="call-status">着信</span>
+                <button id="call-end-btn" class="danger" style="display:none;">通話終了</button>
+            </div>
+            <div class="call-videos">
+                <video id="remote-video" autoplay playsinline></video>
+                <video id="local-video" autoplay muted playsinline></video>
+            </div>
+            <div class="call-controls">
+                <button id="call-accept-btn">応答</button>
+                <button id="call-decline-btn">拒否</button>
+                <button id="mute-btn" style="display:none;">ミュート</button>
+                <button id="cam-toggle-btn" style="display:none;">カメラOFF</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Socket.IOライブラリの読込 -->
     <script src="/socket.io/socket.io.js"></script>
     <!-- クライアント側のJavaScript -->

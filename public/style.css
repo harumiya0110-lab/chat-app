@@ -335,6 +335,76 @@ body {
     cursor: pointer;
 }
 
+/* 通話モーダル */
+.call-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+.call-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+}
+.call-box {
+    position: relative;
+    width: 90%;
+    max-width: 800px;
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    z-index: 2;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
+.call-videos {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+.call-videos video {
+    width: 100%;
+    max-width: 480px;
+    border-radius: 8px;
+    background: black;
+}
+#local-video {
+    width: 160px;
+    max-width: 160px;
+    position: absolute;
+    right: 24px;
+    bottom: 80px;
+    border: 2px solid white;
+}
+.call-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 8px;
+}
+.call-controls button {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+}
+.call-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+}
+.call-header .danger {
+    background: #e55;
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
 /* スクロールバーのスタイル */
 ::-webkit-scrollbar {
     width: 6px;

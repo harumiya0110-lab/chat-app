@@ -13,13 +13,22 @@ const messagesContainer = document.getElementById('messages');
 const usersList = document.getElementById('users-list');
 const currentUsernameDisplay = document.getElementById('current-username');
 const onlineCountDisplay = document.getElementById('online-count');
+const callModal = document.getElementById('call-modal');
+const callStatus = document.getElementById('call-status');
+const remoteVideo = document.getElementById('remote-video');
+const localVideo = document.getElementById('local-video');
+const callAcceptBtn = document.getElementById('call-accept-btn');
+const callDeclineBtn = document.getElementById('call-decline-btn');
+const muteBtn = document.getElementById('mute-btn');
+const camToggleBtn = document.getElementById('cam-toggle-btn');
+const callEndBtn = document.getElementById('call-end-btn');
 
 let autoScrollEnabled = true;
 let localStream = null;
 let peerConnection = null;
 let currentCallTarget = null;
-const audioEl = document.createElement('audio');
-audioEl.autoplay = true;
+let isMuted = false;
+let isVideoOn = true;
 
 messagesContainer.addEventListener('scroll', () => {
     const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 80;
@@ -204,9 +213,9 @@ function updateUsersList(users) {
             li.appendChild(you);
         } else {
             const callBtn = document.createElement('button');
-            callBtn.textContent = '電話';
+            callBtn.textContent = '通話';
             callBtn.style.marginLeft = '8px';
-            callBtn.onclick = () => { startCall(user.id, user.username); };
+            callBtn.onclick = () => { startCall(user.id, user.username, true); };
             li.appendChild(callBtn);
         }
         usersList.appendChild(li);
@@ -247,22 +256,26 @@ async function startCall(targetId, targetName) {
         alert('既に通話中です。');
         return;
     }
-
+    // ビデオ＋音声で取得（モバイルではカメラを許可する）
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     } catch (err) {
-        alert('マイクにアクセスできませんでした: ' + err.message);
+        alert('メディアデバイスにアクセスできませんでした: ' + err.message);
         return;
     }
 
+    // UI を表示
+    showCallUI('発信中...');
+
     peerConnection = createPeerConnection(targetId);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    // ローカルプレビュー
+    if (localVideo) localVideo.srcObject = localStream;
     currentCallTarget = targetId;
 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     socket.emit('call-offer', { targetId, offer });
-    alert(`${targetName} に発信中...`);
 }
 
 function createPeerConnection(targetId) {
@@ -273,8 +286,8 @@ function createPeerConnection(targetId) {
         }
     };
     pc.ontrack = (event) => {
-        audioEl.srcObject = event.streams[0];
-        document.body.appendChild(audioEl);
+        // リモートストリームをビデオにセット
+        if (remoteVideo) remoteVideo.srcObject = event.streams[0];
     };
     pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
@@ -294,35 +307,18 @@ function endCall() {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
     }
-    if (audioEl && audioEl.parentNode) audioEl.parentNode.removeChild(audioEl);
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    isMuted = false; isVideoOn = true;
+    hideCallUI();
     currentCallTarget = null;
 }
 
 // シグナリング受信ハンドラ
 socket.on('incoming-call', async (data) => {
     const { from, username, offer } = data || {};
-    const accept = confirm(`${username} さんから通話があります。応答しますか？`);
-    if (!accept) {
-        socket.emit('end-call', { targetId: from });
-        return;
-    }
-
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-        alert('マイクにアクセスできませんでした: ' + err.message);
-        socket.emit('end-call', { targetId: from });
-        return;
-    }
-
-    peerConnection = createPeerConnection(from);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    currentCallTarget = from;
-
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    socket.emit('call-answer', { targetId: from, answer });
+    // 着信UIを表示して応答を待つ
+    showIncomingCallUI(username, from, offer);
 });
 
 socket.on('call-answered', async (data) => {
@@ -342,6 +338,97 @@ socket.on('ice-candidate', async (data) => {
 socket.on('call-ended', (data) => {
     endCall();
 });
+
+// 通話UI制御
+function showCallUI(statusText) {
+    if (!callModal) return;
+    callModal.style.display = 'block';
+    callStatus.textContent = statusText || '';
+    // in-call controls
+    muteBtn.style.display = 'inline-block';
+    camToggleBtn.style.display = 'inline-block';
+    callEndBtn.style.display = 'inline-block';
+    callAcceptBtn.style.display = 'none';
+    callDeclineBtn.style.display = 'none';
+}
+
+function hideCallUI() {
+    if (!callModal) return;
+    callModal.style.display = 'none';
+    callStatus.textContent = '';
+    muteBtn.style.display = 'none';
+    camToggleBtn.style.display = 'none';
+    callEndBtn.style.display = 'none';
+    callAcceptBtn.style.display = 'inline-block';
+    callDeclineBtn.style.display = 'inline-block';
+}
+
+function showIncomingCallUI(username, from, offer) {
+    if (!callModal) return;
+    callModal.style.display = 'block';
+    callStatus.textContent = `${username} さんから着信`;
+
+    // accept handler
+    const acceptHandler = async () => {
+        callAcceptBtn.removeEventListener('click', acceptHandler);
+        callDeclineBtn.removeEventListener('click', declineHandler);
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        } catch (err) {
+            alert('メディアデバイスにアクセスできませんでした: ' + err.message);
+            socket.emit('end-call', { targetId: from });
+            hideCallUI();
+            return;
+        }
+
+        peerConnection = createPeerConnection(from);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        if (localVideo) localVideo.srcObject = localStream;
+        currentCallTarget = from;
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('call-answer', { targetId: from, answer });
+        showCallUI('通話中');
+    };
+
+    const declineHandler = () => {
+        callAcceptBtn.removeEventListener('click', acceptHandler);
+        callDeclineBtn.removeEventListener('click', declineHandler);
+        socket.emit('end-call', { targetId: from });
+        hideCallUI();
+    };
+
+    callAcceptBtn.addEventListener('click', acceptHandler);
+    callDeclineBtn.addEventListener('click', declineHandler);
+}
+
+// ミュート／カメラ切替／通話終了ボタン動作
+if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+        if (!localStream) return;
+        isMuted = !isMuted;
+        localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+        muteBtn.textContent = isMuted ? 'ミュート解除' : 'ミュート';
+    });
+}
+
+if (camToggleBtn) {
+    camToggleBtn.addEventListener('click', () => {
+        if (!localStream) return;
+        isVideoOn = !isVideoOn;
+        localStream.getVideoTracks().forEach(t => t.enabled = isVideoOn);
+        camToggleBtn.textContent = isVideoOn ? 'カメラOFF' : 'カメラON';
+    });
+}
+
+if (callEndBtn) {
+    callEndBtn.addEventListener('click', () => {
+        if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+        endCall();
+    });
+}
 
 // メッセージコンテナを最下部にスクロール
 function scrollToBottom(force = false) {
