@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
 export default function MapPage() {
   useEffect(() => {
@@ -61,11 +62,14 @@ export default function MapPage() {
     }
     load().catch(()=>{})
 
-    return () => { markers.forEach(m=>m.marker.remove()); map.remove(); }
+    // ensure resize when container size changes
+    setTimeout(()=>map.resize(), 300)
+    window.addEventListener('resize', ()=>map.resize())
+    return () => { markers.forEach(m=>m.marker.remove()); window.removeEventListener('resize', ()=>map.resize()); map.remove(); }
   }, [])
 
   return (
-    <div style={{height: '100vh', position: 'relative'}}>
+    <div style={{height: '100%', position: 'relative', width: '100%'}}>
       <div id="map" style={{width:'100%', height:'100%'}}></div>
     </div>
   )
