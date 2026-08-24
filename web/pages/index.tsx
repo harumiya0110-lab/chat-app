@@ -31,11 +31,16 @@ export default function Home() {
       <Header />
       <div className="container flex gap-4 mt-6">
         {!joined ? (
-          <div className="bg-white p-6 rounded shadow mx-auto">
+          <div id="join" className="mx-auto w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-xl font-semibold mb-3">ニックネームで参加</h2>
+            <p className="mb-5 text-sm text-slate-500">投稿やチャットに参加する名前を入力してください。</p>
             <div className="flex gap-2">
               <input value={username} onChange={e=>setUsername(e.target.value)} placeholder="ニックネーム" className="border p-2 rounded" />
               <button onClick={join} className="ml-2 bg-indigo-600 text-white px-4 py-2 rounded">参加</button>
+            </div>
+            <div className="mt-8 grid grid-cols-2 gap-3 border-t border-slate-100 pt-6">
+              <a href="/posts" className="rounded-xl border border-indigo-200 p-4 text-center font-semibold text-indigo-700 hover:bg-indigo-50">投稿を見る</a>
+              <a href="/map" className="rounded-xl border border-slate-200 p-4 text-center font-semibold text-slate-700 hover:bg-slate-50">地域マップを見る</a>
             </div>
           </div>
         ) : (

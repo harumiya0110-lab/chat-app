@@ -8,10 +8,10 @@ export default function Header() {
           <div className="bg-white/20 rounded-full w-10 h-10 flex items-center justify-center font-bold">RU</div>
           <h1 className="text-lg font-semibold">Rural-Urban Connect</h1>
         </div>
-        <nav className="flex items-center gap-4">
-          <a className="hover:underline" href="/">ホーム</a>
-          <a className="hover:underline" href="/map">地域マップ</a>
-          <a className="hover:underline" href="#">投稿</a>
+        <nav className="flex items-center gap-2 text-sm">
+          <a className="rounded-full px-3 py-2 hover:bg-white/15" href="/">ホーム</a>
+          <a className="rounded-full bg-white px-4 py-2 font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50" href="/posts">投稿を見る</a>
+          <a className="rounded-full border border-white/60 px-4 py-2 font-semibold hover:bg-white/15" href="/map">地域マップ</a>
         </nav>
       </div>
     </header>

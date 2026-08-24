@@ -116,7 +116,7 @@ export default function FeedPanel({ username }: { username: string }) {
                 </label>
                 <span className={`text-xs ${body.length === MAX_LENGTH ? 'font-bold text-rose-600' : 'text-slate-400'}`}>{body.length}/{MAX_LENGTH}</span>
               </div>
-              <button disabled={!body.trim() || posting} onClick={publish} className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">{posting ? '投稿中...' : 'ポストする'}</button>
+              <button disabled={!username || !body.trim() || posting} onClick={publish} className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">{posting ? '投稿中...' : 'ポストする'}</button>
             </div>
           </div>
         </div>
