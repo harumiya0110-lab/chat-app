@@ -40,7 +40,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex-1 flex bg-white rounded shadow overflow-hidden">
-            <Sidebar users={users} />
+            <Sidebar users={users} currentUsername={username} />
             <div className="flex-1 flex flex-col">
               <ChatWindow />
             </div>
