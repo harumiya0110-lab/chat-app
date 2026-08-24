@@ -111,8 +111,21 @@ app.post('/api/posts', async (req, res) => {
 
 // List posts
 app.get('/api/posts', async (req, res) => {
-  const posts = await prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+  const posts = await prisma.post.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { author: true, region: true }
+  });
   res.json(posts);
+});
+
+// Like a post
+app.post('/api/posts/:id/like', async (req, res) => {
+  try {
+    const post = await prisma.post.update({ where: { id: req.params.id }, data: { likes: { increment: 1 } } });
+    res.json({ id: post.id, likes: post.likes });
+  } catch {
+    res.status(404).json({ error: 'post not found' });
+  }
 });
 
 const PORT = process.env.PORT || 4000;
