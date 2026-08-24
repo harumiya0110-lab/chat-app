@@ -14,7 +14,13 @@ export default function Sidebar({ users, currentUsername }: Props) {
           {users.map(u => (
             <li key={u.id} className="text-sm text-gray-800 flex items-center justify-between">
               <span>{u.username}</span>
-              <button className="text-xs text-indigo-600" onClick={()=>{ startCall(u.id).catch(()=>alert('通話開始に失敗しました')) }}>通話</button>
+              <button className="text-xs text-indigo-600" onClick={async ()=>{
+                try{
+                  const useVideo = confirm('ビデオ通話にしますか？（OK=ビデオ／キャンセル=音声のみ）')
+                  if(useVideo) await (await import('../lib/webrtc')).startVideoCall(u.id)
+                  else { const local = await (await import('../lib/webrtc')).getLocalStream(true,false); await (await import('../lib/webrtc')).startCall(u.id, local) }
+                }catch(e){ alert('通話開始に失敗しました') }
+              }}>通話</button>
             </li>
           ))}
         </ul>

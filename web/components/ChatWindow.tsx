@@ -71,6 +71,17 @@ export default function ChatWindow() {
       <div className="p-3 border-t bg-white flex gap-2 items-center">
         <input value={input} onChange={e=>setInput(e.target.value)} placeholder="メッセージを入力..." className="flex-1 border rounded px-3 py-2" />
         <button onClick={send} className="bg-indigo-600 text-white px-4 py-2 rounded">送信</button>
+        <button onClick={async ()=>{
+          try{
+            const cams = await (await import('../lib/webrtc')).listCameras()
+            if(!cams.length) return alert('カメラが見つかりません')
+            const current = cams[0]
+            // cycle to next camera
+            const deviceId = cams.length>1 ? cams[1].deviceId : cams[0].deviceId
+            await (await import('../lib/webrtc')).switchCameraAll(deviceId)
+            alert('カメラを切替えました')
+          }catch(e){ alert('カメラ切替に失敗しました') }
+        }} className="ml-2 bg-gray-200 text-gray-800 px-3 py-2 rounded">カメラ切替</button>
       </div>
     </div>
   )

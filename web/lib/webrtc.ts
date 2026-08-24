@@ -3,6 +3,10 @@ import { getSocket } from './socket'
 type PCEntry = { pc: RTCPeerConnection, stream?: MediaStream }
 const pcs: Record<string, PCEntry> = {}
 
+function getPcEntries(){
+  return Object.entries(pcs)
+}
+
 async function fetchIceServers(){
   try {
     const res = await fetch((process.env.NEXT_PUBLIC_API_URL||'http://localhost:4000') + '/api/ice-servers')
@@ -36,6 +40,11 @@ export async function startCall(targetId:string, localStream?: MediaStream){
   await pc.setLocalDescription(offer)
   getSocket().emit('call-offer', { targetId, offer })
   return pc
+}
+
+export async function startVideoCall(targetId:string){
+  const local = await getLocalStream(true, true)
+  return startCall(targetId, local)
 }
 
 export async function handleIncomingOffer(fromId:string, offer:any, localStream?: MediaStream){
@@ -79,5 +88,25 @@ export function endCall(targetId:string){
 }
 
 export async function getLocalStream(audio=true, video=false){
-  return navigator.mediaDevices.getUserMedia({ audio, video })
+  const constraints: any = { audio: !!audio }
+  if (video === true) constraints.video = true
+  else if (typeof video === 'string' || typeof video === 'object') constraints.video = video
+  return navigator.mediaDevices.getUserMedia(constraints)
+}
+
+export async function switchCameraAll(deviceId?:string){
+  const newStream = await getLocalStream(true, deviceId ? { deviceId: { exact: deviceId } } : true)
+  getPcEntries().forEach(([peerId, entry])=>{
+    const senders = entry.pc.getSenders()
+    const videoSender = senders.find(s => s.track && s.track.kind === 'video')
+    const newVideoTrack = newStream.getVideoTracks()[0]
+    if (videoSender && newVideoTrack) videoSender.replaceTrack(newVideoTrack)
+    // update stored stream
+    entry.stream = newStream
+  })
+}
+
+export async function listCameras(){
+  const devices = await navigator.mediaDevices.enumerateDevices()
+  return devices.filter(d=>d.kind==='videoinput')
 }
