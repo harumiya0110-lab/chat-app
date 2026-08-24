@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
 
@@ -12,6 +13,8 @@ app.use(express.json({ limit: '25mb' }));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
+
+const prisma = new PrismaClient();
 
 type User = { id: string; username?: string };
 const users: Record<string, User> = {};
@@ -74,6 +77,26 @@ io.on('connection', (socket) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Regions list
+app.get('/api/regions', async (req, res) => {
+  const regions = await prisma.region.findMany({ include: { posts: true } });
+  res.json(regions);
+});
+
+// Create post
+app.post('/api/posts', async (req, res) => {
+  const { title, body, mediaUrl, authorUsername, regionCode } = req.body;
+  if (!authorUsername || !title) return res.status(400).json({ error: 'missing fields' });
+  let author = await prisma.user.findUnique({ where: { username: authorUsername } });
+  if (!author) {
+    author = await prisma.user.create({ data: { username: authorUsername } });
+  }
+  let region = null;
+  if (regionCode) region = await prisma.region.findUnique({ where: { code: regionCode } });
+  const post = await prisma.post.create({ data: { title, body, mediaUrl, authorId: author.id, regionId: region?.id } });
+  res.json(post);
+});
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log('API server listening on', PORT));
