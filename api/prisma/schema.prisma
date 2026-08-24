@@ -19,6 +19,7 @@ model Post {
   title     String
   body      String
   mediaUrl  String?
+  likes     Int      @default(0)
   authorId  String
   author    User     @relation(fields: [authorId], references: [id])
   region    Region?  @relation(fields: [regionId], references: [id])

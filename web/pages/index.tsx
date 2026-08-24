@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { getSocket } from '../lib/socket'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
-import ChatWindow from '../components/ChatWindow'
+import FeedPanel from '../components/FeedPanel'
 import MapPanel from '../components/MapPanel'
 
 export default function Home() {
@@ -40,9 +40,9 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex-1 flex bg-white rounded shadow overflow-hidden">
-            <Sidebar users={users} currentUsername={username} />
+            <Sidebar users={users} />
             <div className="flex-1 flex flex-col">
-              <ChatWindow />
+              <FeedPanel username={username} />
             </div>
             <MapPanel />
           </div>

@@ -1,11 +1,9 @@
 import React from 'react'
-import PostForm from './PostForm'
-
-type Props = { users: any[], currentUsername?: string }
+type Props = { users: any[] }
 
 import { startCall } from '../lib/webrtc'
 
-export default function Sidebar({ users, currentUsername }: Props) {
+export default function Sidebar({ users }: Props) {
   return (
     <aside className="w-72 bg-white border-r p-4 overflow-auto">
       <div className="mb-4">
@@ -27,11 +25,9 @@ export default function Sidebar({ users, currentUsername }: Props) {
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-700">最近の投稿</h3>
-        <div className="mt-2 space-y-2 text-sm text-gray-600">投稿の一覧はここに表示</div>
+        <h3 className="text-sm font-semibold text-gray-700">地域コミュニティ</h3>
+        <div className="mt-2 text-sm leading-6 text-gray-500">地域の投稿は中央のホームフィードに表示されます。</div>
       </div>
-
-      <PostForm defaultAuthor={currentUsername} />
     </aside>
   )
 }
