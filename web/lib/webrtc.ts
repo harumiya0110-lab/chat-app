@@ -87,10 +87,10 @@ export function endCall(targetId:string){
   getSocket().emit('end-call', { targetId })
 }
 
-export async function getLocalStream(audio=true, video=false){
+export async function getLocalStream(audio=true, video: boolean | MediaTrackConstraints = false){
   const constraints: any = { audio: !!audio }
   if (video === true) constraints.video = true
-  else if (typeof video === 'string' || typeof video === 'object') constraints.video = video
+  else if (typeof video === 'object') constraints.video = video
   return navigator.mediaDevices.getUserMedia(constraints)
 }
 

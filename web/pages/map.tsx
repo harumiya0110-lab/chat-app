@@ -1,15 +1,12 @@
 import { useEffect, useRef } from 'react'
-import mapboxgl from 'mapbox-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 export default function MapPage() {
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    if (!token) return;
-    mapboxgl.accessToken = token;
-    const map = new mapboxgl.Map({
+    const map = new maplibregl.Map({
       container: 'map',
-      style: 'mapbox://styles/mapbox/streets-v11',
+      style: process.env.NEXT_PUBLIC_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',
       center: [139.6917, 35.6895],
       zoom: 5
     });
@@ -33,9 +30,9 @@ export default function MapPage() {
         el.style.width = '16px';
         el.style.height = '16px';
         el.style.borderRadius = '8px';
-        const marker = new mapboxgl.Marker(el).setLngLat([reg.lng, reg.lat])
+        const marker = new maplibregl.Marker(el).setLngLat([reg.lng, reg.lat])
         const postsHtml = (postsByRegion[reg.id]||[]).map((p:any)=> `<div class="p-1"><strong>${p.title}</strong><div class="text-xs">${p.body||''}</div><div class="text-xs text-gray-500">by ${p.authorUsername}</div></div>`).join('')
-        const popup = new mapboxgl.Popup().setHTML(`<div style="min-width:160px"><h4>${reg.name}</h4><div>投稿: ${(postsByRegion[reg.id]||[]).length}</div><div>${postsHtml}</div></div>`)        
+        const popup = new maplibregl.Popup().setHTML(`<div style="min-width:160px"><h4>${reg.name}</h4><div>投稿: ${(postsByRegion[reg.id]||[]).length}</div><div>${postsHtml}</div></div>`)
         marker.setPopup(popup).addTo(map)
         markers.push({ id: reg.id, marker, hasPosts: (postsByRegion[reg.id]||[]).length>0 })
       })

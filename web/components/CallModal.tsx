@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { getSocket } from '../lib/socket'
 
 export default function CallModal(){
   const [open, setOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function CallModal(){
         osc.start()
         gainRef.current = gain
         ;(osc as any)._started = true
-        ;(osc as any)._stop = ()=>osc.stop()
+        ;(osc as any)._stop = () => osc.stop();
         (audioCtxRef.current as any)._osc = osc
       }
     }catch(e){}
@@ -56,8 +57,7 @@ export default function CallModal(){
   function decline(){
     stopRingtone()
     setOpen(false)
-    const socket = (await import('../lib/socket')).getSocket()
-    socket.emit('end-call', { targetId: caller?.id })
+    getSocket().emit('end-call', { targetId: caller?.id })
     setCaller(null); setOffer(null)
   }
 

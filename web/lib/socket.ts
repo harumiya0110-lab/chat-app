@@ -11,4 +11,3 @@ export function getSocket() {
 export function disconnectSocket() {
   if (socket) { socket.disconnect(); socket = null; }
 }
-}
