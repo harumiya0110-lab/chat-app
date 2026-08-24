@@ -1,30 +1,7 @@
 import Head from 'next/head'
-import { useEffect, useState } from 'react'
-import { getSocket } from '../lib/socket'
 import Header from '../components/Header'
-import Sidebar from '../components/Sidebar'
-import FeedPanel from '../components/FeedPanel'
-import MapPanel from '../components/MapPanel'
 
 export default function Home() {
-  const [users, setUsers] = useState<any[]>([])
-  const [username, setUsername] = useState('')
-  const [joined, setJoined] = useState(false)
-
-  useEffect(() => {
-    const socket = getSocket()
-    socket.on('update-users', (u:any) => setUsers(u))
-    return () => { socket.off('update-users') }
-  }, [])
-
-  function join() {
-    const socket = getSocket();
-    if (!username) return alert('ニックネームを入力')
-    socket.emit('set-username', username)
-    socket.once('username-accepted', () => setJoined(true))
-    socket.once('username-error', (d:any) => alert(d.message))
-  }
-
   const destinations = [
     { href: '/chat', label: 'チャットルーム', kicker: 'LIVE ROOM', description: '今オンラインの人とリアルタイムで話す', tone: 'nav-card--night', icon: '吹' },
     { href: '/posts', label: '投稿', kicker: 'COMMUNITY FEED', description: '地域の出来事や気づきを共有する', tone: 'nav-card--coral', icon: '投' },
