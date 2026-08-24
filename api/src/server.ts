@@ -109,5 +109,11 @@ app.post('/api/posts', async (req, res) => {
   res.json(post);
 });
 
+// List posts
+app.get('/api/posts', async (req, res) => {
+  const posts = await prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(posts);
+});
+
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log('API server listening on', PORT));
