@@ -3,8 +3,9 @@ services:
     name: rural-urban-web
     env: node
     plan: free
-    buildCommand: cd web && npm install && npm run build
-    startCommand: cd web && npm start
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://rural-urban-api.onrender.com
@@ -12,8 +13,9 @@ services:
     name: rural-urban-api
     env: node
     plan: free
-    buildCommand: cd api && npm install && npm run build
-    startCommand: cd api && npm run start
+    rootDir: api
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
       - key: PORT
         value: 10000
