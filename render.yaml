@@ -1,5 +1,20 @@
 services:
   - type: web
+    name: rural-urban-web
+    env: node
+    plan: free
+    buildCommand: "cd web && npm install && npm run build"
+    startCommand: "cd web && npm start"
+    repo: "https://github.com/harumiya0110-lab/chat-app.git"
+  - type: web
+    name: rural-urban-api
+    env: node
+    plan: free
+    buildCommand: "cd api && npm install"
+    startCommand: "cd api && npm run start"
+    repo: "https://github.com/harumiya0110-lab/chat-app.git"
+services:
+  - type: web
     name: chat-app
     env: node
     plan: free

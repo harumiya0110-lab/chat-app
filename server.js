@@ -17,20 +17,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ユーザー情報を保存
 const users = {};
-// 通話管理: callId -> {participants: Set}
-const calls = {};
-function emitUserList() {
-  // Build user list with inCall and callId info
-  const list = Object.values(users).map(u => ({ ...u, inCall: false, callId: null }));
-  // mark users in calls
-  for (const [callId, info] of Object.entries(calls)) {
-    info.participants.forEach(id => {
-      const user = list.find(x => x.id === id);
-      if (user) { user.inCall = true; user.callId = callId; }
-    });
-  }
-  io.emit('update-users', list);
-}
 
 // WebSocket接続時の処理
 io.on('connection', (socket) => {
@@ -61,7 +47,7 @@ io.on('connection', (socket) => {
     });
 
     // オンラインユーザーリストを更新
-    emitUserList();
+    io.emit('update-users', Object.values(users));
   });
 
   // 画像メッセージの受信
@@ -112,27 +98,19 @@ io.on('connection', (socket) => {
 
   // WebRTC シグナリング: 発信側からのオファーを相手に転送
   socket.on('call-offer', (payload) => {
-    const { targetId, offer, callId } = payload || {};
+    const { targetId, offer } = payload || {};
     const caller = users[socket.id];
-    if (!caller || !targetId || !offer) return;
-    const id = callId || socket.id;
-    // create call record if not exists
-    if (!calls[id]) calls[id] = { participants: new Set([socket.id]) };
-    // forward offer with callId
-    io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer, callId: id, initiator: socket.id });
+    if (targetId && offer && caller) {
+      io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
+    }
   });
 
   // 相手からのアンサーを発信者に転送
   socket.on('call-answer', (payload) => {
-    const { targetId, answer, callId } = payload || {};
-    if (!targetId || !answer) return;
-    // add responder to call participants if callId provided
-    if (callId && calls[callId]) {
-      calls[callId].participants.add(socket.id);
-      calls[callId].participants.add(targetId);
-      emitUserList();
+    const { targetId, answer } = payload || {};
+    if (targetId && answer) {
+      io.to(targetId).emit('call-answered', { from: socket.id, answer });
     }
-    io.to(targetId).emit('call-answered', { from: socket.id, answer, callId });
   });
 
   // ICE candidate を相手に転送
@@ -145,39 +123,10 @@ io.on('connection', (socket) => {
 
   // 通話終了通知
   socket.on('end-call', (payload) => {
-    const { targetId, callId } = payload || {};
-    if (callId && calls[callId]) {
-      // remove sender from participants
-      calls[callId].participants.delete(socket.id);
-      // notify remaining participants
-      calls[callId].participants.forEach(id => {
-        io.to(id).emit('call-ended', { from: socket.id, callId });
-      });
-      // if no participants left remove call
-      if (calls[callId].participants.size === 0) delete calls[callId];
-      emitUserList();
-      return;
-    }
+    const { targetId } = payload || {};
     if (targetId) {
       io.to(targetId).emit('call-ended', { from: socket.id });
     }
-  });
-
-  // 参加リクエスト: requester が既存の callId に通話に参加する
-  socket.on('request-join', (payload) => {
-    const { callId, requesterId } = payload || {};
-    if (!callId || !calls[callId]) {
-      socket.emit('join-denied', { reason: '通話が存在しません' });
-      return;
-    }
-    const participants = Array.from(calls[callId].participants);
-    if (!participants.includes(requesterId)) {
-      calls[callId].participants.add(requesterId);
-      emitUserList();
-    }
-    const initiator = participants[0] || socket.id;
-    const reqSock = io.sockets.sockets.get(requesterId);
-    if (reqSock) reqSock.emit('join-approved', { callId, initiator });
   });
 
   // ユーザーが切断したとき
@@ -192,12 +141,7 @@ io.on('connection', (socket) => {
       });
 
       delete users[socket.id];
-      // remove from any calls
-      for (const [callId, info] of Object.entries(calls)) {
-        info.participants.delete(socket.id);
-        if (info.participants.size === 0) delete calls[callId];
-      }
-      emitUserList();
+      io.emit('update-users', Object.values(users));
     }
   });
 });

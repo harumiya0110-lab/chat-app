@@ -1,3 +1,26 @@
+# Rural-Urban Connect
+
+プロジェクト: 田舎の人と都会の人を繋ぐコミュニティプラットフォーム
+
+スタック（提案）:
+- フロント: Next.js (React) + Tailwind CSS
+- バックエンド: Node.js + Express + TypeScript
+- DB: PostgreSQL + Prisma
+- リアルタイム: Socket.IO + WebRTC
+- マップ: Mapbox (または Google Maps)
+
+このリポジトリは monorepo 形式で `web/` と `api/` を含みます。
+
+動かし方（ローカル）
+
+1. データベースの環境変数を設定（`api/.env` に DATABASE_URL を追加）
+2. サーバー側:
+   cd api && npm install && npx prisma migrate dev --name init
+   npm run dev
+3. フロント側:
+   cd web && npm install && npm run dev
+
+Render デプロイ用の `render.yaml` をルートに含めています。
 # 🎯 リアルタイムチャットアプリ
 
 オンラインで複数ユーザーがリアルタイムでチャットできるアプリケーションです。
