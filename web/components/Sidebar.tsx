@@ -2,6 +2,8 @@ import React from 'react'
 
 type Props = { users: any[] }
 
+import { startCall } from '../lib/webrtc'
+
 export default function Sidebar({ users }: Props) {
   return (
     <aside className="w-72 bg-white border-r p-4 overflow-auto">
@@ -9,7 +11,10 @@ export default function Sidebar({ users }: Props) {
         <h2 className="text-sm font-semibold text-gray-700">オンライン</h2>
         <ul className="mt-2 space-y-2">
           {users.map(u => (
-            <li key={u.id} className="text-sm text-gray-800">{u.username}</li>
+            <li key={u.id} className="text-sm text-gray-800 flex items-center justify-between">
+              <span>{u.username}</span>
+              <button className="text-xs text-indigo-600" onClick={()=>{ startCall(u.id).catch(()=>alert('通話開始に失敗しました')) }}>通話</button>
+            </li>
           ))}
         </ul>
       </div>

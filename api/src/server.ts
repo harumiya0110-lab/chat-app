@@ -78,6 +78,17 @@ io.on('connection', (socket) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Provide ICE servers (STUN/TURN) to clients
+app.get('/api/ice-servers', (req, res) => {
+  const servers: any[] = [];
+  const stunUrls = (process.env.STUN_URLS || 'stun:stun.l.google.com:19302').split(',').map(s=>s.trim()).filter(Boolean);
+  servers.push({ urls: stunUrls });
+  if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_PASSWORD) {
+    servers.push({ urls: [process.env.TURN_URL], username: process.env.TURN_USERNAME, credential: process.env.TURN_PASSWORD });
+  }
+  res.json({ iceServers: servers });
+});
+
 // Regions list
 app.get('/api/regions', async (req, res) => {
   const regions = await prisma.region.findMany({ include: { posts: true } });

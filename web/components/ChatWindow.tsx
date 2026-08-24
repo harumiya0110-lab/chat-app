@@ -11,7 +11,38 @@ export default function ChatWindow() {
     socket.on('receive-message', (m:any) => setMessages(prev=>[...prev,m]))
     socket.on('receive-image', (m:any) => setMessages(prev=>[...prev,{...m,type:'image'}]))
     socket.on('receive-video', (m:any) => setMessages(prev=>[...prev,{...m,type:'video'}]))
+    // WebRTC signaling handlers
+    socket.on('incoming-call', async (data:any) => {
+      const { from, username, offer } = data
+      // dispatch an event so UI can show incoming call modal
+      window.dispatchEvent(new CustomEvent('webrtc-incoming', { detail: { from, username, offer } }))
+    })
+    socket.on('call-answered', (data:any) => {
+      const { from, answer } = data
+      window.dispatchEvent(new CustomEvent('webrtc-answer', { detail: { from, answer } }))
+    })
+    socket.on('ice-candidate', (data:any) => {
+      const { from, candidate } = data
+      window.dispatchEvent(new CustomEvent('webrtc-ice', { detail: { from, candidate } }))
+    })
+    socket.on('call-ended', (data:any) => { window.dispatchEvent(new CustomEvent('webrtc-ended', { detail: data })) })
     return () => { socket.off('receive-message'); socket.off('receive-image'); socket.off('receive-video') }
+  }, [])
+
+  useEffect(()=>{
+    const onIncoming = async (e:any) => {
+      const { from, username, offer } = e.detail
+      // auto-accept with audio only for now
+      const { handleIncomingOffer } = await import('../lib/webrtc')
+      const local = await (await import('../lib/webrtc')).getLocalStream(true, false)
+      handleIncomingOffer(from, offer, local)
+    }
+    const onAnswer = (e:any) => { const { from, answer } = e.detail; (async()=>{ const w = await import('../lib/webrtc'); w.handleRemoteAnswer(from, answer) })() }
+    const onIce = (e:any) => { const { from, candidate } = e.detail; (async()=>{ const w = await import('../lib/webrtc'); w.handleRemoteIce(from, candidate) })() }
+    window.addEventListener('webrtc-incoming', onIncoming)
+    window.addEventListener('webrtc-answer', onAnswer)
+    window.addEventListener('webrtc-ice', onIce)
+    return () => { window.removeEventListener('webrtc-incoming', onIncoming); window.removeEventListener('webrtc-answer', onAnswer); window.removeEventListener('webrtc-ice', onIce) }
   }, [])
 
   useEffect(() => {
