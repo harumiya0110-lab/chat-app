@@ -14,10 +14,15 @@ services:
     env: node
     plan: free
     rootDir: api
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm run start
+    healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: 10000
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: STUN_URLS
+        value: stun:stun.l.google.com:19302
