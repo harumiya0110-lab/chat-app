@@ -1,19 +1,99 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
+import 'dotenv/config';
+import cors from 'cors';
+import express from 'express';
+import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { GoogleGenAI } from '@google/genai';
+import { Server as SocketIOServer } from 'socket.io';
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
+const io = new SocketIOServer(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
   }
 });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
+const eventTypes = ['鳥獣目撃', '道路障害', '助け合い', 'イベント', 'その他'];
 
-// 静的ファイルの配信
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+function parseGeminiResponse(response) {
+  const text = response.text?.trim();
+  if (!text) throw new Error('Geminiから空の解析結果が返されました');
+  const parsed = JSON.parse(text);
+  return {
+    hasLocation: parsed.hasLocation === true && typeof parsed.locationName === 'string',
+    locationName: typeof parsed.locationName === 'string' ? parsed.locationName.trim() : '',
+    eventType: eventTypes.includes(parsed.eventType) ? parsed.eventType : 'その他',
+    summary: typeof parsed.summary === 'string' ? parsed.summary.trim().slice(0, 100) : '地域のお知らせ'
+  };
+}
+
+async function analyzeMessage(text) {
+  if (!ai) throw new Error('GEMINI_API_KEYが設定されていません');
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+    contents: `次の地域チャットメッセージを分析してください。場所が特定できる場合だけhasLocationをtrueにしてください。locationNameには都道府県・市町村を含む検索可能な具体的名称を入れてください。推測で場所を補わないでください。\n\nメッセージ: ${text}`,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          hasLocation: { type: 'boolean' },
+          locationName: { type: 'string' },
+          eventType: { type: 'string', enum: eventTypes },
+          summary: { type: 'string' }
+        },
+        required: ['hasLocation', 'locationName', 'eventType', 'summary']
+      }
+    }
+  });
+  return parseGeminiResponse(response);
+}
+
+async function geocodeLocation(locationName) {
+  const url = new URL('https://nominatim.openstreetmap.org/search');
+  url.searchParams.set('q', locationName);
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('limit', '1');
+  const response = await fetch(url, {
+    headers: { 'User-Agent': process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0 (contact@example.com)' }
+  });
+  if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
+  const firstResult = (await response.json())[0];
+  if (!firstResult) return null;
+  const lat = Number(firstResult.lat);
+  const lng = Number(firstResult.lon);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+app.post('/api/messages', async (req, res) => {
+  const { text, userId } = req.body || {};
+  if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) {
+    return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
+  }
+  try {
+    const analysis = await analyzeMessage(text.trim());
+    let locationData = null;
+    if (analysis.hasLocation && analysis.locationName) {
+      const coordinates = await geocodeLocation(analysis.locationName);
+      if (coordinates) locationData = { ...coordinates, eventType: analysis.eventType, summary: analysis.summary, locationName: analysis.locationName };
+    }
+    const message = { text: text.trim(), userId: userId.trim(), createdAt: new Date().toISOString(), locationData };
+    io.emit('receive-message', { username: userId.trim(), message: message.text, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: message.userId, locationData });
+    return res.json(message);
+  } catch (error) {
+    console.error('メッセージ解析に失敗しました:', error);
+    return res.status(502).json({ error: 'メッセージの解析に失敗しました。しばらくしてから再試行してください。' });
+  }
+});
 
 // ユーザー情報を保存
 const users = {};
