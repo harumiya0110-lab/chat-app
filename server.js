@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const app = express();
 const server = http.createServer(app);
@@ -18,9 +19,11 @@ const __dirname = path.dirname(__filename);
 
 const eventTypes = ['鳥獣目撃', '道路障害', '助け合い', 'イベント', 'その他'];
 const PORT = Number(process.env.PORT) || 3000;
-const HF_TOKEN = process.env.HF_TOKEN;
-const HF_MODEL = process.env.HF_MODEL || 'Qwen/Qwen3-32B:fastest';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const NOMINATIM_USER_AGENT = process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0';
+
+const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -32,7 +35,7 @@ app.get('/api/health', (req, res) => {
 
 function normalizeAnalysis(value) {
   if (!value || typeof value !== 'object') {
-    throw new Error('Hugging Faceの解析結果が不正です');
+    throw new Error('Geminiの解析結果が不正です');
   }
 
   const hasLocation = value.hasLocation === true;
@@ -63,7 +66,6 @@ function normalizeAnalysis(value) {
 
 function extractJson(text) {
   const cleaned = String(text || '')
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
@@ -198,23 +200,16 @@ async function geocodeLocation(locationName, locationCandidates = [], originalTe
 }
 
 async function analyzeMessage(text) {
-  if (!HF_TOKEN) throw new Error('HF_TOKENが設定されていません');
+  if (!GEMINI_API_KEY || !ai) {
+    throw new Error('GEMINI_API_KEYが設定されていません');
+  }
 
   const systemPrompt = `あなたは地域情報チャットの解析AIです。
 ユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。
-JSON以外の文章は絶対に返さないでください。
+必ず指定されたJSON形式で返してください。
 場所は推測せず、メッセージに書かれている地名・施設名をできるだけそのまま保持してください。`;
 
   const userPrompt = `次のメッセージを解析してください。
-
-JSONの形式:
-{
-  "hasLocation": trueまたはfalse,
-  "locationName": "最も具体的な場所の名前",
-  "locationCandidates": ["場所候補1", "場所候補2"],
-  "eventType": "鳥獣目撃" または "道路障害" または "助け合い" または "イベント" または "その他",
-  "summary": "10文字程度の短い日本語要約"
-}
 
 ルール:
 - 場所を文章から明確に特定できる場合だけ hasLocation を true にする。
@@ -224,58 +219,58 @@ JSONの形式:
 - locationCandidatesには、同じ場所を表す別表記や、検索に使えそうな短い候補を最大5個入れる。
 - 都道府県・市区町村・町名・施設名など、メッセージ中に書かれている情報を省略しすぎない。
 - 元メッセージだけでは行政区が分からない場合は、勝手に自治体を補わない。
-- eventType は必ず5種類のいずれかにする。
+- eventType は「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれかにする。
 - 場所がない場合は hasLocation=false、locationName=""、locationCandidates=[] にする。
 - summary は短い日本語にする。
 
 メッセージ:
 ${text}`;
 
-  const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${HF_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: HF_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-      max_tokens: 500,
-      extra_body: { chat_template_kwargs: { enable_thinking: false } }
-    }),
-    signal: AbortSignal.timeout(30000)
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            hasLocation: { type: Type.BOOLEAN },
+            locationName: { type: Type.STRING },
+            locationCandidates: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            eventType: {
+              type: Type.STRING,
+              enum: eventTypes
+            },
+            summary: { type: Type.STRING }
+          },
+          required: ['hasLocation', 'locationName', 'locationCandidates', 'eventType', 'summary']
+        },
+        temperature: 0.1,
+        maxOutputTokens: 500
+      }
+    });
 
-  const responseText = await response.text();
-  if (!response.ok) {
-    let detail = responseText.slice(0, 800);
+    const content = response.text;
+    console.log(`Gemini response: model=${GEMINI_MODEL}, content_length=${String(content || '').length}`);
+
+    if (!content) {
+      throw new Error('Geminiから空の解析結果が返されました');
+    }
+
     try {
-      const errorJson = JSON.parse(responseText);
-      detail = errorJson?.error?.message || errorJson?.error || detail;
-    } catch {}
-    const safeDetail = typeof detail === 'string' ? detail : JSON.stringify(detail);
-    console.error(`Hugging Face request failed: status=${response.status}, model=${HF_MODEL}, detail=${safeDetail}`);
-    throw new Error(`Hugging Face API error: ${response.status} ${safeDetail}`);
+      return normalizeAnalysis(extractJson(content));
+    } catch (error) {
+      throw new Error(`GeminiのJSON解析に失敗しました: ${error.message}`);
+    }
+  } catch (error) {
+    console.error(`Gemini request failed: model=${GEMINI_MODEL}`, error);
+    throw error;
   }
-
-  let data;
-  try { data = JSON.parse(responseText); }
-  catch { throw new Error('Hugging FaceのレスポンスがJSONではありません'); }
-
-  const content = data?.choices?.[0]?.message?.content;
-  const reasoning = data?.choices?.[0]?.message?.reasoning_content;
-  const finishReason = data?.choices?.[0]?.finish_reason;
-  console.log(`Hugging Face response: finish_reason=${finishReason}, content_length=${String(content || '').length}, reasoning_length=${String(reasoning || '').length}`);
-
-  if (!content) throw new Error(`Hugging Faceから空の解析結果が返されました (finish_reason=${finishReason || 'unknown'})`);
-
-  try { return normalizeAnalysis(extractJson(content)); }
-  catch (error) { throw new Error(`Hugging FaceのJSON解析に失敗しました: ${error.message}`); }
 }
 
 app.post('/api/messages', async (req, res) => {
@@ -283,6 +278,7 @@ app.post('/api/messages', async (req, res) => {
   if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) {
     return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
   }
+
   const cleanText = text.trim();
   const cleanUserId = userId.trim().slice(0, 200);
 
@@ -290,9 +286,15 @@ app.post('/api/messages', async (req, res) => {
     const analysis = await analyzeMessage(cleanText);
     let locationData = null;
     let geocodeError = null;
+
     if (analysis.hasLocation) {
       try {
-        const coordinates = await geocodeLocation(analysis.locationName, analysis.locationCandidates, cleanText);
+        const coordinates = await geocodeLocation(
+          analysis.locationName,
+          analysis.locationCandidates,
+          cleanText
+        );
+
         if (coordinates) {
           locationData = {
             lat: coordinates.lat,
@@ -303,14 +305,22 @@ app.post('/api/messages', async (req, res) => {
             matchedLocation: coordinates.displayName,
             matchedQuery: coordinates.matchedQuery
           };
-        } else geocodeError = '場所を地図上で特定できませんでした';
+        } else {
+          geocodeError = '場所を地図上で特定できませんでした';
+        }
       } catch (error) {
         console.error('ジオコーディング失敗:', error);
         geocodeError = '地図検索サービスに接続できませんでした';
       }
     }
 
-    const message = { text: cleanText, userId: cleanUserId, createdAt: new Date().toISOString(), locationData };
+    const message = {
+      text: cleanText,
+      userId: cleanUserId,
+      createdAt: new Date().toISOString(),
+      locationData
+    };
+
     io.emit('receive-message', {
       username: cleanUserId,
       message: cleanText,
@@ -318,76 +328,135 @@ app.post('/api/messages', async (req, res) => {
       userId: cleanUserId,
       locationData
     });
+
     return res.json({ ...message, analysis, geocodeError });
   } catch (error) {
     console.error('メッセージ解析に失敗しました:', error);
-    return res.status(502).json({ error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。' });
+    return res.status(502).json({
+      error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。'
+    });
   }
 });
 
 const users = {};
+
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
+
   socket.on('set-username', username => {
     if (typeof username !== 'string' || !username.trim()) return;
     const cleanUsername = username.trim().slice(0, 50);
     const isTaken = Object.values(users).some(u => u.username?.toLowerCase() === cleanUsername.toLowerCase());
+
     if (isTaken) {
       socket.emit('username-error', { message: 'この名前は既に使用されています。別の名前を選んでください。' });
       return;
     }
-    users[socket.id] = { id: socket.id, username: cleanUsername, timestamp: new Date() };
+
+    users[socket.id] = {
+      id: socket.id,
+      username: cleanUsername,
+      timestamp: new Date()
+    };
+
     socket.emit('username-accepted', { username: cleanUsername });
-    io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
+    io.emit('user-joined', {
+      username: cleanUsername,
+      message: `${cleanUsername}さんがチャットに参加しました`
+    });
     io.emit('update-users', Object.values(users));
   });
 
   socket.on('send-image', data => {
     const user = users[socket.id];
     if (user && data?.image) {
-      io.emit('receive-image', { username: user.username, image: data.image, filename: data.filename || null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
+      io.emit('receive-image', {
+        username: user.username,
+        image: data.image,
+        filename: data.filename || null,
+        timestamp: new Date().toLocaleTimeString('ja-JP'),
+        userId: socket.id
+      });
     }
   });
 
   socket.on('send-video', data => {
     const user = users[socket.id];
     if (user && data?.video) {
-      io.emit('receive-video', { username: user.username, video: data.video, filename: data.filename || null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
+      io.emit('receive-video', {
+        username: user.username,
+        video: data.video,
+        filename: data.filename || null,
+        timestamp: new Date().toLocaleTimeString('ja-JP'),
+        userId: socket.id
+      });
     }
   });
 
   socket.on('send-message', data => {
     const user = users[socket.id];
     if (user && typeof data?.message === 'string' && data.message.trim()) {
-      io.emit('receive-message', { username: user.username, message: data.message.trim(), timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id, locationData: null });
+      io.emit('receive-message', {
+        username: user.username,
+        message: data.message.trim(),
+        timestamp: new Date().toLocaleTimeString('ja-JP'),
+        userId: socket.id,
+        locationData: null
+      });
     }
   });
 
   socket.on('call-offer', payload => {
     const { targetId, offer } = payload || {};
     const caller = users[socket.id];
-    if (targetId && offer && caller) io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
+    if (targetId && offer && caller) {
+      io.to(targetId).emit('incoming-call', {
+        from: socket.id,
+        username: caller.username,
+        offer
+      });
+    }
   });
+
   socket.on('call-answer', payload => {
     const { targetId, answer } = payload || {};
-    if (targetId && answer) io.to(targetId).emit('call-answered', { from: socket.id, answer });
+    if (targetId && answer) {
+      io.to(targetId).emit('call-answered', { from: socket.id, answer });
+    }
   });
+
   socket.on('ice-candidate', payload => {
     const { targetId, candidate } = payload || {};
-    if (targetId && candidate) io.to(targetId).emit('ice-candidate', { from: socket.id, candidate });
+    if (targetId && candidate) {
+      io.to(targetId).emit('ice-candidate', {
+        from: socket.id,
+        candidate
+      });
+    }
   });
+
   socket.on('end-call', payload => {
     const { targetId } = payload || {};
-    if (targetId) io.to(targetId).emit('call-ended', { from: socket.id });
+    if (targetId) {
+      io.to(targetId).emit('call-ended', { from: socket.id });
+    }
   });
+
   socket.on('disconnect', () => {
     const user = users[socket.id];
     if (!user) return;
+
     console.log(`ユーザーが切断しました: ${user.username}`);
-    io.emit('user-left', { username: user.username, message: `${user.username}さんがチャットから退出しました` });
+    io.emit('user-left', {
+      username: user.username,
+      message: `${user.username}さんがチャットから退出しました`
+    });
+
     delete users[socket.id];
     io.emit('update-users', Object.values(users));
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`チャットサーバーがポート ${PORT} で起動しました`));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`チャットサーバーがポート ${PORT} で起動しました`);
+});
