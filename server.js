@@ -4,7 +4,6 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GoogleGenAI, Type } from '@google/genai';
 import { Server as SocketIOServer } from 'socket.io';
 
 const app = express();
@@ -15,13 +14,11 @@ const io = new SocketIOServer(server, {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ai = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-  : null;
 
 const eventTypes = ['鳥獣目撃', '道路障害', '助け合い', 'イベント', 'その他'];
 const PORT = Number(process.env.PORT) || 3000;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const HF_TOKEN = process.env.HF_TOKEN;
+const HF_MODEL = process.env.HF_MODEL || 'google/gemma-2-2b-it';
 const NOMINATIM_USER_AGENT = process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0';
 
 app.use(cors());
@@ -34,7 +31,7 @@ app.get('/api/health', (req, res) => {
 
 function normalizeAnalysis(value) {
   if (!value || typeof value !== 'object') {
-    throw new Error('Geminiの解析結果が不正です');
+    throw new Error('Hugging Faceの解析結果が不正です');
   }
 
   const hasLocation = value.hasLocation === true;
@@ -56,51 +53,86 @@ function normalizeAnalysis(value) {
   };
 }
 
+function extractJson(text) {
+  const cleaned = String(text || '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    }
+    throw new Error('JSONを抽出できませんでした');
+  }
+}
+
 async function analyzeMessage(text) {
-  if (!ai) {
-    throw new Error('GEMINI_API_KEYが設定されていません');
+  if (!HF_TOKEN) {
+    throw new Error('HF_TOKENが設定されていません');
   }
 
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: [
-      {
-        role: 'user',
-        parts: [{
-          text: `あなたは地域情報チャットの解析AIです。\n\n次のメッセージから、地図上に表示できる場所情報とイベント種別を抽出してください。\n- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。\n- 場所を推測・創作しない。\n- locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。\n- eventType は必ず「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれか。\n- summary は10文字程度の短い日本語要約。\n\nメッセージ:\n${text}`
-        }]
-      }
-    ],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          hasLocation: { type: Type.BOOLEAN },
-          locationName: { type: Type.STRING },
-          eventType: {
-            type: Type.STRING,
-            enum: eventTypes
-          },
-          summary: { type: Type.STRING }
-        },
-        required: ['hasLocation', 'locationName', 'eventType', 'summary']
-      }
-    }
+  const prompt = `あなたは地域情報チャットの解析AIです。
+
+次のメッセージから、地図上に表示できる場所情報とイベント種別を抽出してください。
+必ずJSONだけを返してください。Markdownや説明文は不要です。
+
+JSONの形式:
+{
+  "hasLocation": trueまたはfalse,
+  "locationName": "場所の名前",
+  "eventType": "鳥獣目撃" または "道路障害" または "助け合い" または "イベント" または "その他",
+  "summary": "10文字程度の短い日本語要約"
+}
+
+ルール:
+- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。
+- 場所を推測・創作しない。
+- locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。
+- 元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。
+- eventType は必ず指定された5種類のいずれかにする。
+- 場所がない場合は hasLocation=false、locationName="" にする。
+- summary は短くする。
+
+メッセージ:
+${text}`;
+
+  const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${HF_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: HF_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      max_tokens: 300
+    }),
+    signal: AbortSignal.timeout(30000)
   });
 
-  if (!response.text) {
-    throw new Error('Geminiから空の解析結果が返されました');
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Hugging Face API error: ${response.status} ${errorText.slice(0, 500)}`);
   }
 
-  let parsed;
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error('Hugging Faceから空の解析結果が返されました');
+  }
+
   try {
-    parsed = JSON.parse(response.text);
+    return normalizeAnalysis(extractJson(content));
   } catch (error) {
-    throw new Error(`GeminiのJSON解析に失敗しました: ${error.message}`);
+    throw new Error(`Hugging FaceのJSON解析に失敗しました: ${error.message}`);
   }
-
-  return normalizeAnalysis(parsed);
 }
 
 async function geocodeLocation(locationName) {
