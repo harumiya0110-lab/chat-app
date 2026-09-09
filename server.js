@@ -55,6 +55,7 @@ function normalizeAnalysis(value) {
 
 function extractJson(text) {
   const cleaned = String(text || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
@@ -76,31 +77,28 @@ async function analyzeMessage(text) {
     throw new Error('HF_TOKENが設定されていません');
   }
 
-  const systemPrompt = `あなたは地域情報チャットの解析AIです。
-ユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。
-JSON以外の文章は絶対に返さないでください。`;
+  const systemPrompt = `あなたは地域情報チャットの解析AIです。\nユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。\n回答は指定されたJSONスキーマに厳密に従ってください。`;
 
-  const userPrompt = `次のメッセージを解析してください。
+  const userPrompt = `次のメッセージを解析してください。\n\nルール:\n- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。\n- 場所を推測・創作しない。\n- locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。\n- 元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。\n- eventType は必ず「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれかにする。\n- 場所がない場合は hasLocation=false、locationName="" にする。\n- summary は10文字程度の短い日本語にする。\n\nメッセージ:\n${text}`;
 
-JSONの形式:
-{
-  "hasLocation": trueまたはfalse,
-  "locationName": "場所の名前",
-  "eventType": "鳥獣目撃" または "道路障害" または "助け合い" または "イベント" または "その他",
-  "summary": "10文字程度の短い日本語要約"
-}
-
-ルール:
-- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。
-- 場所を推測・創作しない。
-- locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。
-- 元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。
-- eventType は必ず5種類のいずれかにする。
-- 場所がない場合は hasLocation=false、locationName="" にする。
-- summary は短い日本語にする。
-
-メッセージ:
-${text}`;
+  const responseFormat = {
+    type: 'json_schema',
+    json_schema: {
+      name: 'location_event_analysis',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          hasLocation: { type: 'boolean' },
+          locationName: { type: 'string' },
+          eventType: { type: 'string', enum: eventTypes },
+          summary: { type: 'string' }
+        },
+        required: ['hasLocation', 'locationName', 'eventType', 'summary']
+      }
+    }
+  };
 
   const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
     method: 'POST',
@@ -114,9 +112,11 @@ ${text}`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      response_format: { type: 'json_object' },
+      response_format: responseFormat,
       temperature: 0.1,
-      max_tokens: 300
+      max_tokens: 600,
+      stream: false,
+      enable_thinking: false
     }),
     signal: AbortSignal.timeout(30000)
   });
@@ -129,7 +129,7 @@ ${text}`;
       const errorJson = JSON.parse(responseText);
       detail = errorJson?.error?.message || errorJson?.error || detail;
     } catch {
-      // Keep the raw response text when it is not JSON.
+      // Keep raw response text when it is not JSON.
     }
 
     const safeDetail = typeof detail === 'string' ? detail : JSON.stringify(detail);
@@ -144,10 +144,17 @@ ${text}`;
     throw new Error('Hugging FaceのレスポンスがJSONではありません');
   }
 
-  const content = data?.choices?.[0]?.message?.content;
+  const choice = data?.choices?.[0] || null;
+  const message = choice?.message || null;
+  const content = typeof message?.content === 'string' ? message.content.trim() : '';
+  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+
+  console.log(`Hugging Face response: finish_reason=${choice?.finish_reason || 'unknown'}, content_length=${content.length}, reasoning_length=${reasoning.length}`);
 
   if (!content) {
-    throw new Error('Hugging Faceから空の解析結果が返されました');
+    throw new Error(
+      `Hugging Faceから空の解析結果が返されました (finish_reason=${choice?.finish_reason || 'unknown'}, reasoning_length=${reasoning.length})`
+    );
   }
 
   try {
@@ -252,7 +259,7 @@ app.post('/api/messages', async (req, res) => {
   } catch (error) {
     console.error('メッセージ解析に失敗しました:', error);
     return res.status(502).json({
-      error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。'
+      error: 'メッセージのAI解析に失敗しました。Renderログで詳細を確認してください。'
     });
   }
 });
