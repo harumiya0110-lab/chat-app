@@ -33,15 +33,9 @@
             const useLocation = document.getElementById('location-checkbox')?.checked === true;
             if (!useLocation) {
               const message = String(body.text || '').trim();
-              if (message) {
+              if (message && typeof socket !== 'undefined' && socket?.connected) {
                 document.getElementById('status').textContent = '場所を付けずに投稿しています…';
-                window.io?.();
-              }
-              if (window.socketForLocationToggle) {
-                window.socketForLocationToggle.emit('send-message', { message });
-              } else {
-                const sockets = Object.values(window).find(value => value && typeof value.emit === 'function' && value.id);
-                if (sockets) sockets.emit('send-message', { message });
+                socket.emit('send-message', { message });
               }
               return new Response(JSON.stringify({ locationData: null, geocodeError: null }), {
                 status: 200,
@@ -58,15 +52,6 @@
   </script>
   <script src="/client.js"></script>
   <script>
-    // client.js の Socket.IO 接続を、場所なし投稿の切り替えから利用できるようにする
-    const socketWait = setInterval(() => {
-      try {
-        if (typeof socket !== 'undefined' && socket?.id) {
-          window.socketForLocationToggle = socket;
-          clearInterval(socketWait);
-        }
-      } catch {}
-    }, 100);
     const locationCheckbox = document.getElementById('location-checkbox');
     const statusEl = document.getElementById('status');
     locationCheckbox?.addEventListener('change', () => {
