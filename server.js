@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
 const eventTypes = ['鳥獣目撃', '道路障害', '助け合い', 'イベント', 'その他'];
 const PORT = Number(process.env.PORT) || 3000;
 const HF_TOKEN = process.env.HF_TOKEN;
-const HF_MODEL = process.env.HF_MODEL || 'google/gemma-2-2b-it';
+const HF_MODEL = process.env.HF_MODEL || 'Qwen/Qwen3-32B:fastest';
 const NOMINATIM_USER_AGENT = process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0';
 
 app.use(cors());
@@ -76,10 +76,11 @@ async function analyzeMessage(text) {
     throw new Error('HF_TOKENが設定されていません');
   }
 
-  const prompt = `あなたは地域情報チャットの解析AIです。
+  const systemPrompt = `あなたは地域情報チャットの解析AIです。
+ユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。
+JSON以外の文章は絶対に返さないでください。`;
 
-次のメッセージから、地図上に表示できる場所情報とイベント種別を抽出してください。
-必ずJSONだけを返してください。Markdownや説明文は不要です。
+  const userPrompt = `次のメッセージを解析してください。
 
 JSONの形式:
 {
@@ -94,9 +95,9 @@ JSONの形式:
 - 場所を推測・創作しない。
 - locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。
 - 元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。
-- eventType は必ず指定された5種類のいずれかにする。
+- eventType は必ず5種類のいずれかにする。
 - 場所がない場合は hasLocation=false、locationName="" にする。
-- summary は短くする。
+- summary は短い日本語にする。
 
 メッセージ:
 ${text}`;
@@ -109,19 +110,40 @@ ${text}`;
     },
     body: JSON.stringify({
       model: HF_MODEL,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
       temperature: 0.1,
       max_tokens: 300
     }),
     signal: AbortSignal.timeout(30000)
   });
 
+  const responseText = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`Hugging Face API error: ${response.status} ${errorText.slice(0, 500)}`);
+    let detail = responseText.slice(0, 800);
+    try {
+      const errorJson = JSON.parse(responseText);
+      detail = errorJson?.error?.message || errorJson?.error || detail;
+    } catch {
+      // Keep the raw response text when it is not JSON.
+    }
+
+    const safeDetail = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    console.error(`Hugging Face request failed: status=${response.status}, model=${HF_MODEL}, detail=${safeDetail}`);
+    throw new Error(`Hugging Face API error: ${response.status} ${safeDetail}`);
   }
 
-  const data = await response.json();
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error('Hugging FaceのレスポンスがJSONではありません');
+  }
+
   const content = data?.choices?.[0]?.message?.content;
 
   if (!content) {
