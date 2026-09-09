@@ -17,7 +17,7 @@
         <div class="chat-right"><div id="messages" class="messages" aria-live="polite"></div><div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div></div>
       </div>
     </section>
-    <section class="map-panel"><div class="panel-heading"><div><h2>地域マップ</h2><p>投稿された場所を色分けして表示します。</p></div><div class="legend"><span><i class="legend-dot traffic"></i>交通障害</span><span><i class="legend-dot help"></i>助け合い</span><span><i class="legend-dot event"></i>イベント</span><span><i class="legend-dot wildlife"></i>鳥獣目撃</span><span><i class="legend-dot other"></i>その他</span></div></div><div id="map"></div></section>
+    <section class="map-panel"><div class="panel-heading"><div><h2>地域マップ</h2><p>投稿された場所を色分けして表示します。</p></div><div class="map-filters" aria-label="投稿種類の表示切替"><span class="filter-title">表示：</span><button type="button" class="map-filter active" data-filter="all">すべて</button><button type="button" class="map-filter" data-filter="交通障害">🔴 交通障害</button><button type="button" class="map-filter" data-filter="助け合い">🟢 助け合い</button><button type="button" class="map-filter" data-filter="イベント">🟠 イベント</button><button type="button" class="map-filter" data-filter="鳥獣目撃">🟣 鳥獣目撃</button><button type="button" class="map-filter" data-filter="その他">⚪ その他</button></div><div class="legend"><span><i class="legend-dot traffic"></i>交通障害</span><span><i class="legend-dot help"></i>助け合い</span><span><i class="legend-dot event"></i>イベント</span><span><i class="legend-dot wildlife"></i>鳥獣目撃</span><span><i class="legend-dot other"></i>その他</span></div></div><div id="map"></div></section>
   </main>
   <div id="call-modal" class="call-modal" hidden><div class="call-backdrop"></div><div class="call-box"><div class="call-header"><strong id="call-status">通話</strong></div><div class="call-videos"><video id="remote-video" autoplay playsinline></video><video id="local-video" autoplay muted playsinline></video></div><div class="call-controls"><button id="call-accept-btn">応答</button><button id="call-decline-btn">拒否</button><button id="mute-btn" hidden>ミュート</button><button id="cam-toggle-btn" hidden>カメラOFF</button><button id="minimize-btn" hidden>最小化</button><button id="call-end-btn" class="danger" hidden>通話終了</button></div></div></div>
   <div id="mini-call-bar" class="mini-call-bar" hidden><video id="mini-local" autoplay muted playsinline></video><video id="mini-remote" autoplay playsinline></video><button id="mini-unminimize">展開</button><button id="mini-end" class="danger">終了</button></div>
@@ -48,6 +48,65 @@
         }
         return originalFetch(input, init);
       };
+    })();
+  </script>
+  <script>
+    (() => {
+      const MARKER_TYPES = {
+        '#d64545': '交通障害',
+        '#2d8a57': '助け合い',
+        '#e39a28': 'イベント',
+        '#8b5cf6': '鳥獣目撃',
+        '#6c7a89': 'その他'
+      };
+      let activeFilter = 'all';
+      const markerRegistry = [];
+      const originalMarker = L.marker.bind(L);
+      const originalAddTo = L.Marker.prototype.addTo;
+
+      function detectMarkerType(marker) {
+        const html = String(marker?.options?.icon?.options?.html || '').toLowerCase();
+        for (const [color, type] of Object.entries(MARKER_TYPES)) {
+          if (html.includes(color)) return type;
+        }
+        return 'その他';
+      }
+
+      L.marker = function(latlng, options = {}) {
+        const marker = originalMarker(latlng, options);
+        marker.__eventType = detectMarkerType(marker);
+        marker.__registeredForFilter = false;
+        marker.__originalAddTo = originalAddTo.bind(marker);
+        marker.addTo = function(targetMap) {
+          if (!marker.__registeredForFilter) {
+            markerRegistry.push({ marker, targetMap });
+            marker.__registeredForFilter = true;
+          }
+          if (activeFilter === 'all' || activeFilter === marker.__eventType) {
+            marker.__originalAddTo(targetMap);
+          }
+          return marker;
+        };
+        return marker;
+      };
+
+      window.setMapEventFilter = (filter) => {
+        activeFilter = filter;
+        markerRegistry.forEach(({ marker, targetMap }) => {
+          const visible = filter === 'all' || filter === marker.__eventType;
+          if (visible) targetMap.addLayer(marker);
+          else if (targetMap.hasLayer(marker)) targetMap.removeLayer(marker);
+        });
+        document.querySelectorAll('.map-filter').forEach(button => {
+          button.classList.toggle('active', button.dataset.filter === filter);
+        });
+      };
+
+      document.addEventListener('click', event => {
+        const button = event.target.closest('.map-filter');
+        if (!button) return;
+        window.setMapEventFilter(button.dataset.filter || 'all');
+      });
     })();
   </script>
   <script src="/client.js"></script>
