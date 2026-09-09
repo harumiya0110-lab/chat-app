@@ -5,9 +5,9 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --import=./geocoder-compat.mjs server.js",
     "build": "echo \"No build step required for this Node.js server\"",
-    "dev": "node server.js"
+    "dev": "node --import=./geocoder-compat.mjs server.js"
   },
   "keywords": [
     "chat",
