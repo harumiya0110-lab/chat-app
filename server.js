@@ -38,6 +38,12 @@ function normalizeAnalysis(value) {
   const locationName = typeof value.locationName === 'string'
     ? value.locationName.trim().slice(0, 200)
     : '';
+  const locationCandidates = Array.isArray(value.locationCandidates)
+    ? value.locationCandidates
+        .filter((item) => typeof item === 'string' && item.trim())
+        .map((item) => item.trim().slice(0, 200))
+        .slice(0, 5)
+    : [];
   const eventType = eventTypes.includes(value.eventType)
     ? value.eventType
     : 'その他';
@@ -48,6 +54,7 @@ function normalizeAnalysis(value) {
   return {
     hasLocation: hasLocation && Boolean(locationName),
     locationName,
+    locationCandidates,
     eventType,
     summary
   };
@@ -72,33 +79,164 @@ function extractJson(text) {
   }
 }
 
+function normalizeLocationQuery(value) {
+  return String(value || '')
+    .replace(/[「」『』]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/(付近|周辺|あたり|辺り|近く|近辺|付近で|周辺で|あたりで|近くで)$/u, '')
+    .trim()
+    .slice(0, 200);
+}
+
+function extractLocationCandidatesFromText(text) {
+  const candidates = [];
+  const patterns = [
+    /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:都|道|府|県|市|区|町|村|郡))/gu,
+    /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:駅|公園|橋|学校|公民館|役所|市役所|区役所|町役場|村役場|病院|神社|寺|港|川|山|峠|交差点))/gu
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of String(text || '').matchAll(pattern)) {
+      const value = normalizeLocationQuery(match[1]);
+      if (value.length >= 2 && !candidates.includes(value)) {
+        candidates.push(value);
+      }
+    }
+  }
+
+  return candidates.slice(0, 10);
+}
+
+function buildGeocodingCandidates(locationName, locationCandidates, originalText) {
+  const candidates = [];
+  const add = (value) => {
+    const normalized = normalizeLocationQuery(value);
+    if (normalized.length >= 2 && !candidates.includes(normalized)) {
+      candidates.push(normalized);
+    }
+  };
+
+  add(locationName);
+  for (const candidate of locationCandidates || []) add(candidate);
+  for (const candidate of extractLocationCandidatesFromText(originalText)) add(candidate);
+
+  // 検索対象が「○○橋」などの施設名だけの場合、元文章から市区町村が取れれば組み合わせる。
+  const adminAreas = extractLocationCandidatesFromText(originalText)
+    .filter((value) => /(都|道|府|県|市|区|町|村)$/u.test(value));
+
+  if (locationName && adminAreas.length) {
+    for (const area of adminAreas.slice(0, 3)) {
+      add(`${area} ${locationName}`);
+    }
+  }
+
+  return candidates.slice(0, 12);
+}
+
+async function geocodeLocation(locationName, locationCandidates = [], originalText = '') {
+  const queries = buildGeocodingCandidates(locationName, locationCandidates, originalText);
+  if (!queries.length) return null;
+
+  for (const query of queries) {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '3');
+    url.searchParams.set('addressdetails', '1');
+    url.searchParams.set('accept-language', 'ja');
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': NOMINATIM_USER_AGENT,
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (!response.ok) {
+        console.error(`Nominatim query failed: ${response.status} query=${query}`);
+        continue;
+      }
+
+      const results = await response.json();
+      if (!Array.isArray(results) || !results.length) continue;
+
+      // 上位候補を評価し、検索語との一致度が高いものを優先。
+      const normalizedQuery = query.toLowerCase();
+      const scored = results
+        .map((result) => {
+          const displayName = String(result.display_name || '').toLowerCase();
+          const namedetails = Object.values(result.namedetails || {})
+            .join(' ')
+            .toLowerCase();
+          const combined = `${displayName} ${namedetails}`;
+          let score = Number(result.importance || 0);
+          if (combined.includes(normalizedQuery)) score += 1.5;
+          for (const token of normalizedQuery.split(/\s+/u)) {
+            if (token.length >= 2 && combined.includes(token)) score += 0.2;
+          }
+          return { result, score };
+        })
+        .sort((a, b) => b.score - a.score);
+
+      const best = scored[0]?.result;
+      if (!best) continue;
+
+      const lat = Number(best.lat);
+      const lng = Number(best.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+      console.log(`Location matched: query="${query}" -> "${best.display_name}"`);
+      return {
+        lat,
+        lng,
+        matchedQuery: query,
+        displayName: best.display_name || query
+      };
+    } catch (error) {
+      console.error(`Nominatim query error: query=${query}`, error);
+    }
+  }
+
+  return null;
+}
+
 async function analyzeMessage(text) {
   if (!HF_TOKEN) {
     throw new Error('HF_TOKENが設定されていません');
   }
 
-  const systemPrompt = `あなたは地域情報チャットの解析AIです。\nユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。\n回答は指定されたJSONスキーマに厳密に従ってください。`;
+  const systemPrompt = `あなたは地域情報チャットの解析AIです。
+ユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。
+JSON以外の文章は絶対に返さないでください。
+場所は推測せず、メッセージに書かれている地名・施設名をできるだけそのまま保持してください。`;
 
-  const userPrompt = `次のメッセージを解析してください。\n\nルール:\n- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。\n- 場所を推測・創作しない。\n- locationName は、元メッセージに含まれる場所を都道府県・市町村などの行政区名と組み合わせ、Nominatimで検索しやすい具体的な名称にする。\n- 元メッセージだけでは行政区が分からない場合は、分かる範囲の名称を使い、勝手に自治体を補わない。\n- eventType は必ず「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれかにする。\n- 場所がない場合は hasLocation=false、locationName="" にする。\n- summary は10文字程度の短い日本語にする。\n\nメッセージ:\n${text}`;
+  const userPrompt = `次のメッセージを解析してください。
 
-  const responseFormat = {
-    type: 'json_schema',
-    json_schema: {
-      name: 'location_event_analysis',
-      strict: true,
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          hasLocation: { type: 'boolean' },
-          locationName: { type: 'string' },
-          eventType: { type: 'string', enum: eventTypes },
-          summary: { type: 'string' }
-        },
-        required: ['hasLocation', 'locationName', 'eventType', 'summary']
-      }
-    }
-  };
+JSONの形式:
+{
+  "hasLocation": trueまたはfalse,
+  "locationName": "最も具体的な場所の名前",
+  "locationCandidates": ["場所候補1", "場所候補2"],
+  "eventType": "鳥獣目撃" または "道路障害" または "助け合い" または "イベント" または "その他",
+  "summary": "10文字程度の短い日本語要約"
+}
+
+ルール:
+- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。
+- 場所を推測・創作しない。
+- locationName は、メッセージに明記された地名・施設名を優先する。
+- 「○○付近」「○○の近く」「○○周辺」は、位置を表す部分の名前だけをlocationNameにする。
+- locationCandidatesには、同じ場所を表す別表記や、検索に使えそうな短い候補を最大5個入れる。
+- 都道府県・市区町村・町名・施設名など、メッセージ中に書かれている情報を省略しすぎない。
+- 元メッセージだけでは行政区が分からない場合は、勝手に自治体を補わない。
+- eventType は必ず5種類のいずれかにする。
+- 場所がない場合は hasLocation=false、locationName=""、locationCandidates=[] にする。
+- summary は短い日本語にする。
+
+メッセージ:
+${text}`;
 
   const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
     method: 'POST',
@@ -112,11 +250,12 @@ async function analyzeMessage(text) {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      response_format: responseFormat,
+      response_format: { type: 'json_object' },
       temperature: 0.1,
-      max_tokens: 600,
-      stream: false,
-      enable_thinking: false
+      max_tokens: 500,
+      extra_body: {
+        chat_template_kwargs: { enable_thinking: false }
+      }
     }),
     signal: AbortSignal.timeout(30000)
   });
@@ -129,7 +268,7 @@ async function analyzeMessage(text) {
       const errorJson = JSON.parse(responseText);
       detail = errorJson?.error?.message || errorJson?.error || detail;
     } catch {
-      // Keep raw response text when it is not JSON.
+      // Keep raw response text.
     }
 
     const safeDetail = typeof detail === 'string' ? detail : JSON.stringify(detail);
@@ -144,17 +283,14 @@ async function analyzeMessage(text) {
     throw new Error('Hugging FaceのレスポンスがJSONではありません');
   }
 
-  const choice = data?.choices?.[0] || null;
-  const message = choice?.message || null;
-  const content = typeof message?.content === 'string' ? message.content.trim() : '';
-  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+  const content = data?.choices?.[0]?.message?.content;
+  const reasoning = data?.choices?.[0]?.message?.reasoning_content;
+  const finishReason = data?.choices?.[0]?.finish_reason;
 
-  console.log(`Hugging Face response: finish_reason=${choice?.finish_reason || 'unknown'}, content_length=${content.length}, reasoning_length=${reasoning.length}`);
+  console.log(`Hugging Face response: finish_reason=${finishReason}, content_length=${String(content || '').length}, reasoning_length=${String(reasoning || '').length}`);
 
   if (!content) {
-    throw new Error(
-      `Hugging Faceから空の解析結果が返されました (finish_reason=${choice?.finish_reason || 'unknown'}, reasoning_length=${reasoning.length})`
-    );
+    throw new Error(`Hugging Faceから空の解析結果が返されました (finish_reason=${finishReason || 'unknown'})`);
   }
 
   try {
@@ -162,36 +298,6 @@ async function analyzeMessage(text) {
   } catch (error) {
     throw new Error(`Hugging FaceのJSON解析に失敗しました: ${error.message}`);
   }
-}
-
-async function geocodeLocation(locationName) {
-  const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.searchParams.set('q', locationName);
-  url.searchParams.set('format', 'jsonv2');
-  url.searchParams.set('limit', '1');
-  url.searchParams.set('accept-language', 'ja');
-
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': NOMINATIM_USER_AGENT,
-      'Accept': 'application/json'
-    },
-    signal: AbortSignal.timeout(10000)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Nominatim API error: ${response.status}`);
-  }
-
-  const results = await response.json();
-  const first = Array.isArray(results) ? results[0] : null;
-  if (!first) return null;
-
-  const lat = Number(first.lat);
-  const lng = Number(first.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-
-  return { lat, lng };
 }
 
 app.post('/api/messages', async (req, res) => {
@@ -219,13 +325,21 @@ app.post('/api/messages', async (req, res) => {
 
     if (analysis.hasLocation) {
       try {
-        const coordinates = await geocodeLocation(analysis.locationName);
+        const coordinates = await geocodeLocation(
+          analysis.locationName,
+          analysis.locationCandidates,
+          cleanText
+        );
+
         if (coordinates) {
           locationData = {
-            ...coordinates,
+            lat: coordinates.lat,
+            lng: coordinates.lng,
             eventType: analysis.eventType,
             summary: analysis.summary,
-            locationName: analysis.locationName
+            locationName: analysis.locationName,
+            matchedLocation: coordinates.displayName,
+            matchedQuery: coordinates.matchedQuery
           };
         } else {
           geocodeError = '場所を地図上で特定できませんでした';
@@ -259,7 +373,7 @@ app.post('/api/messages', async (req, res) => {
   } catch (error) {
     console.error('メッセージ解析に失敗しました:', error);
     return res.status(502).json({
-      error: 'メッセージのAI解析に失敗しました。Renderログで詳細を確認してください。'
+      error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。'
     });
   }
 });
