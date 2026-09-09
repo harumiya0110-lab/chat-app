@@ -1,15 +1,8 @@
 services:
   - type: web
     name: inaka-power-chat-map
-    env: node
+    runtime: node
     plan: free
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
-    envVars:
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        value: gemini-1.5-flash
-      - key: NOMINATIM_USER_AGENT
-        value: inaka-power-chat-map/1.0 (contact@example.com)
