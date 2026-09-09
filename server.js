@@ -327,7 +327,6 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`チャットサーバーがポート ${PORT} で起動しました`);
-  console.log(`ブラウザで http://localhost:${PORT} にアクセスしてください`);
 });
