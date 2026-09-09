@@ -26,6 +26,11 @@
     #map { min-height: 560px; height: 70vh; }
     .status { padding: 0 1rem .75rem; color: #68796e; font-size: .9rem; min-height: 2.5rem; }
     .map-note { padding: .65rem 1rem; font-size: .82rem; color: #68796e; border-bottom: 1px solid #e3e9e0; }
+    .map-legend { display: flex; flex-wrap: wrap; gap: .45rem .8rem; align-items: center; padding: .7rem 1rem; border-bottom: 1px solid #e3e9e0; font-size: .84rem; background: #fbfcfa; }
+    .legend-item { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(33,52,44,.25); display: inline-block; }
+    .event-marker { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
+    .event-marker span { transform: rotate(45deg); color: #fff; font-size: 14px; font-weight: 800; line-height: 1; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } #map { height: 55vh; min-height: 360px; } #messages { min-height: 280px; } }
   </style>
 </head>
@@ -49,6 +54,12 @@
     <section aria-label="地図">
       <div class="panel-heading">地域マップ</div>
       <div class="map-note">ピンをクリックすると、イベント種別・要約・元の投稿を確認できます。</div>
+      <div class="map-legend" aria-label="イベント種別の凡例">
+        <span class="legend-item"><span class="legend-dot" style="background:#d64545"></span>交通障害</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2d8a57"></span>助け合い</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#e39a28"></span>イベント</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#6c7a89"></span>その他</span>
+      </div>
       <div id="map"></div>
     </section>
   </main>
@@ -56,10 +67,16 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // 地域に合わせて変更してください。
-    // 現在は広島市付近を初期表示にしています。
     const DEFAULT_CENTER = [34.3853, 132.4553];
     const DEFAULT_ZOOM = 11;
+
+    const EVENT_STYLES = {
+      '交通障害': { color: '#d64545', symbol: '！' },
+      '道路障害': { color: '#d64545', symbol: '！' },
+      '助け合い': { color: '#2d8a57', symbol: '＋' },
+      'イベント': { color: '#e39a28', symbol: '★' },
+      'その他': { color: '#6c7a89', symbol: '・' }
+    };
 
     const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -92,14 +109,32 @@
         ? new Date(data.createdAt).toLocaleString('ja-JP')
         : new Date().toLocaleTimeString('ja-JP'));
 
+      const eventType = data.locationData?.eventType;
+      const style = EVENT_STYLES[eventType];
+      const badge = eventType && style
+        ? `<span style="display:inline-block;margin:.2rem 0;padding:.12rem .45rem;border-radius:999px;background:${style.color};color:#fff;font-size:.75rem;font-weight:700;">${escapeHtml(eventType)}</span><br>`
+        : '';
+
       item.innerHTML = `
         <strong>${escapeHtml(data.username || data.userId || '投稿者')}</strong><br>
+        ${badge}
         ${escapeHtml(data.message || data.text)}<br>
         <small>${escapeHtml(timestamp)}</small>
       `;
 
       messages.append(item);
       messages.scrollTop = messages.scrollHeight;
+    }
+
+    function createEventIcon(eventType) {
+      const style = EVENT_STYLES[eventType] || EVENT_STYLES['その他'];
+      return L.divIcon({
+        className: '',
+        html: `<div class="event-marker" style="background:${style.color};"><span>${style.symbol}</span></div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -30]
+      });
     }
 
     function addMarker(message) {
@@ -110,17 +145,21 @@
       const lng = Number(location.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
 
+      const eventType = location.eventType || 'その他';
+      const style = EVENT_STYLES[eventType] || EVENT_STYLES['その他'];
       const popupHtml = `
         <div>
-          <strong>${escapeHtml(location.eventType)}</strong><br>
-          ${escapeHtml(location.summary)}<br>
+          <div style="display:inline-block;padding:.15rem .5rem;border-radius:999px;background:${style.color};color:#fff;font-weight:700;margin-bottom:.35rem;">
+            ${escapeHtml(eventType)}
+          </div><br>
+          <strong>${escapeHtml(location.summary)}</strong><br>
           <small>${escapeHtml(location.locationName)}</small>
           <hr>
           ${escapeHtml(message.text || message.message || '')}
         </div>
       `;
 
-      L.marker([lat, lng])
+      L.marker([lat, lng], { icon: createEventIcon(eventType) })
         .addTo(map)
         .bindPopup(popupHtml);
 
@@ -128,7 +167,6 @@
       return true;
     }
 
-    // 他ユーザーの投稿をSocket.IOで受信したとき。
     socket.on('receive-message', data => {
       addMessage(data);
       addMarker(data);
@@ -154,9 +192,6 @@
           throw new Error(result.error || '送信に失敗しました');
         }
 
-        // /api/messages のレスポンスには locationData が含まれるため、
-        // 自分の投稿だけはここで即時にピンを追加します。
-        // チャット本文はサーバーのSocket.IOイベントで全員に配信されます。
         if (result.locationData) {
           addMarker(result);
           status.textContent = `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`;
