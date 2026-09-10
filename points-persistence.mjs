@@ -212,9 +212,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
             }
 
             // 「手伝える」を押しただけでは、まだ地域ポイントは付与しません。
-            return originalSocketOn(socketEventName, handler) === undefined
-              ? undefined
-              : handler(payload, ack);
+            return handler(payload, ack);
           } catch (error) {
             console.error('Regional points toggle-help guard failed:', error);
             if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
