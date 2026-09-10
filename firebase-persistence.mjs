@@ -183,6 +183,25 @@ async function saveMessage(data) {
   return name.split('/').pop() || null;
 }
 
+async function deleteMessage(id, username) {
+  if (!enabled || !id || !username) return { ok: false, reason: 'invalid' };
+
+  const safeId = encodeURIComponent(String(id));
+  const existing = await firestoreRequest(`/messages/${safeId}`, { method: 'GET' });
+  if (!existing?.fields) return { ok: false, reason: 'not-found' };
+
+  const saved = normalizeMessage({
+    ...fromFirestoreFields(existing.fields),
+    id: String(existing.name || '').split('/').pop() || String(id)
+  });
+
+  // 投稿者名が一致する場合だけ、保存された投稿を削除します。
+  if (saved.username !== String(username)) return { ok: false, reason: 'not-owner' };
+
+  await firestoreRequest(`/messages/${safeId}`, { method: 'DELETE' });
+  return { ok: true };
+}
+
 async function loadRecentMessages() {
   if (!enabled) return [];
   const query = '/messages?pageSize=100&orderBy=createdAt%20desc';
@@ -233,6 +252,26 @@ SocketIOServer.prototype.on = function(eventName, listener) {
   }
 
   const wrappedListener = (socket, ...rest) => {
+    socket.on('delete-map-pin', async (payload = {}, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      if (!username || !id) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+        return;
+      }
+
+      try {
+        const result = await deleteMessage(id, username);
+        if (result.ok) {
+          socket.server.emit('map-pin-deleted', { id, username });
+        }
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore message delete failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     const originalSocketEmit = socket.emit.bind(socket);
     socket.emit = (socketEventName, ...args) => {
       if (socketEventName === 'username-accepted' && args[0]?.username) {
