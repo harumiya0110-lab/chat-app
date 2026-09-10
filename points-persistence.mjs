@@ -133,12 +133,11 @@ async function getMessage(id) {
   const safeId = encodeURIComponent(String(id));
   const result = await firestoreRequest(`/messages/${safeId}`, { method: 'GET' });
   if (!result?.fields) return null;
+  const fields = fromFirestoreFields(result.fields);
   return {
-    username: String(fromFirestoreFields(result.fields).username || ''),
-    helpUsers: Array.isArray(fromFirestoreFields(result.fields).helpUsers) ? fromFirestoreFields(result.fields).helpUsers : [],
-    helpPointAwardedUsers: Array.isArray(fromFirestoreFields(result.fields).helpPointAwardedUsers)
-      ? fromFirestoreFields(result.fields).helpPointAwardedUsers
-      : []
+    username: String(fields.username || ''),
+    helpUsers: Array.isArray(fields.helpUsers) ? fields.helpUsers : [],
+    helpConfirmedUsers: Array.isArray(fields.helpConfirmedUsers) ? fields.helpConfirmedUsers : []
   };
 }
 
@@ -164,18 +163,23 @@ async function setPoints(username, points) {
   });
 }
 
-async function markPointAwarded(messageId, username, awardedUsers) {
+async function markHelpConfirmed(messageId, helperUsername, confirmedUsers) {
   const safeId = encodeURIComponent(String(messageId));
-  const safeUsers = [...new Set([...awardedUsers, username])].slice(0, 100);
+  const safeUsers = [...new Set([...confirmedUsers, helperUsername])]
+    .filter(item => typeof item === 'string' && item.trim())
+    .map(item => item.trim().slice(0, 50))
+    .slice(0, 100);
+
   await firestoreRequest(
-    `/messages/${safeId}?updateMask.fieldPaths=helpPointAwardedUsers`,
+    `/messages/${safeId}?updateMask.fieldPaths=helpConfirmedUsers`,
     {
       method: 'PATCH',
       body: JSON.stringify({
-        fields: { helpPointAwardedUsers: firestoreValue(safeUsers) }
+        fields: { helpConfirmedUsers: firestoreValue(safeUsers) }
       })
     }
   );
+  return safeUsers;
 }
 
 const originalServerOn = SocketIOServer.prototype.on;
@@ -185,62 +189,121 @@ SocketIOServer.prototype.on = function(eventName, listener) {
   const wrappedListener = (socket, ...rest) => {
     const originalSocketOn = socket.on.bind(socket);
     socket.on = (socketEventName, handler) => {
-      if (socketEventName !== 'toggle-help') {
-        return originalSocketOn(socketEventName, handler);
+      if (socketEventName === 'toggle-help') {
+        const wrappedHandler = async (payload = {}, ack) => {
+          const username = socket.__regionalPointsUsername || '';
+          const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+          if (!username || !id) {
+            if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+            return;
+          }
+
+          try {
+            const saved = await getMessage(id);
+            if (!saved) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+              return;
+            }
+
+            // 自分の投稿には「手伝える」を登録できません。
+            if (saved.username === username) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'own-post' });
+              return;
+            }
+
+            // 「手伝える」を押しただけでは、まだ地域ポイントは付与しません。
+            return originalSocketOn(socketEventName, handler) === undefined
+              ? undefined
+              : handler(payload, ack);
+          } catch (error) {
+            console.error('Regional points toggle-help guard failed:', error);
+            if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+          }
+        };
+
+        return originalSocketOn(socketEventName, wrappedHandler);
       }
 
-      const wrappedHandler = async (payload = {}, ack) => {
-        const username = socket.__regionalPointsUsername || '';
-        const id = typeof payload.id === 'string' ? payload.id.trim() : '';
-        if (!username || !id) {
-          if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
-          return;
-        }
+      if (socketEventName === 'confirm-help') {
+        const wrappedHandler = async (payload = {}, ack) => {
+          const ownerUsername = socket.__regionalPointsUsername || '';
+          const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+          const helperUsername = typeof payload.helperUsername === 'string'
+            ? payload.helperUsername.trim().slice(0, 50)
+            : '';
 
-        try {
-          const saved = await getMessage(id);
-          if (!saved) {
-            if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+          if (!ownerUsername || !id || !helperUsername) {
+            if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
             return;
           }
 
-          // 自分の投稿には「手伝える」を登録できません。
-          if (saved.username === username) {
-            if (typeof ack === 'function') ack({ ok: false, reason: 'own-post' });
-            return;
-          }
-
-          const wrappedAck = async (result) => {
-            if (result?.ok && result.helping && enabled) {
-              try {
-                const refreshed = await getMessage(id);
-                const awardedUsers = refreshed?.helpPointAwardedUsers || [];
-                if (!awardedUsers.includes(username)) {
-                  const currentPoints = await getPoints(username);
-                  await setPoints(username, currentPoints + POINTS_PER_HELP);
-                  await markPointAwarded(id, username, awardedUsers);
-                  socket.server.emit('region-points-updated', {
-                    username,
-                    points: currentPoints + POINTS_PER_HELP,
-                    earned: POINTS_PER_HELP,
-                    messageId: id
-                  });
-                }
-              } catch (error) {
-                console.error('Regional points award failed:', error);
-              }
+          try {
+            const saved = await getMessage(id);
+            if (!saved) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+              return;
             }
-            if (typeof ack === 'function') ack(result);
-          };
 
-          return handler(payload, wrappedAck);
-        } catch (error) {
-          console.error('Regional points toggle-help guard failed:', error);
-          if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
-        }
-      };
+            if (saved.username !== ownerUsername) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
+              return;
+            }
 
-      return originalSocketOn(socketEventName, wrappedHandler);
+            if (!saved.helpUsers.includes(helperUsername)) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'not-helper' });
+              return;
+            }
+
+            const confirmedUsers = Array.isArray(saved.helpConfirmedUsers)
+              ? [...saved.helpConfirmedUsers]
+              : [];
+
+            if (confirmedUsers.includes(helperUsername)) {
+              if (typeof ack === 'function') ack({
+                ok: true,
+                alreadyConfirmed: true,
+                helperUsername,
+                helpConfirmedUsers: confirmedUsers
+              });
+              return;
+            }
+
+            const currentPoints = await getPoints(helperUsername);
+            const newPoints = currentPoints + POINTS_PER_HELP;
+            await setPoints(helperUsername, newPoints);
+            const updatedConfirmedUsers = await markHelpConfirmed(id, helperUsername, confirmedUsers);
+
+            socket.server.emit('region-points-updated', {
+              username: helperUsername,
+              points: newPoints,
+              earned: POINTS_PER_HELP,
+              messageId: id,
+              reason: 'help-confirmed'
+            });
+            socket.server.emit('map-pin-help-confirmed', {
+              id,
+              helperUsername,
+              confirmedBy: ownerUsername,
+              points: POINTS_PER_HELP,
+              helpConfirmedUsers: updatedConfirmedUsers
+            });
+
+            if (typeof ack === 'function') ack({
+              ok: true,
+              helperUsername,
+              points: POINTS_PER_HELP,
+              helpConfirmedUsers: updatedConfirmedUsers
+            });
+          } catch (error) {
+            console.error('Regional points confirmation failed:', error);
+            if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+          }
+        };
+
+        return originalSocketOn(socketEventName, wrappedHandler);
+      }
+
+      return originalSocketOn(socketEventName, handler);
     };
 
     const previousEmit = socket.emit.bind(socket);
@@ -265,8 +328,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       return previousEmit(socketEventName, ...args);
     };
 
-    const result = listener(socket, ...rest);
-    return result;
+    return listener(socket, ...rest);
   };
 
   return originalServerOn.call(this, eventName, wrappedListener);
