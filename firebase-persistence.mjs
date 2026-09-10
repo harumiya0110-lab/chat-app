@@ -23,9 +23,7 @@ function firestoreValue(value) {
   if (typeof value === 'number') {
     return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
   }
-  if (Array.isArray(value)) {
-    return { arrayValue: { values: value.map(firestoreValue) } };
-  }
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(firestoreValue) } };
   if (typeof value === 'object') {
     const fields = {};
     for (const [key, item] of Object.entries(value)) fields[key] = firestoreValue(item);
@@ -76,6 +74,10 @@ function normalizeMessage(data) {
   const helpUsers = Array.isArray(data?.helpUsers)
     ? [...new Set(data.helpUsers.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim().slice(0, 50)))].slice(0, 100)
     : [];
+  const helpConfirmedUsers = Array.isArray(data?.helpConfirmedUsers)
+    ? [...new Set(data.helpConfirmedUsers.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim().slice(0, 50)))].slice(0, 100)
+    : [];
+
   return {
     id: typeof data?.id === 'string' ? data.id : null,
     username: typeof data?.username === 'string' && data.username ? data.username : '投稿者',
@@ -83,7 +85,8 @@ function normalizeMessage(data) {
     userId: typeof data?.userId === 'string' ? data.userId.slice(0, 200) : '',
     createdAt,
     locationData: normalizeLocationData(data?.locationData),
-    helpUsers
+    helpUsers,
+    helpConfirmedUsers
   };
 }
 
@@ -200,7 +203,6 @@ async function deleteMessage(id, username) {
   if (!enabled || !id || !username) return { ok: false, reason: 'invalid' };
   const saved = await getSavedMessage(id);
   if (!saved) return { ok: false, reason: 'not-found' };
-
   if (saved.username !== String(username)) return { ok: false, reason: 'not-owner' };
 
   const safeId = encodeURIComponent(String(id));
@@ -240,7 +242,7 @@ async function toggleHelper(id, username) {
     }
   );
 
-  return { ok: true, helping, helpUsers, count: helpUsers.length };
+  return { ok: true, helping, helpUsers, count: helpUsers.length, helpConfirmedUsers: saved.helpConfirmedUsers };
 }
 
 async function loadRecentMessages() {
@@ -288,9 +290,7 @@ SocketIOServer.prototype.emit = function(eventName, ...args) {
 
 const originalServerOn = SocketIOServer.prototype.on;
 SocketIOServer.prototype.on = function(eventName, listener) {
-  if (eventName !== 'connection') {
-    return originalServerOn.call(this, eventName, listener);
-  }
+  if (eventName !== 'connection') return originalServerOn.call(this, eventName, listener);
 
   const wrappedListener = (socket, ...rest) => {
     socket.on('delete-map-pin', async (payload = {}, ack) => {
@@ -303,9 +303,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 
       try {
         const result = await deleteMessage(id, username);
-        if (result.ok) {
-          socket.server.emit('map-pin-deleted', { id, username });
-        }
+        if (result.ok) socket.server.emit('map-pin-deleted', { id, username });
         if (typeof ack === 'function') ack(result);
       } catch (error) {
         console.error('Firestore message delete failed:', error);
@@ -327,7 +325,8 @@ SocketIOServer.prototype.on = function(eventName, listener) {
           socket.server.emit('map-pin-help-updated', {
             id,
             helpUsers: result.helpUsers,
-            count: result.count
+            count: result.count,
+            helpConfirmedUsers: result.helpConfirmedUsers || []
           });
         }
         if (typeof ack === 'function') ack(result);
