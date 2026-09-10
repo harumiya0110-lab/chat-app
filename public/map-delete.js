@@ -28,6 +28,7 @@
 
   function renderHelpStatus(actions, marker) {
     const helpUsers = Array.isArray(marker.__helpUsers) ? marker.__helpUsers : [];
+    const confirmedUsers = Array.isArray(marker.__helpConfirmedUsers) ? marker.__helpConfirmedUsers : [];
     const isOwner = marker.__deleteOwnerName === currentUsername;
     const helping = !isOwner && helpUsers.includes(currentUsername);
     const names = helpUsers.slice(0, 8).map(name => String(name)).join('、');
@@ -55,13 +56,76 @@
       block.appendChild(empty);
     }
 
+    if (isOwner && helpUsers.length) {
+      const confirmTitle = document.createElement('div');
+      confirmTitle.className = 'map-help-people';
+      confirmTitle.textContent = '実際に手伝いに来た人を確認してください。';
+      block.appendChild(confirmTitle);
+
+      helpUsers.forEach(helperUsername => {
+        const row = document.createElement('div');
+        row.className = 'map-help-confirm-row';
+
+        const name = document.createElement('span');
+        name.className = 'map-help-confirm-name';
+        name.textContent = String(helperUsername);
+        row.appendChild(name);
+
+        const confirmed = confirmedUsers.includes(helperUsername);
+        const confirmButton = document.createElement('button');
+        confirmButton.type = 'button';
+        confirmButton.className = 'map-help-confirm-btn';
+        confirmButton.textContent = confirmed ? '✅ 来た（確認済み）' : '📍 来た！';
+        confirmButton.disabled = confirmed;
+
+        if (!confirmed) {
+          confirmButton.addEventListener('click', () => {
+            confirmButton.disabled = true;
+            confirmButton.textContent = '確認中…';
+
+            socket.emit('confirm-help', {
+              id: marker.__deleteMessageId,
+              helperUsername
+            }, result => {
+              if (!result?.ok) {
+                confirmButton.disabled = false;
+                confirmButton.textContent = '📍 来た！';
+                if (typeof setStatus === 'function') {
+                  const messages = {
+                    'not-owner': '投稿者本人だけが「来た！」を押せます。',
+                    'not-helper': 'この人は「手伝える」に参加していません。',
+                    'not-found': '投稿が見つかりません。',
+                    'unauthorized': 'ログインしてから確認してください。',
+                    'server-error': '確認中にエラーが発生しました。'
+                  };
+                  setStatus(messages[result.reason] || '確認に失敗しました。');
+                }
+                return;
+              }
+
+              marker.__helpConfirmedUsers = Array.isArray(result.helpConfirmedUsers)
+                ? result.helpConfirmedUsers
+                : [...confirmedUsers, helperUsername];
+              renderHelpStatus(actions, marker);
+              if (typeof setStatus === 'function') {
+                setStatus(`「${helperUsername}」さんが実際に手伝ったことを確認しました。${Number(result.points || 0)}pt付与しました。`);
+              }
+            });
+          });
+        }
+
+        row.appendChild(confirmButton);
+        block.appendChild(row);
+      });
+    }
+
     if (isOwner) {
-      const ownerNotice = document.createElement('button');
-      ownerNotice.type = 'button';
-      ownerNotice.className = 'map-help-btn';
-      ownerNotice.disabled = true;
-      ownerNotice.textContent = '🙅 自分の投稿には「手伝える」はできません';
-      block.appendChild(ownerNotice);
+      if (!helpUsers.length) {
+        const ownerNotice = document.createElement('div');
+        ownerNotice.className = 'map-help-people';
+        ownerNotice.textContent = '🙅 自分の投稿には「手伝える」はできません。';
+        block.appendChild(ownerNotice);
+      }
       actions.appendChild(block);
       return;
     }
@@ -92,13 +156,31 @@
         }
 
         marker.__helpUsers = Array.isArray(result.helpUsers) ? result.helpUsers : [];
+        marker.__helpConfirmedUsers = Array.isArray(result.helpConfirmedUsers) ? result.helpConfirmedUsers : [];
         renderHelpStatus(actions, marker);
         if (typeof setStatus === 'function') {
-          setStatus(result.helping ? '「手伝える」に参加しました。' : '「手伝える」を取り消しました。');
+          setStatus(result.helping
+            ? '「手伝える」に参加しました。実際に手伝ったあと、投稿者が「来た！」を押すと10ptもらえます。'
+            : '「手伝える」を取り消しました。');
         }
       });
     });
     block.appendChild(button);
+
+    if (helping && !confirmedUsers.includes(currentUsername)) {
+      const note = document.createElement('div');
+      note.className = 'map-help-people';
+      note.textContent = '⭐ 投稿者が「来た！」を押すと地域ポイント10ptが付与されます。';
+      block.appendChild(note);
+    }
+
+    if (confirmedUsers.includes(currentUsername)) {
+      const done = document.createElement('div');
+      done.className = 'map-help-people';
+      done.textContent = '🎉 投稿者に「来た！」と確認され、地域ポイントが付与されました。';
+      block.appendChild(done);
+    }
+
     actions.appendChild(block);
   }
 
@@ -167,6 +249,7 @@
     marker.__deleteOwnerName = null;
     marker.__deleteMessageId = null;
     marker.__helpUsers = [];
+    marker.__helpConfirmedUsers = [];
     return marker;
   };
 
@@ -179,6 +262,7 @@
       marker.__deleteOwnerName = typeof data.username === 'string' ? data.username : null;
       marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
       marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
+      marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
       ownerMarkers.add(marker);
       addDeleteControl(marker);
     }, 0);
@@ -191,6 +275,24 @@
     map.eachLayer(layer => {
       if (layer?.__deleteMessageId !== id) return;
       layer.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
+      layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : layer.__helpConfirmedUsers;
+
+      const popup = layer.getPopup?.();
+      const popupElement = popup?.getElement?.();
+      const actions = popupElement?.querySelector?.('.map-pin-actions');
+      if (actions) renderHelpStatus(actions, layer);
+    });
+  });
+
+  socket.on('map-pin-help-confirmed', data => {
+    const id = typeof data?.id === 'string' ? data.id : '';
+    if (!id || typeof map === 'undefined') return;
+
+    map.eachLayer(layer => {
+      if (layer?.__deleteMessageId !== id) return;
+      layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers)
+        ? data.helpConfirmedUsers
+        : [...(layer.__helpConfirmedUsers || []), data.helperUsername];
 
       const popup = layer.getPopup?.();
       const popupElement = popup?.getElement?.();
@@ -215,9 +317,7 @@
     if (!event.target.closest('.map-filter') || typeof map === 'undefined') return;
     setTimeout(() => {
       ownerMarkers.forEach(marker => {
-        if (marker.__deletedByOwner && map.hasLayer(marker)) {
-          map.removeLayer(marker);
-        }
+        if (marker.__deletedByOwner && map.hasLayer(marker)) map.removeLayer(marker);
       });
     }, 0);
   });
