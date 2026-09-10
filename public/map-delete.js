@@ -28,7 +28,8 @@
 
   function renderHelpStatus(actions, marker) {
     const helpUsers = Array.isArray(marker.__helpUsers) ? marker.__helpUsers : [];
-    const helping = helpUsers.includes(currentUsername);
+    const isOwner = marker.__deleteOwnerName === currentUsername;
+    const helping = !isOwner && helpUsers.includes(currentUsername);
     const names = helpUsers.slice(0, 8).map(name => String(name)).join('、');
     const extra = helpUsers.length > 8 ? ` ほか${helpUsers.length - 8}人` : '';
 
@@ -54,6 +55,17 @@
       block.appendChild(empty);
     }
 
+    if (isOwner) {
+      const ownerNotice = document.createElement('button');
+      ownerNotice.type = 'button';
+      ownerNotice.className = 'map-help-btn';
+      ownerNotice.disabled = true;
+      ownerNotice.textContent = '🙅 自分の投稿には「手伝える」はできません';
+      block.appendChild(ownerNotice);
+      actions.appendChild(block);
+      return;
+    }
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = helping ? 'map-help-btn helping' : 'map-help-btn';
@@ -71,6 +83,7 @@
             const messages = {
               'not-found': '投稿が見つかりません。',
               'unauthorized': 'ログインしてから参加してください。',
+              'own-post': '自分の投稿には「手伝える」はできません。',
               'server-error': '手伝える人の登録に失敗しました。'
             };
             setStatus(messages[result.reason] || '更新に失敗しました。');
@@ -147,7 +160,6 @@
     });
   }
 
-  // 今後作成されるマーカーに識別番号を付けます。
   const originalMarker = L.marker.bind(L);
   L.marker = function(latlng, options = {}) {
     const marker = originalMarker(latlng, options);
@@ -199,7 +211,6 @@
     });
   });
 
-  // 表示切替のたびに、削除済みピンが復活しないようにします。
   document.addEventListener('click', event => {
     if (!event.target.closest('.map-filter') || typeof map === 'undefined') return;
     setTimeout(() => {
