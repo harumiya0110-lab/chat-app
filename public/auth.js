@@ -5,10 +5,13 @@
   const CONFIG = {
     // Firebase Console > Project settings > General > Your apps > Web app > SDK setup and configuration
     // FirebaseのWeb APIキーはFirebaseサービス用の公開設定値です。Gemini APIキーとは別物です。
-    apiKey: 'PASTE_FIREBASE_WEB_API_KEY_HERE',
+    apiKey: 'AIzaSyAQk0FwLApOl0w7KsHGsgbStO3DFnC0tOE',
     authDomain: 'inakachat-29b24.firebaseapp.com',
     projectId: 'inakachat-29b24',
-    appId: 'PASTE_FIREBASE_WEB_APP_ID_HERE'
+    storageBucket: 'inakachat-29b24.firebasestorage.app',
+    messagingSenderId: '144875359478',
+    appId: '1:144875359478:web:cbf2b6413fd414cb98b0d7',
+    measurementId: 'G-HSK5TPMF7N'
   };
 
   const setupPanel = document.getElementById('setup-panel');
@@ -95,9 +98,6 @@
 
   async function ensureFirebase() {
     if (window.firebase?.auth) return;
-    if (CONFIG.apiKey.startsWith('PASTE_') || CONFIG.appId.startsWith('PASTE_')) {
-      throw new Error('Firebase WebアプリのapiKeyとappIdをpublic/auth.jsに設定してください。');
-    }
 
     const load = (src) => new Promise((resolve, reject) => {
       const script = document.createElement('script');
@@ -119,11 +119,13 @@
     window.ruralFirebaseAuth.onAuthStateChanged(user => {
       if (!user) {
         accountStatus.textContent = '';
+        accountStatus.classList.remove('account-error');
         accountActions.hidden = true;
         return;
       }
       suggestNickname(user);
       accountStatus.textContent = `✅ ログイン中：${user.email || 'アカウント'}`;
+      accountStatus.classList.remove('account-error');
       accountActions.hidden = false;
     });
   }
@@ -181,6 +183,6 @@
 
   ensureFirebase().catch(error => {
     console.warn('Firebase Authentication is not configured yet:', error.message);
-    accountStatus.textContent = 'メールアカウントログインを使うにはFirebase Webアプリ設定が必要です。今までの名前だけでの参加はそのまま使えます。';
+    accountStatus.textContent = 'Firebase Authenticationの初期化に失敗しました。Firebase Consoleの設定を確認してください。';
   });
 })();
