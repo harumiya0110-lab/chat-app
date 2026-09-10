@@ -182,6 +182,81 @@ async function markHelpConfirmed(messageId, helperUsername, confirmedUsers) {
   return safeUsers;
 }
 
+async function confirmHelp(socket, payload = {}, ack) {
+  const ownerUsername = socket.__regionalPointsUsername || '';
+  const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+  const helperUsername = typeof payload.helperUsername === 'string'
+    ? payload.helperUsername.trim().slice(0, 50)
+    : '';
+
+  if (!ownerUsername || !id || !helperUsername) {
+    if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+    return;
+  }
+
+  try {
+    const saved = await getMessage(id);
+    if (!saved) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+      return;
+    }
+
+    if (saved.username !== ownerUsername) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
+      return;
+    }
+
+    if (!saved.helpUsers.includes(helperUsername)) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'not-helper' });
+      return;
+    }
+
+    const confirmedUsers = Array.isArray(saved.helpConfirmedUsers)
+      ? [...saved.helpConfirmedUsers]
+      : [];
+
+    if (confirmedUsers.includes(helperUsername)) {
+      if (typeof ack === 'function') ack({
+        ok: true,
+        alreadyConfirmed: true,
+        helperUsername,
+        helpConfirmedUsers: confirmedUsers
+      });
+      return;
+    }
+
+    const currentPoints = await getPoints(helperUsername);
+    const newPoints = currentPoints + POINTS_PER_HELP;
+    await setPoints(helperUsername, newPoints);
+    const updatedConfirmedUsers = await markHelpConfirmed(id, helperUsername, confirmedUsers);
+
+    socket.server.emit('region-points-updated', {
+      username: helperUsername,
+      points: newPoints,
+      earned: POINTS_PER_HELP,
+      messageId: id,
+      reason: 'help-confirmed'
+    });
+    socket.server.emit('map-pin-help-confirmed', {
+      id,
+      helperUsername,
+      confirmedBy: ownerUsername,
+      points: POINTS_PER_HELP,
+      helpConfirmedUsers: updatedConfirmedUsers
+    });
+
+    if (typeof ack === 'function') ack({
+      ok: true,
+      helperUsername,
+      points: POINTS_PER_HELP,
+      helpConfirmedUsers: updatedConfirmedUsers
+    });
+  } catch (error) {
+    console.error('Regional points confirmation failed:', error);
+    if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+  }
+}
+
 const originalServerOn = SocketIOServer.prototype.on;
 SocketIOServer.prototype.on = function(eventName, listener) {
   if (eventName !== 'connection') return originalServerOn.call(this, eventName, listener);
@@ -211,7 +286,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
               return;
             }
 
-            // 「手伝える」を押しただけでは、まだ地域ポイントは付与しません。
+            // 「手伝える」を押しただけでは地域ポイントは付与しません。
             return handler(payload, ack);
           } catch (error) {
             console.error('Regional points toggle-help guard failed:', error);
@@ -222,87 +297,13 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         return originalSocketOn(socketEventName, wrappedHandler);
       }
 
-      if (socketEventName === 'confirm-help') {
-        const wrappedHandler = async (payload = {}, ack) => {
-          const ownerUsername = socket.__regionalPointsUsername || '';
-          const id = typeof payload.id === 'string' ? payload.id.trim() : '';
-          const helperUsername = typeof payload.helperUsername === 'string'
-            ? payload.helperUsername.trim().slice(0, 50)
-            : '';
-
-          if (!ownerUsername || !id || !helperUsername) {
-            if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
-            return;
-          }
-
-          try {
-            const saved = await getMessage(id);
-            if (!saved) {
-              if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
-              return;
-            }
-
-            if (saved.username !== ownerUsername) {
-              if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
-              return;
-            }
-
-            if (!saved.helpUsers.includes(helperUsername)) {
-              if (typeof ack === 'function') ack({ ok: false, reason: 'not-helper' });
-              return;
-            }
-
-            const confirmedUsers = Array.isArray(saved.helpConfirmedUsers)
-              ? [...saved.helpConfirmedUsers]
-              : [];
-
-            if (confirmedUsers.includes(helperUsername)) {
-              if (typeof ack === 'function') ack({
-                ok: true,
-                alreadyConfirmed: true,
-                helperUsername,
-                helpConfirmedUsers: confirmedUsers
-              });
-              return;
-            }
-
-            const currentPoints = await getPoints(helperUsername);
-            const newPoints = currentPoints + POINTS_PER_HELP;
-            await setPoints(helperUsername, newPoints);
-            const updatedConfirmedUsers = await markHelpConfirmed(id, helperUsername, confirmedUsers);
-
-            socket.server.emit('region-points-updated', {
-              username: helperUsername,
-              points: newPoints,
-              earned: POINTS_PER_HELP,
-              messageId: id,
-              reason: 'help-confirmed'
-            });
-            socket.server.emit('map-pin-help-confirmed', {
-              id,
-              helperUsername,
-              confirmedBy: ownerUsername,
-              points: POINTS_PER_HELP,
-              helpConfirmedUsers: updatedConfirmedUsers
-            });
-
-            if (typeof ack === 'function') ack({
-              ok: true,
-              helperUsername,
-              points: POINTS_PER_HELP,
-              helpConfirmedUsers: updatedConfirmedUsers
-            });
-          } catch (error) {
-            console.error('Regional points confirmation failed:', error);
-            if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
-          }
-        };
-
-        return originalSocketOn(socketEventName, wrappedHandler);
-      }
-
       return originalSocketOn(socketEventName, handler);
     };
+
+    // 「来た！」の確認は、このモジュール自身でイベントを登録します。
+    originalSocketOn('confirm-help', (payload = {}, ack) => {
+      void confirmHelp(socket, payload, ack);
+    });
 
     const previousEmit = socket.emit.bind(socket);
     socket.emit = (socketEventName, ...args) => {
