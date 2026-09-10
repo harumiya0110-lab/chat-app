@@ -144,10 +144,16 @@ async function getMessage(id) {
 async function getPoints(username) {
   if (!enabled || !username) return 0;
   const safeUsername = encodeURIComponent(String(username));
-  const result = await firestoreRequest(`/regionalPoints/${safeUsername}`, { method: 'GET' });
-  if (!result?.fields) return 0;
-  const fields = fromFirestoreFields(result.fields);
-  return Number(fields.points || 0);
+  try {
+    const result = await firestoreRequest(`/regionalPoints/${safeUsername}`, { method: 'GET' });
+    if (!result?.fields) return 0;
+    const fields = fromFirestoreFields(result.fields);
+    return Number(fields.points || 0);
+  } catch (error) {
+    // 初回利用者には地域ポイントのドキュメントがまだ存在しないため、0ptとして扱います。
+    if (String(error?.message || '').startsWith('Firestore request failed: 404')) return 0;
+    throw error;
+  }
 }
 
 async function setPoints(username, points) {
