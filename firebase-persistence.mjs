@@ -311,6 +311,35 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       }
     });
 
+    socket.on('delete-chat-message', async (payload = {}, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      if (!username || !id) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+        return;
+      }
+
+      try {
+        const saved = await getSavedMessage(id);
+        if (!saved) {
+          if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+          return;
+        }
+
+        if (saved.username !== username) {
+          if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
+          return;
+        }
+
+        const result = await deleteMessage(id, username);
+        if (result.ok) socket.server.emit('chat-message-deleted', { id, username });
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore chat message delete failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     socket.on('toggle-help', async (payload = {}, ack) => {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
