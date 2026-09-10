@@ -12,7 +12,7 @@
   function setPoints(points) {
     const value = Number.isFinite(Number(points)) ? Math.max(0, Math.floor(Number(points))) : 0;
     pointsEl.textContent = `⭐ 地域ポイント ${value}pt`;
-    pointsEl.title = '人を助けたときにもらえる地域ポイント';
+    pointsEl.title = '投稿者に実際の手伝いを確認してもらうと10pt獲得';
   }
 
   socket.on('region-points-updated', data => {
@@ -21,7 +21,7 @@
 
     const earned = Number(data.earned || 0);
     if (earned > 0 && typeof setStatus === 'function') {
-      setStatus(`🎉 「手伝える」で地域ポイントを${earned}pt獲得しました！`);
+      setStatus(`🎉 投稿者が「来た！」と確認しました。地域ポイントを${earned}pt獲得しました！`);
     }
   });
 })();
