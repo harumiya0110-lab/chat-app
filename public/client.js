@@ -70,6 +70,48 @@ function scrollToBottom() {
   messages.scrollTop = messages.scrollHeight;
 }
 
+function addNormalMessageDeleteControl(item, data) {
+  if (data.locationData || data.username !== currentUsername || !data.id) return;
+
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+
+  const deleteButton = document.createElement('button');
+  deleteButton.type = 'button';
+  deleteButton.className = 'chat-delete-btn';
+  deleteButton.textContent = '🗑 削除';
+  deleteButton.title = '自分の投稿だけ削除できます';
+
+  deleteButton.addEventListener('click', () => {
+    if (!window.confirm('この投稿を削除しますか？')) return;
+
+    deleteButton.disabled = true;
+    deleteButton.textContent = '削除中…';
+
+    socket.emit('delete-chat-message', { id: data.id }, result => {
+      if (!result?.ok) {
+        deleteButton.disabled = false;
+        deleteButton.textContent = '🗑 削除';
+        const reasonMessages = {
+          'not-owner': '自分の投稿だけ削除できます。',
+          'not-found': '投稿が見つかりません。',
+          'unauthorized': 'ログインしてから削除してください。',
+          'server-error': '削除中にエラーが発生しました。'
+        };
+        setStatus(reasonMessages[result.reason] || '投稿の削除に失敗しました。');
+        return;
+      }
+
+      item.remove();
+      setStatus('自分の投稿を削除しました。');
+      scrollToBottom();
+    });
+  });
+
+  actions.appendChild(deleteButton);
+  item.appendChild(actions);
+}
+
 function addMessage(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
@@ -78,6 +120,7 @@ function addMessage(data) {
   const style = EVENT_STYLES[type];
   const badge = type && style ? `<span style="display:inline-block;background:${style.color};color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-bottom:4px">${escapeHtml(type)}</span><br>` : '';
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-bubble">${badge}${escapeHtml(data.message || data.text || '')}</div>`;
+  addNormalMessageDeleteControl(item, data);
   messages.appendChild(item);
   scrollToBottom();
 }
@@ -191,6 +234,15 @@ socket.on('receive-message', data => {
   addMessage(data);
   addMarker(data);
 });
+
+socket.on('chat-message-deleted', data => {
+  const id = typeof data?.id === 'string' ? data.id : '';
+  if (!id) return;
+  messages.querySelectorAll('.message').forEach(item => {
+    if (item.dataset.messageId === id) item.remove();
+  });
+});
+
 socket.on('receive-image', addImage);
 socket.on('receive-video', addVideo);
 socket.on('user-joined', data => addSystemMessage(data.message));
@@ -387,46 +439,35 @@ async function startCall(targetId, targetName) {
   } catch (error) {
     console.error(error);
     cleanupCall(false);
-    alert(`通話を開始できませんでした。カメラ・マイクの許可を確認してください。\n${error.message}`);
+    alert(error.message || '通話を開始できませんでした');
   }
 }
 
-socket.on('incoming-call', ({ from, username, offer }) => {
-  if (currentCallTarget) {
-    socket.emit('end-call', { targetId: from });
-    return;
-  }
-  pendingIncoming = { from, username, offer };
-  showCallUI(`${username}さんから着信`, true);
+socket.on('incoming-call', data => {
+  if (currentCallTarget) return;
+  pendingIncoming = data;
+  currentCallTarget = data.from;
+  showCallUI(`${data.username}さんから着信`, true);
 });
 
 acceptBtn.addEventListener('click', async () => {
   if (!pendingIncoming) return;
-  const { from, offer, username } = pendingIncoming;
   try {
     localStream = await getMedia();
-    currentCallTarget = from;
-    peerConnection = createPeerConnection(from);
+    peerConnection = createPeerConnection(pendingIncoming.from);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     localVideo.srcObject = localStream;
     miniLocal.srcObject = localStream;
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    showCallUI(`${pendingIncoming.username}さんと接続中…`);
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingIncoming.offer));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    socket.emit('call-answer', { targetId: from, answer });
-    callStatus.textContent = `${username}さんと通話中`;
-    acceptBtn.hidden = true;
-    declineBtn.hidden = true;
-    muteBtn.hidden = false;
-    camToggleBtn.hidden = false;
-    minimizeBtn.hidden = false;
-    endBtn.hidden = false;
+    socket.emit('call-answer', { targetId: pendingIncoming.from, answer });
     pendingIncoming = null;
   } catch (error) {
     console.error(error);
-    socket.emit('end-call', { targetId: from });
-    cleanupCall(false);
-    alert(`通話に応答できませんでした。\n${error.message}`);
+    cleanupCall(true);
+    alert(error.message || '通話に応答できませんでした');
   }
 });
 
@@ -435,51 +476,59 @@ declineBtn.addEventListener('click', () => {
   cleanupCall(false);
 });
 
-socket.on('call-answered', async ({ answer }) => {
-  if (!peerConnection || !answer) return;
-  try { await peerConnection.setRemoteDescription(new RTCSessionDescription(answer)); }
-  catch (error) { console.error(error); }
+socket.on('call-answered', async data => {
+  if (!peerConnection || data.from !== currentCallTarget) return;
+  try {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    callStatus.textContent = '接続中…';
+  } catch (error) {
+    console.error(error);
+    cleanupCall(true);
+  }
 });
 
-socket.on('ice-candidate', async ({ candidate }) => {
-  if (!peerConnection || !candidate) return;
-  try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)); }
-  catch (error) { console.warn('ICE candidate error', error); }
+socket.on('ice-candidate', async data => {
+  if (!peerConnection || data.from !== currentCallTarget || !data.candidate) return;
+  try {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } catch (error) {
+    console.error(error);
+  }
 });
 
-socket.on('call-ended', () => cleanupCall(false));
+socket.on('call-ended', data => {
+  if (data.from === currentCallTarget) cleanupCall(false);
+});
 
 muteBtn.addEventListener('click', () => {
-  const audio = localStream?.getAudioTracks()[0];
-  if (!audio) return;
+  if (!localStream) return;
   isMuted = !isMuted;
-  audio.enabled = !isMuted;
+  localStream.getAudioTracks().forEach(track => { track.enabled = !isMuted; });
   muteBtn.textContent = isMuted ? 'ミュート解除' : 'ミュート';
 });
 
 camToggleBtn.addEventListener('click', () => {
-  const video = localStream?.getVideoTracks()[0];
-  if (!video) return;
+  if (!localStream) return;
   isVideoOn = !isVideoOn;
-  video.enabled = isVideoOn;
+  localStream.getVideoTracks().forEach(track => { track.enabled = isVideoOn; });
   camToggleBtn.textContent = isVideoOn ? 'カメラOFF' : 'カメラON';
 });
 
-endBtn.addEventListener('click', () => cleanupCall(true));
-miniEnd.addEventListener('click', () => cleanupCall(true));
-
-minimizeBtn.addEventListener('click', () => {
+function minimizeCall() {
+  if (!currentCallTarget) return;
   isMinimized = true;
   callModal.hidden = true;
   miniBar.hidden = false;
-});
+}
 
-miniUnminimize.addEventListener('click', () => {
+function unminimizeCall() {
+  if (!currentCallTarget) return;
   isMinimized = false;
-  callModal.hidden = false;
   miniBar.hidden = true;
-});
+  callModal.hidden = false;
+}
 
-window.addEventListener('beforeunload', () => {
-  if (currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
-});
+minimizeBtn.addEventListener('click', minimizeCall);
+miniUnminimize.addEventListener('click', unminimizeCall);
+endBtn.addEventListener('click', () => cleanupCall(true));
+miniEnd.addEventListener('click', () => cleanupCall(true));
