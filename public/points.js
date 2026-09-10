@@ -24,4 +24,12 @@
       setStatus(`🎉 投稿者が「来た！」と確認しました。地域ポイントを${earned}pt獲得しました！`);
     }
   });
+
+  // Firebase Authentication のログイン画面を後から読み込みます。
+  // client.js / points.js の既存動作を変えず、今までの「名前だけで参加」も残します。
+  const authScript = document.createElement('script');
+  authScript.src = '/auth.js';
+  authScript.defer = true;
+  authScript.onerror = () => console.error('Firebase Authentication script could not be loaded.');
+  document.head.appendChild(authScript);
 })();
