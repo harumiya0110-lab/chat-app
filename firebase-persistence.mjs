@@ -73,13 +73,17 @@ function normalizeMessage(data) {
   const createdAt = typeof data?.createdAt === 'string' && data.createdAt
     ? data.createdAt
     : new Date().toISOString();
+  const helpUsers = Array.isArray(data?.helpUsers)
+    ? [...new Set(data.helpUsers.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim().slice(0, 50)))].slice(0, 100)
+    : [];
   return {
     id: typeof data?.id === 'string' ? data.id : null,
     username: typeof data?.username === 'string' && data.username ? data.username : '投稿者',
     message: typeof data?.message === 'string' ? data.message.slice(0, 2000) : '',
     userId: typeof data?.userId === 'string' ? data.userId.slice(0, 200) : '',
     createdAt,
-    locationData: normalizeLocationData(data?.locationData)
+    locationData: normalizeLocationData(data?.locationData),
+    helpUsers
   };
 }
 
@@ -169,13 +173,11 @@ async function saveMessage(data) {
   const result = await firestoreRequest('/messages', {
     method: 'POST',
     body: JSON.stringify({
-      fields: {
-        ...Object.fromEntries(
-          Object.entries(message)
-            .filter(([key]) => key !== 'id')
-            .map(([key, value]) => [key, firestoreValue(value)])
-        )
-      }
+      fields: Object.fromEntries(
+        Object.entries(message)
+          .filter(([key]) => key !== 'id')
+          .map(([key, value]) => [key, firestoreValue(value)])
+      )
     })
   });
 
@@ -183,23 +185,62 @@ async function saveMessage(data) {
   return name.split('/').pop() || null;
 }
 
-async function deleteMessage(id, username) {
-  if (!enabled || !id || !username) return { ok: false, reason: 'invalid' };
-
+async function getSavedMessage(id) {
+  if (!enabled || !id) return null;
   const safeId = encodeURIComponent(String(id));
   const existing = await firestoreRequest(`/messages/${safeId}`, { method: 'GET' });
-  if (!existing?.fields) return { ok: false, reason: 'not-found' };
-
-  const saved = normalizeMessage({
+  if (!existing?.fields) return null;
+  return normalizeMessage({
     ...fromFirestoreFields(existing.fields),
     id: String(existing.name || '').split('/').pop() || String(id)
   });
+}
 
-  // 投稿者名が一致する場合だけ、保存された投稿を削除します。
+async function deleteMessage(id, username) {
+  if (!enabled || !id || !username) return { ok: false, reason: 'invalid' };
+  const saved = await getSavedMessage(id);
+  if (!saved) return { ok: false, reason: 'not-found' };
+
   if (saved.username !== String(username)) return { ok: false, reason: 'not-owner' };
 
+  const safeId = encodeURIComponent(String(id));
   await firestoreRequest(`/messages/${safeId}`, { method: 'DELETE' });
   return { ok: true };
+}
+
+async function toggleHelper(id, username) {
+  if (!enabled || !id || !username) return { ok: false, reason: 'invalid' };
+  const cleanUsername = String(username).trim().slice(0, 50);
+  if (!cleanUsername) return { ok: false, reason: 'invalid' };
+
+  const saved = await getSavedMessage(id);
+  if (!saved) return { ok: false, reason: 'not-found' };
+
+  const helpUsers = Array.isArray(saved.helpUsers) ? [...saved.helpUsers] : [];
+  const index = helpUsers.indexOf(cleanUsername);
+  let helping;
+
+  if (index >= 0) {
+    helpUsers.splice(index, 1);
+    helping = false;
+  } else {
+    helpUsers.push(cleanUsername);
+    helpUsers.splice(0, Math.max(0, helpUsers.length - 100));
+    helping = true;
+  }
+
+  const safeId = encodeURIComponent(String(id));
+  await firestoreRequest(
+    `/messages/${safeId}?updateMask.fieldPaths=helpUsers`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fields: { helpUsers: firestoreValue(helpUsers) }
+      })
+    }
+  );
+
+  return { ok: true, helping, helpUsers, count: helpUsers.length };
 }
 
 async function loadRecentMessages() {
@@ -268,6 +309,30 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         if (typeof ack === 'function') ack(result);
       } catch (error) {
         console.error('Firestore message delete failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
+    socket.on('toggle-help', async (payload = {}, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      if (!username || !id) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+        return;
+      }
+
+      try {
+        const result = await toggleHelper(id, username);
+        if (result.ok) {
+          socket.server.emit('map-pin-help-updated', {
+            id,
+            helpUsers: result.helpUsers,
+            count: result.count
+          });
+        }
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore helper update failed:', error);
         if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
       }
     });
