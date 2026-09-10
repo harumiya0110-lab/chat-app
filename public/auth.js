@@ -1,4 +1,7 @@
 (() => {
+  if (window.__ruralAuthInitialized) return;
+  window.__ruralAuthInitialized = true;
+
   const CONFIG = {
     // Firebase Console > Project settings > General > Your apps > Web app > SDK setup and configuration
     // FirebaseのWeb APIキーはFirebaseサービス用の公開設定値です。Gemini APIキーとは別物です。
@@ -13,6 +16,9 @@
   const joinBtn = document.getElementById('join-btn');
   const statusEl = document.getElementById('status');
   if (!setupPanel || !usernameInput || !joinBtn) return;
+
+  const existing = setupPanel.querySelector('.account-login');
+  if (existing) return;
 
   const style = document.createElement('style');
   style.textContent = `
