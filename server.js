@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
+import { claimAccountName, releaseAccountName, isAccountNameAvailable } from './firebase-persistence.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -31,6 +32,55 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.post('/api/account-name/claim', async (req, res) => {
+  const { accountName, uid, email } = req.body || {};
+  const cleanName = typeof accountName === 'string' ? accountName.trim().slice(0, 20) : '';
+  const cleanUid = typeof uid === 'string' ? uid.trim() : '';
+  const cleanEmail = typeof email === 'string' ? email.trim().slice(0, 320) : '';
+
+  if (!cleanName || !cleanUid) {
+    return res.status(400).json({ ok: false, reason: 'invalid' });
+  }
+
+  try {
+    const result = await claimAccountName(cleanName, cleanUid, cleanEmail);
+    if (!result.ok && result.reason === 'name-taken') {
+      return res.status(409).json(result);
+    }
+    if (!result.ok) return res.status(503).json(result);
+    return res.json(result);
+  } catch (error) {
+    console.error('Account-name claim failed:', error);
+    return res.status(500).json({ ok: false, reason: 'server-error' });
+  }
+});
+
+app.get('/api/account-name/check', async (req, res) => {
+  const accountName = typeof req.query.name === 'string' ? req.query.name.trim().slice(0, 20) : '';
+  if (!accountName) return res.status(400).json({ ok: false, available: false, reason: 'invalid' });
+
+  try {
+    return res.json(await isAccountNameAvailable(accountName));
+  } catch (error) {
+    console.error('Account-name availability check failed:', error);
+    return res.status(500).json({ ok: false, available: false, reason: 'server-error' });
+  }
+});
+
+app.post('/api/account-name/release', async (req, res) => {
+  const { accountName, uid } = req.body || {};
+  const cleanName = typeof accountName === 'string' ? accountName.trim().slice(0, 20) : '';
+  const cleanUid = typeof uid === 'string' ? uid.trim() : '';
+  if (!cleanName || !cleanUid) return res.status(400).json({ ok: false, reason: 'invalid' });
+
+  try {
+    return res.json(await releaseAccountName(cleanName, cleanUid));
+  } catch (error) {
+    console.error('Account-name release failed:', error);
+    return res.status(500).json({ ok: false, reason: 'server-error' });
+  }
 });
 
 function normalizeAnalysis(value) {
@@ -226,51 +276,31 @@ async function analyzeMessage(text) {
 メッセージ:
 ${text}`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            hasLocation: { type: Type.BOOLEAN },
-            locationName: { type: Type.STRING },
-            locationCandidates: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            eventType: {
-              type: Type.STRING,
-              enum: eventTypes
-            },
-            summary: { type: Type.STRING }
-          },
-          required: ['hasLocation', 'locationName', 'locationCandidates', 'eventType', 'summary']
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: userPrompt,
+    config: {
+      systemInstruction: systemPrompt,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          hasLocation: { type: Type.BOOLEAN },
+          locationName: { type: Type.STRING },
+          locationCandidates: { type: Type.ARRAY, items: { type: Type.STRING } },
+          eventType: { type: Type.STRING, enum: eventTypes },
+          summary: { type: Type.STRING }
         },
-        temperature: 0.1,
-        maxOutputTokens: 500
-      }
-    });
-
-    const content = response.text;
-    console.log(`Gemini response: model=${GEMINI_MODEL}, content_length=${String(content || '').length}`);
-
-    if (!content) {
-      throw new Error('Geminiから空の解析結果が返されました');
+        required: ['hasLocation', 'locationName', 'locationCandidates', 'eventType', 'summary']
+      },
+      temperature: 0.1,
+      maxOutputTokens: 500
     }
+  });
 
-    try {
-      return normalizeAnalysis(extractJson(content));
-    } catch (error) {
-      throw new Error(`GeminiのJSON解析に失敗しました: ${error.message}`);
-    }
-  } catch (error) {
-    console.error(`Gemini request failed: model=${GEMINI_MODEL}`, error);
-    throw error;
-  }
+  const content = response.text;
+  if (!content) throw new Error('Geminiから空の解析結果が返されました');
+  return normalizeAnalysis(extractJson(content));
 }
 
 app.post('/api/messages', async (req, res) => {
@@ -289,12 +319,7 @@ app.post('/api/messages', async (req, res) => {
 
     if (analysis.hasLocation) {
       try {
-        const coordinates = await geocodeLocation(
-          analysis.locationName,
-          analysis.locationCandidates,
-          cleanText
-        );
-
+        const coordinates = await geocodeLocation(analysis.locationName, analysis.locationCandidates, cleanText);
         if (coordinates) {
           locationData = {
             lat: coordinates.lat,
@@ -332,15 +357,13 @@ app.post('/api/messages', async (req, res) => {
     return res.json({ ...message, analysis, geocodeError });
   } catch (error) {
     console.error('メッセージ解析に失敗しました:', error);
-    return res.status(502).json({
-      error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。'
-    });
+    return res.status(502).json({ error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。' });
   }
 });
 
 const users = {};
 
-io.on('connection', socket => {
+aio.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
 
   socket.on('set-username', username => {
@@ -353,17 +376,9 @@ io.on('connection', socket => {
       return;
     }
 
-    users[socket.id] = {
-      id: socket.id,
-      username: cleanUsername,
-      timestamp: new Date()
-    };
-
+    users[socket.id] = { id: socket.id, username: cleanUsername, timestamp: new Date() };
     socket.emit('username-accepted', { username: cleanUsername });
-    io.emit('user-joined', {
-      username: cleanUsername,
-      message: `${cleanUsername}さんがチャットに参加しました`
-    });
+    io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
   });
 
@@ -410,53 +425,44 @@ io.on('connection', socket => {
     const { targetId, offer } = payload || {};
     const caller = users[socket.id];
     if (targetId && offer && caller) {
-      io.to(targetId).emit('incoming-call', {
-        from: socket.id,
-        username: caller.username,
-        offer
-      });
+      io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
     }
   });
 
   socket.on('call-answer', payload => {
     const { targetId, answer } = payload || {};
-    if (targetId && answer) {
+    if (targetId && answer && users[socket.id]) {
       io.to(targetId).emit('call-answered', { from: socket.id, answer });
     }
   });
 
   socket.on('ice-candidate', payload => {
     const { targetId, candidate } = payload || {};
-    if (targetId && candidate) {
-      io.to(targetId).emit('ice-candidate', {
-        from: socket.id,
-        candidate
-      });
+    if (targetId && candidate && users[socket.id]) {
+      io.to(targetId).emit('ice-candidate', { from: socket.id, candidate });
     }
   });
 
+  socket.on('call-reject', payload => {
+    const targetId = payload?.targetId;
+    if (targetId) io.to(targetId).emit('call-rejected', { from: socket.id });
+  });
+
   socket.on('end-call', payload => {
-    const { targetId } = payload || {};
-    if (targetId) {
-      io.to(targetId).emit('call-ended', { from: socket.id });
-    }
+    const targetId = payload?.targetId;
+    if (targetId) io.to(targetId).emit('call-ended', { from: socket.id });
   });
 
   socket.on('disconnect', () => {
     const user = users[socket.id];
-    if (!user) return;
-
-    console.log(`ユーザーが切断しました: ${user.username}`);
-    io.emit('user-left', {
-      username: user.username,
-      message: `${user.username}さんがチャットから退出しました`
-    });
-
-    delete users[socket.id];
-    io.emit('update-users', Object.values(users));
+    if (user) {
+      delete users[socket.id];
+      io.emit('user-left', { username: user.username, message: `${user.username}さんがチャットを退出しました` });
+      io.emit('update-users', Object.values(users));
+    }
   });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`チャットサーバーがポート ${PORT} で起動しました`);
+  console.log(`Server running on port ${PORT}`);
 });
