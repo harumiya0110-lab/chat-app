@@ -19,6 +19,12 @@
     return result;
   }
 
+  function isFreshAccount(user) {
+    const created = Date.parse(user?.metadata?.creationTime || '');
+    const signedIn = Date.parse(user?.metadata?.lastSignInTime || '');
+    return Number.isFinite(created) && Number.isFinite(signedIn) && Math.abs(created - signedIn) < 15000;
+  }
+
   async function enterChat(username, user = null) {
     const cleanUsername = String(username || '').normalize('NFC').trim().slice(0, 20);
     if (!cleanUsername || !chatMain.hidden) return;
@@ -32,9 +38,13 @@
       try {
         const result = await claimName(cleanUsername, user.uid, user.email);
         if (!result.ok) {
+          const wasFreshAccount = isFreshAccount(user);
           joiningUsername = '';
-          await window.ruralFirebaseAuth?.signOut?.();
-          if (statusEl) statusEl.textContent = 'このアカウント名はすでに別のアカウントで使用されています。別のアカウント名が必要です。';
+          if (wasFreshAccount) await user.delete().catch(() => {});
+          else await window.ruralFirebaseAuth?.signOut?.();
+          if (statusEl) statusEl.textContent = wasFreshAccount
+            ? 'そのアカウント名はすでに使用されています。アカウント作成を取り消しました。別の名前で登録してください。'
+            : 'このアカウント名はすでに別のアカウントで使用されています。';
           return;
         }
       } catch (error) {
