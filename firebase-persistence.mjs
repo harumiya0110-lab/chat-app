@@ -162,10 +162,76 @@ async function firestoreRequest(path, options = {}) {
   });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Firestore request failed: ${response.status} ${body.slice(0, 300)}`);
+    const error = new Error(`Firestore request failed: ${response.status} ${body.slice(0, 300)}`);
+    error.status = response.status;
+    throw error;
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+function normalizeAccountName(name) {
+  return String(name || '').trim().slice(0, 20);
+}
+
+function accountNameDocumentId(name) {
+  return encodeURIComponent(normalizeAccountName(name).toLowerCase());
+}
+
+export async function isAccountNameAvailable(name) {
+  const cleanName = normalizeAccountName(name);
+  if (!enabled || !cleanName) return { ok: false, available: false, reason: 'invalid' };
+  const safeId = accountNameDocumentId(cleanName);
+  const token = await getAccessToken();
+  if (!token) return { ok: false, available: false, reason: 'disabled' };
+  const response = await fetch(documentsUrl(`/accountNames/${safeId}`), {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (response.status === 404) return { ok: true, available: true };
+  if (!response.ok) throw new Error(`Firestore account-name check failed: ${response.status}`);
+  return { ok: true, available: false };
+}
+
+export async function claimAccountName(name, uid, email = '') {
+  const cleanName = normalizeAccountName(name);
+  const cleanUid = String(uid || '').trim();
+  if (!enabled || !cleanName || !cleanUid) return { ok: false, reason: 'invalid' };
+
+  const safeId = accountNameDocumentId(cleanName);
+  try {
+    await firestoreRequest(`/accountNames?documentId=${safeId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        fields: {
+          accountName: firestoreValue(cleanName),
+          normalizedName: firestoreValue(cleanName.toLowerCase()),
+          uid: firestoreValue(cleanUid),
+          email: firestoreValue(String(email || '').trim()),
+          createdAt: firestoreValue(new Date().toISOString())
+        }
+      })
+    });
+    return { ok: true };
+  } catch (error) {
+    if (error.status === 409) return { ok: false, reason: 'name-taken' };
+    throw error;
+  }
+}
+
+export async function releaseAccountName(name, uid = '') {
+  const cleanName = normalizeAccountName(name);
+  if (!enabled || !cleanName) return { ok: false, reason: 'invalid' };
+  const safeId = accountNameDocumentId(cleanName);
+  const existing = await firestoreRequest(`/accountNames/${safeId}`, { method: 'GET' }).catch(error => {
+    if (error.status === 404) return null;
+    throw error;
+  });
+  if (!existing?.fields) return { ok: true };
+  const ownerUid = fromFirestoreValue(existing.fields.uid);
+  if (uid && ownerUid && String(ownerUid) !== String(uid)) return { ok: false, reason: 'not-owner' };
+  await firestoreRequest(`/accountNames/${safeId}`, { method: 'DELETE' });
+  return { ok: true };
 }
 
 async function saveMessage(data) {
@@ -191,12 +257,17 @@ async function saveMessage(data) {
 async function getSavedMessage(id) {
   if (!enabled || !id) return null;
   const safeId = encodeURIComponent(String(id));
-  const existing = await firestoreRequest(`/messages/${safeId}`, { method: 'GET' });
-  if (!existing?.fields) return null;
-  return normalizeMessage({
-    ...fromFirestoreFields(existing.fields),
-    id: String(existing.name || '').split('/').pop() || String(id)
-  });
+  try {
+    const existing = await firestoreRequest(`/messages/${safeId}`, { method: 'GET' });
+    if (!existing?.fields) return null;
+    return normalizeMessage({
+      ...fromFirestoreFields(existing.fields),
+      id: String(existing.name || '').split('/').pop() || String(id)
+    });
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
 }
 
 async function deleteMessage(id, username) {
@@ -236,9 +307,7 @@ async function toggleHelper(id, username) {
     `/messages/${safeId}?updateMask.fieldPaths=helpUsers`,
     {
       method: 'PATCH',
-      body: JSON.stringify({
-        fields: { helpUsers: firestoreValue(helpUsers) }
-      })
+      body: JSON.stringify({ fields: { helpUsers: firestoreValue(helpUsers) } })
     }
   );
 
@@ -300,7 +369,6 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
         return;
       }
-
       try {
         const result = await deleteMessage(id, username);
         if (result.ok) socket.server.emit('map-pin-deleted', { id, username });
@@ -318,19 +386,16 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
         return;
       }
-
       try {
         const saved = await getSavedMessage(id);
         if (!saved) {
           if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
           return;
         }
-
         if (saved.username !== username) {
           if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
           return;
         }
-
         const result = await deleteMessage(id, username);
         if (result.ok) socket.server.emit('chat-message-deleted', { id, username });
         if (typeof ack === 'function') ack(result);
@@ -347,7 +412,6 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
         return;
       }
-
       try {
         const result = await toggleHelper(id, username);
         if (result.ok) {
@@ -385,7 +449,6 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         })();
         return accepted;
       }
-
       if (socketEventName === 'disconnect') usernameBySocketId.delete(socket.id);
       return originalSocketEmit(socketEventName, ...args);
     };
