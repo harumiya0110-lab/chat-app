@@ -204,4 +204,16 @@
   setTimeout(refreshMapSize, 0);
   setTimeout(refreshMapSize, 200);
   setTimeout(refreshMapSize, 600);
+
+  // 「名前だけで参加」の場合は、メールログイン時と違って
+  // rural-account-authenticated イベントが発生しないため、
+  // username-accepted を直接受け取って初期表示を解除します。
+  if (typeof socket !== 'undefined') {
+    socket.on('username-accepted', () => {
+      document.body.classList.remove('pre-auth');
+      setTimeout(refreshMapSize, 0);
+      setTimeout(refreshMapSize, 150);
+      setTimeout(refreshMapSize, 500);
+    });
+  }
 })();
