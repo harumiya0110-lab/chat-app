@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { claimAccountName, releaseAccountName, isAccountNameAvailable } from './firebase-persistence.mjs';
+import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +15,7 @@ const io = new SocketIOServer(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   maxHttpBufferSize: 40 * 1024 * 1024
 });
+registerThemePersistence(io);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -259,6 +261,7 @@ io.on('connection', socket => {
     }
     users[socket.id] = { id: socket.id, username: cleanUsername, timestamp: new Date() };
     socket.emit('username-accepted', { username: cleanUsername });
+    void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
   });
@@ -274,19 +277,16 @@ io.on('connection', socket => {
       if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
       return;
     }
-
     const bytes = toVideoBuffer(data?.video);
     if (!bytes) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
       return;
     }
-
     const MAX_VIDEO_SIZE = 15 * 1024 * 1024;
     if (bytes.length > MAX_VIDEO_SIZE) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
       return;
     }
-
     const videoType = safeVideoMime(data?.videoType);
     io.emit('receive-video', {
       username: user.username,
@@ -296,7 +296,6 @@ io.on('connection', socket => {
       timestamp: new Date().toLocaleTimeString('ja-JP'),
       userId: socket.id
     });
-
     if (typeof ack === 'function') ack({ ok: true });
   });
 
@@ -306,19 +305,16 @@ io.on('connection', socket => {
       if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
       return;
     }
-
     const bytes = toAudioBuffer(data?.audio);
     if (!bytes) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
       return;
     }
-
     const MAX_AUDIO_SIZE = 8 * 1024 * 1024;
     if (bytes.length > MAX_AUDIO_SIZE) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
       return;
     }
-
     const audioType = safeAudioMime(data?.audioType);
     io.emit('receive-audio', {
       username: user.username,
@@ -329,7 +325,6 @@ io.on('connection', socket => {
       timestamp: new Date().toLocaleTimeString('ja-JP'),
       userId: socket.id
     });
-
     if (typeof ack === 'function') ack({ ok: true });
   });
 
