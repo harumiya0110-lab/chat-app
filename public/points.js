@@ -25,6 +25,36 @@
     }
   });
 
+  // 「手伝える」は「イベント」と「助け合い」の投稿だけで表示します。
+  // map-delete.js 側がポップアップを描画したあとに非対象の操作欄を除去します。
+  const HELPABLE_EVENT_TYPES = new Set(['イベント', '助け合い']);
+
+  function removeHelpControlFromMarker(marker) {
+    if (!marker || HELPABLE_EVENT_TYPES.has(marker.__eventType)) return;
+    const popupElement = marker.getPopup?.()?.getElement?.();
+    const actions = popupElement?.querySelector?.('.map-pin-actions');
+    if (!actions) return;
+    actions.querySelector('.map-help-block')?.remove();
+  }
+
+  if (typeof map !== 'undefined' && map?.on) {
+    map.on('popupopen', event => {
+      setTimeout(() => removeHelpControlFromMarker(event?.popup?._source), 0);
+    });
+  }
+
+  function refreshRestrictedHelpControl(id) {
+    if (!id || typeof map === 'undefined') return;
+    setTimeout(() => {
+      map.eachLayer(layer => {
+        if (layer?.__deleteMessageId === id) removeHelpControlFromMarker(layer);
+      });
+    }, 0);
+  }
+
+  socket.on('map-pin-help-updated', data => refreshRestrictedHelpControl(data?.id));
+  socket.on('map-pin-help-confirmed', data => refreshRestrictedHelpControl(data?.id));
+
   // Firebase Authentication のログイン画面を後から読み込みます。
   // client.js / points.js の既存動作を変えず、今までの「名前だけで参加」も残します。
   const authScript = document.createElement('script');
