@@ -34,6 +34,55 @@
       color: #31513f !important;
       background: #eef2ee !important;
     }
+
+    /* チャット背景ごとに文字色・吹き出し色を最適化 */
+    body[data-rural-chat-background="default"] .messages,
+    body[data-rural-chat-background="default"] .messages .message,
+    body[data-rural-chat-background="default"] .messages .message-bubble { color:#21342c!important; }
+    body[data-rural-chat-background="default"] .messages .message-header { color:#53655b!important; }
+
+    body[data-rural-chat-background="paper"] .messages,
+    body[data-rural-chat-background="paper"] .messages .message,
+    body[data-rural-chat-background="paper"] .messages .message-bubble { color:#433b2e!important; }
+    body[data-rural-chat-background="paper"] .messages .message-header { color:#6f624d!important; }
+
+    body[data-rural-chat-background="sky"] .messages,
+    body[data-rural-chat-background="sky"] .messages .message,
+    body[data-rural-chat-background="sky"] .messages .message-bubble { color:#163a49!important; }
+    body[data-rural-chat-background="sky"] .messages .message-header { color:#416472!important; }
+
+    body[data-rural-chat-background="sakura"] .messages,
+    body[data-rural-chat-background="sakura"] .messages .message,
+    body[data-rural-chat-background="sakura"] .messages .message-bubble { color:#542f40!important; }
+    body[data-rural-chat-background="sakura"] .messages .message-header { color:#815766!important; }
+
+    body[data-rural-chat-background="night"] .messages,
+    body[data-rural-chat-background="night"] .messages .message,
+    body[data-rural-chat-background="night"] .messages .message-bubble { color:#f1f6fa!important; }
+    body[data-rural-chat-background="night"] .messages .message-header { color:#c7d6df!important; }
+    body[data-rural-chat-background="night"] .messages .message-bubble {
+      background:rgba(48,64,80,.94)!important;
+      border-color:rgba(177,201,216,.18)!important;
+    }
+
+    body[data-rural-chat-background="sunset"] .messages,
+    body[data-rural-chat-background="sunset"] .messages .message,
+    body[data-rural-chat-background="sunset"] .messages .message-bubble { color:#472f27!important; }
+    body[data-rural-chat-background="sunset"] .messages .message-header { color:#76564b!important; }
+
+    /* 入力欄・状態表示も背景に合わせて読みやすくする */
+    body[data-rural-chat-background="default"] .status,
+    body[data-rural-chat-background="default"] .input-area { color:#31513f!important; }
+    body[data-rural-chat-background="paper"] .status,
+    body[data-rural-chat-background="paper"] .input-area { color:#544637!important; }
+    body[data-rural-chat-background="sky"] .status,
+    body[data-rural-chat-background="sky"] .input-area { color:#245267!important; }
+    body[data-rural-chat-background="sakura"] .status,
+    body[data-rural-chat-background="sakura"] .input-area { color:#684254!important; }
+    body[data-rural-chat-background="night"] .status,
+    body[data-rural-chat-background="night"] .input-area { color:#dbe7ee!important; }
+    body[data-rural-chat-background="sunset"] .status,
+    body[data-rural-chat-background="sunset"] .input-area { color:#5c4035!important; }
   `;
   document.head.appendChild(style);
 
