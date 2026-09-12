@@ -35,12 +35,7 @@
   <div id="mini-call-bar" class="mini-call-bar" hidden><video id="mini-local" autoplay muted playsinline></video><video id="mini-remote" autoplay playsinline></video><button id="mini-unminimize">↗️ 通話を開く</button><button id="mini-end" class="danger">📞 終了</button></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="/socket.io/socket.io.js"></script>
   <script>
-    (() => {
-      const revealApp=()=>{const chatMain=document.getElementById('chat-main');if(chatMain?.hidden)return false;document.body.classList.remove('pre-auth');setTimeout(()=>{if(window.ruralMap?.invalidateSize)window.ruralMap.invalidateSize(true)},100);return true;};
-      window.addEventListener('rural-account-authenticated',()=>{revealApp();setTimeout(revealApp,300)},true);
-      window.addEventListener('username-accepted',revealApp,true);
-      window.addEventListener('rural-chat-joined',revealApp,true);
-    })();
+    (() => { const revealApp=()=>{const chatMain=document.getElementById('chat-main');if(chatMain?.hidden)return false;document.body.classList.remove('pre-auth');setTimeout(()=>{if(window.ruralMap?.invalidateSize)window.ruralMap.invalidateSize(true)},100);return true;}; window.addEventListener('rural-account-authenticated',()=>{revealApp();setTimeout(revealApp,300)},true); window.addEventListener('username-accepted',revealApp,true); window.addEventListener('rural-chat-joined',revealApp,true); })();
   </script>
   <script>
     (()=>{const originalLeafletMap=L.map.bind(L);L.map=(...args)=>{const createdMap=originalLeafletMap(...args);window.ruralMap=createdMap;return createdMap;};})();
@@ -60,7 +55,7 @@
   <script src="/points.js"></script>
   <script src="/theme-shop.js"></script>
   <script src="/theme-shop-color-fix.js"></script>
-  <script src="/chat-customization-shop-optimized.js"></script>
+  <script src="/chat-background-shop.js"></script>
   <script src="/map-delete.js"></script>
   <script src="/chat-map-link.js"></script>
   <script>
