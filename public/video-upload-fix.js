@@ -32,8 +32,6 @@
       return;
     }
 
-    // サーバーから届いた動画ファイルのMIMEタイプをそのまま使うことで、
-    // 動画に含まれている音声トラックも一緒に再生できるようにします。
     const type = typeof data?.videoType === 'string' && /^video\/[a-z0-9.+-]+$/i.test(data.videoType)
       ? data.videoType
       : 'video/mp4';
@@ -64,10 +62,8 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   }
 
-  // client.jsで作られたvideo要素に、Socket.IOから届いたバイナリをBlob URLとして再設定します。
   socket.on('receive-video', fixReceivedVideo);
 
-  // 動画ファイルそのものをArrayBufferで送信するため、音声トラックも動画データに含めたまま送ります。
   videoButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -83,7 +79,9 @@
       input.remove();
       if (!file) return;
 
-      const MAX_VIDEO_SIZE = 15 * 1024 * 1024;
+      // 「15MB」の表記差で弾かれないよう、実際の送信許容値は16MiBにします。
+      // 15MB以下の一般的な動画ファイルはすべてこの範囲に入ります。
+      const MAX_VIDEO_SIZE = 16 * 1024 * 1024;
       if (file.size > MAX_VIDEO_SIZE) {
         alert('動画は15MB以下にしてください');
         return;
@@ -105,14 +103,14 @@
         const buffer = await file.arrayBuffer();
         if (status) status.textContent = '動画を送信しています…';
 
-        socket.timeout(60000).emit('send-video', {
+        socket.timeout(120000).emit('send-video', {
           video: buffer,
           videoType: file.type,
           filename: file.name
         }, (err, result) => {
           if (err) {
             console.error('動画送信タイムアウト:', err);
-            if (status) status.textContent = '動画の送信がタイムアウトしました。動画サイズを小さくして再試行してください。';
+            if (status) status.textContent = '動画の送信がタイムアウトしました。通信状態を確認して再試行してください。';
             return;
           }
           if (!result?.ok) {
@@ -122,7 +120,7 @@
             if (status) status.textContent = message;
             return;
           }
-          if (status) status.textContent = '動画を送信しました。動画に音声が含まれていれば、そのまま再生されます。';
+          if (status) status.textContent = '動画を送信しました。';
         });
       } catch (error) {
         console.error('動画送信エラー:', error);
