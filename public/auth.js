@@ -3,7 +3,7 @@
   window.__ruralAuthInitialized = true;
 
   const CONFIG = {
-    apiKey: 'AIzaSyAQk0FwLApOl0w7KsHGsgbStO3DFnC0tOE',
+    apiKey: 'AIzaSyAQk0FwLAp0lw7KsHGsgbStO3DFnC0tOE',
     authDomain: 'inakachat-29b24.firebaseapp.com',
     projectId: 'inakachat-29b24',
     storageBucket: 'inakachat-29b24.firebasestorage.app',
@@ -273,10 +273,10 @@
     setAccountStatus('メールでログインしています…');
     try {
       await ensureFirebase();
-      const result = await window.ruralFirebaseAuth.signInWithEmailAndPassword(email, password);
-      const name = setChatName(result.user);
-      if (!name) throw new Error('アカウント名が登録されていません。');
-      announceAuthenticated(result.user, '✅ メールアドレスでログインしました。チャットへ移動しています…');
+      await window.ruralFirebaseAuth.signInWithEmailAndPassword(email, password);
+      // ログイン完了後のチャット参加は onAuthStateChanged に一本化します。
+      // ここでもannounceAuthenticatedを呼ぶと、同じソケットへ2回参加要求を送って
+      // 「この名前は既に使用されています」と表示される原因になります。
     } catch (error) {
       console.error(error);
       setAccountStatus(friendlyError(error), true);
@@ -351,8 +351,6 @@
   signoutBtn.addEventListener('click', signOutAccount);
   headerSignoutBtn?.addEventListener('click', signOutAccount);
 
-  // 自動ログイン時は、認証済みユーザーをチャット参加へつなぎます。
-  // 通常の「名前だけで参加」ボタンもそのまま利用できます。
   window.addEventListener('rural-account-authenticated', event => {
     const name = String(event.detail?.username || '').trim();
     if (!name || typeof socket === 'undefined') return;
