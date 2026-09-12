@@ -3,7 +3,6 @@
   window.__ruralAuthInitialized = true;
 
   const CONFIG = {
-    // Firebase Console > Project settings > General > Your apps > Web app > SDK setup and configuration
     apiKey: 'AIzaSyAQk0FwLApOl0w7KsHGsgbStO3DFnC0tOE',
     authDomain: 'inakachat-29b24.firebaseapp.com',
     projectId: 'inakachat-29b24',
@@ -27,47 +26,112 @@
     .account-login{width:min(390px,100%);padding:14px;border:1px solid #d6e1d3;border-radius:12px;background:rgba(255,255,255,.82);text-align:left}
     .account-login h3{margin:0 0 8px;font-size:15px}
     .account-login p{margin:0 0 10px;color:#68796e;font-size:12px;line-height:1.5}
-    .account-login input{width:100%;padding:9px 11px;border:1px solid #b9c9b8;border-radius:8px;font:inherit}
+    .account-login input{width:100%;padding:9px 11px;border:1px solid #b9c9b8;border-radius:8px;font:inherit;box-sizing:border-box}
     .account-row{display:flex;gap:7px;margin-top:7px}
     .account-login button{flex:1;min-width:0;padding:9px 10px;border:1px solid #b9c9b8;border-radius:8px;background:#fff;color:#234d3c;cursor:pointer;font:inherit}
+    .account-login button:hover:not(:disabled){background:#f4f8f2}
+    .account-login button:disabled{opacity:.55;cursor:wait}
     .account-login .account-signout{background:#f7e9e9;color:#8d3333;border-color:#e7bcbc}
     .account-login .account-note{margin-top:8px;font-size:11px;color:#68796e;line-height:1.5}
     .account-login .account-status{margin-top:8px;font-size:12px;line-height:1.45;color:#234d3c}
     .account-login .account-reset{margin-top:7px;width:100%;background:#f5f8f3}
     .account-error{color:#a52d2d!important}
+    .auth-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .auth-choice button{padding:12px 10px;font-weight:700;border-radius:10px}
+    .auth-choice .auth-login-choice{background:#234d3c;color:#fff;border-color:#234d3c}
+    .auth-choice .auth-signup-choice{background:#fff;color:#234d3c;border-color:#b9c9b8}
+    .auth-view{margin-top:10px}
+    .auth-back{width:100%;margin-top:8px;background:#eef2ee!important;color:#31513f!important}
+    .auth-view[hidden]{display:none}
+    @media(max-width:430px){.auth-choice{grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 
   const accountBox = document.createElement('div');
   accountBox.className = 'account-login';
   accountBox.innerHTML = `
-    <h3>🔐 メールアドレスでログイン</h3>
-    <p>新規登録時にアカウント名を決めます。次回からはメールアドレスとパスワードだけで自動的にチャットへ入れます。</p>
-    <input id="account-name" type="text" maxlength="20" autocomplete="nickname" placeholder="アカウント名（新規登録時のみ）">
-    <input id="account-email" type="email" autocomplete="email" placeholder="メールアドレス" style="margin-top:7px">
-    <input id="account-password" type="password" autocomplete="current-password" placeholder="パスワード" style="margin-top:7px">
-    <div class="account-row">
-      <button id="email-login-btn" type="button">メールでログイン</button>
-      <button id="email-signup-btn" type="button">新規登録</button>
+    <h3>🔐 アカウント</h3>
+    <p>アカウントを作成すると、登録したメールアドレスとパスワードで次回からログインできます。</p>
+
+    <div id="auth-choice" class="auth-choice">
+      <button type="button" class="auth-login-choice">📩 ログイン</button>
+      <button type="button" class="auth-signup-choice">✨ アカウント作成</button>
     </div>
-    <button id="password-reset-btn" type="button" class="account-reset">📩 パスワードを忘れた場合</button>
+
+    <div id="auth-login-view" class="auth-view" hidden>
+      <input id="account-email-login" type="email" autocomplete="email" placeholder="メールアドレス">
+      <input id="account-password-login" type="password" autocomplete="current-password" placeholder="パスワード" style="margin-top:7px">
+      <div class="account-row">
+        <button id="email-login-btn" type="button">メールでログイン</button>
+        <button id="auth-login-back" type="button" class="auth-back">戻る</button>
+      </div>
+      <button id="password-reset-btn" type="button" class="account-reset">📩 パスワードを忘れた場合</button>
+    </div>
+
+    <div id="auth-signup-view" class="auth-view" hidden>
+      <input id="account-name" type="text" maxlength="20" autocomplete="nickname" placeholder="アカウント名">
+      <input id="account-email-signup" type="email" autocomplete="email" placeholder="メールアドレス" style="margin-top:7px">
+      <input id="account-password-signup" type="password" autocomplete="new-password" placeholder="パスワード" style="margin-top:7px">
+      <div class="account-row">
+        <button id="email-signup-btn" type="button">アカウントを作成</button>
+        <button id="auth-signup-back" type="button" class="auth-back">戻る</button>
+      </div>
+    </div>
+
     <div id="account-status" class="account-status"></div>
     <div id="account-actions" class="account-row" hidden>
       <button id="account-signout-btn" type="button" class="account-signout">ログアウト</button>
     </div>
-    <div class="account-note">名前だけでの参加も今までどおり利用できます。アカウントログインでは登録したアカウント名がチャットの名前になります。</div>
+    <div class="account-note">アカウントを使わず、名前だけで参加することもできます。</div>
   `;
   setupPanel.appendChild(accountBox);
 
+  const choice = accountBox.querySelector('#auth-choice');
+  const loginView = accountBox.querySelector('#auth-login-view');
+  const signupView = accountBox.querySelector('#auth-signup-view');
+  const loginChoiceBtn = accountBox.querySelector('.auth-login-choice');
+  const signupChoiceBtn = accountBox.querySelector('.auth-signup-choice');
+  const loginBackBtn = accountBox.querySelector('#auth-login-back');
+  const signupBackBtn = accountBox.querySelector('#auth-signup-back');
+
   const accountNameInput = accountBox.querySelector('#account-name');
-  const emailInput = accountBox.querySelector('#account-email');
-  const passwordInput = accountBox.querySelector('#account-password');
+  const emailLoginInput = accountBox.querySelector('#account-email-login');
+  const passwordLoginInput = accountBox.querySelector('#account-password-login');
+  const emailSignupInput = accountBox.querySelector('#account-email-signup');
+  const passwordSignupInput = accountBox.querySelector('#account-password-signup');
   const emailLoginBtn = accountBox.querySelector('#email-login-btn');
   const emailSignupBtn = accountBox.querySelector('#email-signup-btn');
   const passwordResetBtn = accountBox.querySelector('#password-reset-btn');
   const signoutBtn = accountBox.querySelector('#account-signout-btn');
   const accountStatus = accountBox.querySelector('#account-status');
   const accountActions = accountBox.querySelector('#account-actions');
+
+  function showChoice() {
+    choice.hidden = false;
+    loginView.hidden = true;
+    signupView.hidden = true;
+  }
+
+  function showLogin() {
+    choice.hidden = true;
+    loginView.hidden = false;
+    signupView.hidden = true;
+    setAccountStatus('');
+    emailLoginInput.focus();
+  }
+
+  function showSignup() {
+    choice.hidden = true;
+    loginView.hidden = true;
+    signupView.hidden = false;
+    setAccountStatus('');
+    accountNameInput.focus();
+  }
+
+  loginChoiceBtn.addEventListener('click', showLogin);
+  signupChoiceBtn.addEventListener('click', showSignup);
+  loginBackBtn.addEventListener('click', showChoice);
+  signupBackBtn.addEventListener('click', showChoice);
 
   function setAccountStatus(text, error = false) {
     accountStatus.textContent = text;
@@ -114,7 +178,7 @@
   }
 
   function setButtonsDisabled(disabled) {
-    [emailLoginBtn, emailSignupBtn, passwordResetBtn].forEach(button => { button.disabled = disabled; });
+    [emailLoginBtn, emailSignupBtn, passwordResetBtn, loginChoiceBtn, signupChoiceBtn, loginBackBtn, signupBackBtn].forEach(button => { button.disabled = disabled; });
   }
 
   async function ensureFirebase() {
@@ -131,9 +195,7 @@
     await load('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
     await load('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js');
 
-    if (!window.firebase.apps.length) {
-      window.firebase.initializeApp(CONFIG);
-    }
+    if (!window.firebase.apps.length) window.firebase.initializeApp(CONFIG);
     window.ruralFirebaseAuth = window.firebase.auth();
     window.ruralFirebaseAuth.useDeviceLanguage();
 
@@ -142,6 +204,7 @@
         accountStatus.textContent = '';
         accountStatus.classList.remove('account-error');
         accountActions.hidden = true;
+        showChoice();
         return;
       }
       setChatName(user);
@@ -153,8 +216,8 @@
   }
 
   async function signInEmail() {
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
+    const email = emailLoginInput.value.trim();
+    const password = passwordLoginInput.value;
     if (!email || !password) return setAccountStatus('メールアドレスとパスワードを入力してください。', true);
     setButtonsDisabled(true);
     setAccountStatus('メールでログインしています…');
@@ -174,9 +237,9 @@
 
   async function signUpEmail() {
     const accountName = accountNameInput.value.trim();
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    if (!accountName) return setAccountStatus('新規登録時はアカウント名を入力してください。', true);
+    const email = emailSignupInput.value.trim();
+    const password = passwordSignupInput.value;
+    if (!accountName) return setAccountStatus('アカウント名を入力してください。', true);
     if (accountName.length > 20) return setAccountStatus('アカウント名は20文字以内にしてください。', true);
     if (!email || !password) return setAccountStatus('メールアドレスとパスワードを入力してください。', true);
     setButtonsDisabled(true);
@@ -197,23 +260,20 @@
   }
 
   async function sendPasswordReset() {
-    const email = emailInput.value.trim();
+    const email = emailLoginInput.value.trim();
     if (!email) return setAccountStatus('パスワード変更メールを送るメールアドレスを入力してください。', true);
     setButtonsDisabled(true);
     setAccountStatus('パスワード変更メールを送信しています…');
     try {
       await ensureFirebase();
       await window.ruralFirebaseAuth.sendPasswordResetEmail(email);
-      passwordInput.value = '';
+      passwordLoginInput.value = '';
       setAccountStatus('✅ パスワード変更メールを送信しました。メールに記載されたリンクから新しいパスワードを設定してください。');
     } catch (error) {
       console.error(error);
       const code = error?.code || '';
-      if (code === 'auth/user-not-found') {
-        setAccountStatus('このメールアドレスのアカウントが見つかりません。', true);
-      } else {
-        setAccountStatus(friendlyError(error), true);
-      }
+      if (code === 'auth/user-not-found') setAccountStatus('このメールアドレスのアカウントが見つかりません。', true);
+      else setAccountStatus(friendlyError(error), true);
     } finally {
       setButtonsDisabled(false);
     }
@@ -228,7 +288,12 @@
       await window.ruralFirebaseAuth.signOut();
       usernameInput.value = '';
       accountNameInput.value = '';
-      setAccountStatus('ログアウトしました。名前だけで参加することもできます。');
+      emailLoginInput.value = '';
+      passwordLoginInput.value = '';
+      emailSignupInput.value = '';
+      passwordSignupInput.value = '';
+      setAccountStatus('ログアウトしました。');
+      showChoice();
     } catch (error) {
       console.error(error);
       setAccountStatus(friendlyError(error), true);
@@ -237,6 +302,6 @@
 
   ensureFirebase().catch(error => {
     console.warn('Firebase Authentication is not configured yet:', error.message);
-    accountStatus.textContent = 'Firebase Authenticationの初期化に失敗しました。Firebase Consoleの設定を確認してください。';
+    setAccountStatus('Firebase Authenticationの初期化に失敗しました。Firebase Consoleの設定を確認してください。', true);
   });
 })();
