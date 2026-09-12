@@ -24,12 +24,17 @@
       if (typeof data?.video === 'string' && data.video.startsWith('data:video/')) {
         video.src = data.video;
         video.controls = true;
+        video.muted = false;
+        video.defaultMuted = false;
+        video.volume = 1;
         video.load();
       }
       return;
     }
 
-    const type = typeof data?.videoType === 'string' && data.videoType.startsWith('video/')
+    // サーバーから届いた動画ファイルのMIMEタイプをそのまま使うことで、
+    // 動画に含まれている音声トラックも一緒に再生できるようにします。
+    const type = typeof data?.videoType === 'string' && /^video\/[a-z0-9.+-]+$/i.test(data.videoType)
       ? data.videoType
       : 'video/mp4';
     const blob = new Blob([bytes], { type });
@@ -39,18 +44,30 @@
     video.controls = true;
     video.preload = 'metadata';
     video.playsInline = true;
+    video.muted = false;
+    video.defaultMuted = false;
+    video.volume = 1;
     video.load();
 
-    const revoke = () => setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-    video.addEventListener('loadedmetadata', revoke, { once: true });
-    video.addEventListener('error', revoke, { once: true });
+    video.addEventListener('loadedmetadata', () => {
+      video.muted = false;
+      video.defaultMuted = false;
+      video.volume = 1;
+      if (status) status.textContent = '動画を再生できます。音声は動画に含まれる音声トラックをそのまま再生します。';
+    }, { once: true });
+
+    video.addEventListener('error', () => {
+      if (status) status.textContent = '動画を再生できませんでした。MP4（H.264/AAC）など、ブラウザ対応形式の動画を試してください。';
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    }, { once: true });
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   }
 
   // client.jsで作られたvideo要素に、Socket.IOから届いたバイナリをBlob URLとして再設定します。
   socket.on('receive-video', fixReceivedVideo);
 
-  // client.js の既存の動画選択処理はBase64化して一括送信するため、
-  // capture phaseで処理を差し替え、ArrayBufferのままSocket.IOへ渡します。
+  // 動画ファイルそのものをArrayBufferで送信するため、音声トラックも動画データに含めたまま送ります。
   videoButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -105,7 +122,7 @@
             if (status) status.textContent = message;
             return;
           }
-          if (status) status.textContent = '動画を送信しました。';
+          if (status) status.textContent = '動画を送信しました。動画に音声が含まれていれば、そのまま再生されます。';
         });
       } catch (error) {
         console.error('動画送信エラー:', error);
@@ -116,5 +133,5 @@
     input.click();
   }, true);
 
-  console.log('Video upload and playback override enabled.');
+  console.log('Video upload and audio playback override enabled.');
 })();
