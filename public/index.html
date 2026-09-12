@@ -6,8 +6,32 @@
   <title>チャットマップ</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/style.css">
+  <style>
+    /* ログイン・参加前は、地図と地域ポイント関連UIを表示しません。 */
+    body.pre-auth .map-panel,
+    body.pre-auth .header-user,
+    body.pre-auth #map,
+    body.pre-auth .regional-points,
+    body.pre-auth .theme-shop-open,
+    body.pre-auth #online-count {
+      display: none !important;
+    }
+    body.pre-auth .app-main {
+      grid-template-columns: 1fr;
+    }
+    body.pre-auth .chat-panel {
+      width: min(760px, 100%);
+      margin: 0 auto;
+    }
+    body.pre-auth .setup-panel {
+      min-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+  </style>
 </head>
-<body>
+<body class="pre-auth">
   <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
   <main class="app-main">
     <section class="chat-panel">
@@ -22,6 +46,18 @@
   <div id="call-modal" class="call-modal" hidden><div class="call-backdrop"></div><div class="call-box"><div class="call-header"><strong id="call-status">通話</strong></div><div class="call-videos"><video id="remote-video" autoplay playsinline></video><video id="local-video" autoplay muted playsinline></video></div><div class="call-controls"><button id="call-accept-btn">応答</button><button id="call-decline-btn">拒否</button><button id="mute-btn" hidden>ミュート</button><button id="cam-toggle-btn" hidden>カメラOFF</button><button id="minimize-btn" hidden>最小化</button><button id="call-end-btn" class="danger" hidden>通話終了</button></div></div></div>
   <div id="mini-call-bar" class="mini-call-bar" hidden><video id="mini-local" autoplay muted playsinline></video><video id="mini-remote" autoplay playsinline></video><button id="mini-unminimize">展開</button><button id="mini-end" class="danger">終了</button></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="/socket.io/socket.io.js"></script>
+  <script>
+    (() => {
+      const revealApp = () => {
+        document.body.classList.remove('pre-auth');
+        setTimeout(() => {
+          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize();
+        }, 100);
+      };
+      window.addEventListener('rural-account-authenticated', revealApp);
+      if (typeof socket !== 'undefined') socket.on('username-accepted', revealApp);
+    })();
+  </script>
   <script>
     (() => {
       const originalLeafletMap = L.map.bind(L);
