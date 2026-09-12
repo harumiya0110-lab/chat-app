@@ -20,7 +20,7 @@
   </style>
 </head>
 <body class="pre-auth">
-  <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span><button id="header-signout-btn" type="button" class="header-signout" hidden>🚪 ログアウト</button></div></header>
+  <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
   <main class="app-main">
     <section class="chat-panel">
       <div id="setup-panel" class="setup-panel"><h2>チャットに参加</h2><p>ニックネームを入力してください</p><div id="initial-input-holder"><input id="username-input" maxlength="20" placeholder="ニックネーム"></div><button id="join-btn">参加する</button></div>
@@ -65,7 +65,6 @@
     const locationCheckbox=document.getElementById('location-checkbox');const statusEl=document.getElementById('status');locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析して地図に表示します。':'場所を付けずに投稿します。チャットのみ表示されます。'});(()=>{const muteBtn=document.getElementById('mute-btn'),camBtn=document.getElementById('cam-toggle-btn'),minimizeBtn=document.getElementById('minimize-btn'),endBtn=document.getElementById('call-end-btn'),acceptBtn=document.getElementById('call-accept-btn'),declineBtn=document.getElementById('call-decline-btn'),miniUnminimize=document.getElementById('mini-unminimize'),miniEnd=document.getElementById('mini-end');const decorateCallButton=(button,type)=>{if(!button)return;const set=(value,title)=>{if(button.textContent!==value)button.textContent=value;button.title=title;button.setAttribute('aria-label',title)};if(type==='mute'){const muted=button.textContent.includes('解除');set(muted?'🔇 ミュート解除':'🎤 ミュート',muted?'マイクをオンにします':'マイクをオフにします');button.classList.toggle('is-off',muted)}else if(type==='camera'){const cameraOff=button.textContent.includes('カメラON');set(cameraOff?'📷 カメラON':'📹 カメラOFF',cameraOff?'カメラをオンにします':'カメラをオフにします');button.classList.toggle('is-off',cameraOff)}else if(type==='minimize')set('↙️ 小さくする','通話画面を小さくします');else if(type==='end')set('📞 通話終了','通話を終了します');else if(type==='accept')set('✅ 応答','通話に応答します');else if(type==='decline')set('✖️ 拒否','通話を拒否します');else if(type==='open-mini')set('↗️ 通話を開く','通話画面を開きます');else if(type==='mini-end')set('📞 終了','通話を終了します')};decorateCallButton(muteBtn,'mute');decorateCallButton(camBtn,'camera');decorateCallButton(minimizeBtn,'minimize');decorateCallButton(endBtn,'end');decorateCallButton(acceptBtn,'accept');decorateCallButton(declineBtn,'decline');decorateCallButton(miniUnminimize,'open-mini');decorateCallButton(miniEnd,'mini-end')})();
   </script>
   <style id="pre-auth-layout-guard">
-    /* 初期ログイン画面はテーマ交換から完全に独立させ、レイアウトも固定します。 */
     body.pre-auth{background:#eef2e9!important;color:#21342c!important;overflow-x:hidden!important;}
     body.pre-auth .app-header{display:flex!important;padding:16px 24px!important;background:#234d3c!important;color:#fff!important;}
     body.pre-auth .app-main{display:grid!important;grid-template-columns:1fr!important;gap:14px!important;max-width:1500px!important;margin:14px auto!important;padding:0 14px!important;}
