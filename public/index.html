@@ -38,7 +38,7 @@
       <div id="setup-panel" class="setup-panel"><h2>チャットに参加</h2><p>ニックネームを入力してください</p><div id="initial-input-holder"><input id="username-input" maxlength="20" placeholder="ニックネーム"></div><button id="join-btn">参加する</button></div>
       <div id="chat-main" class="chat-main" hidden>
         <aside class="users-panel"><h2>オンラインユーザー</h2><ul id="users-list"></ul></aside>
-        <div class="chat-right"><div id="messages" class="messages" aria-live="polite"></div><div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div></div>
+        <div class="chat-right"><div id="messages" class="messages" aria-live="polite"></div><div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><button id="audio-btn" class="tool-btn voice-btn" title="音声を録音して送る">🎙️</button><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div></div>
       </div>
     </section>
     <section class="map-panel"><div class="panel-heading"><div><h2>地域マップ</h2><p>投稿された場所を色分けして表示します。</p></div><div class="map-filters" aria-label="投稿種類の表示切替"><span class="filter-title">表示：</span><button type="button" class="map-filter active" data-filter="all">すべて</button><button type="button" class="map-filter" data-filter="交通障害">🔴 交通障害</button><button type="button" class="map-filter" data-filter="助け合い">🟢 助け合い</button><button type="button" class="map-filter" data-filter="イベント">🟠 イベント</button><button type="button" class="map-filter" data-filter="鳥獣目撃">🟣 鳥獣目撃</button><button type="button" class="map-filter" data-filter="その他">⚪ その他</button></div><div class="legend"><span><i class="legend-dot traffic"></i>交通障害</span><span><i class="legend-dot help"></i>助け合い</span><span><i class="legend-dot event"></i>イベント</span><span><i class="legend-dot wildlife"></i>鳥獣目撃</span><span><i class="legend-dot other"></i>その他</span></div></div><div id="map"></div></section>
@@ -106,6 +106,7 @@
   </script>
   <script src="/client.js"></script>
   <script src="/video-upload-fix.js"></script>
+  <script src="/voice-message.js"></script>
   <script src="/auth.js"></script>
   <script src="/account-auto-login.js"></script>
   <script src="/chat-delete.js"></script>
