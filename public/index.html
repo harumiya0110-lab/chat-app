@@ -16,19 +16,9 @@
     body.pre-auth #online-count {
       display: none !important;
     }
-    body.pre-auth .app-main {
-      grid-template-columns: 1fr;
-    }
-    body.pre-auth .chat-panel {
-      width: min(760px, 100%);
-      margin: 0 auto;
-    }
-    body.pre-auth .setup-panel {
-      min-height: 70vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
+    body.pre-auth .app-main { grid-template-columns: 1fr; }
+    body.pre-auth .chat-panel { width: min(760px, 100%); margin: 0 auto; }
+    body.pre-auth .setup-panel { min-height: 70vh; display:flex; flex-direction:column; justify-content:center; }
     #initial-input-holder{display:contents}
   </style>
 </head>
@@ -50,10 +40,11 @@
   <script>
     (() => {
       const revealApp = () => {
+        /* 認証完了時ではなく、チャット参加が完了した時だけ画面を切り替える。 */
+        const chatMain = document.getElementById('chat-main');
+        if (chatMain?.hidden) return;
         document.body.classList.remove('pre-auth');
-        setTimeout(() => {
-          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize();
-        }, 100);
+        setTimeout(() => { if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(); }, 100);
       };
       window.addEventListener('rural-account-authenticated', revealApp);
       if (typeof socket !== 'undefined') socket.on('username-accepted', revealApp);
@@ -62,11 +53,7 @@
   <script>
     (() => {
       const originalLeafletMap = L.map.bind(L);
-      L.map = (...args) => {
-        const createdMap = originalLeafletMap(...args);
-        window.ruralMap = createdMap;
-        return createdMap;
-      };
+      L.map = (...args) => { const createdMap = originalLeafletMap(...args); window.ruralMap = createdMap; return createdMap; };
     })();
   </script>
   <script>
@@ -84,14 +71,9 @@
                 document.getElementById('status').textContent = '場所を付けずに投稿しています…';
                 socket.emit('send-message', { message });
               }
-              return new Response(JSON.stringify({ locationData: null, geocodeError: null }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
+              return new Response(JSON.stringify({ locationData: null, geocodeError: null }), {status:200,headers:{'Content-Type':'application/json'}});
             }
-          } catch (error) {
-            console.error('投稿モードの切り替えに失敗:', error);
-          }
+          } catch (error) { console.error('投稿モードの切り替えに失敗:', error); }
         }
         return originalFetch(input, init);
       };
@@ -99,61 +81,12 @@
   </script>
   <script>
     (() => {
-      const MARKER_TYPES = {
-        '#d64545': '交通障害',
-        '#2d8a57': '助け合い',
-        '#e39a28': 'イベント',
-        '#8b5cf6': '鳥獣目撃',
-        '#6c7a89': 'その他'
-      };
-      let activeFilter = 'all';
-      const markerRegistry = [];
-      const originalMarker = L.marker.bind(L);
-      const originalAddTo = L.Marker.prototype.addTo;
-
-      function detectMarkerType(marker) {
-        const html = String(marker?.options?.icon?.options?.html || '').toLowerCase();
-        for (const [color, type] of Object.entries(MARKER_TYPES)) {
-          if (html.includes(color)) return type;
-        }
-        return 'その他';
-      }
-
-      L.marker = function(latlng, options = {}) {
-        const marker = originalMarker(latlng, options);
-        marker.__eventType = detectMarkerType(marker);
-        marker.__registeredForFilter = false;
-        marker.__originalAddTo = originalAddTo.bind(marker);
-        marker.addTo = function(targetMap) {
-          if (!marker.__registeredForFilter) {
-            markerRegistry.push({ marker, targetMap });
-            marker.__registeredForFilter = true;
-          }
-          if (activeFilter === 'all' || activeFilter === marker.__eventType) {
-            marker.__originalAddTo(targetMap);
-          }
-          return marker;
-        };
-        return marker;
-      };
-
-      window.setMapEventFilter = (filter) => {
-        activeFilter = filter;
-        markerRegistry.forEach(({ marker, targetMap }) => {
-          const visible = filter === 'all' || filter === marker.__eventType;
-          if (visible) targetMap.addLayer(marker);
-          else if (targetMap.hasLayer(marker)) targetMap.removeLayer(marker);
-        });
-        document.querySelectorAll('.map-filter').forEach(button => {
-          button.classList.toggle('active', button.dataset.filter === filter);
-        });
-      };
-
-      document.addEventListener('click', event => {
-        const button = event.target.closest('.map-filter');
-        if (!button) return;
-        window.setMapEventFilter(button.dataset.filter || 'all');
-      });
+      const MARKER_TYPES={'#d64545':'交通障害','#2d8a57':'助け合い','#e39a28':'イベント','#8b5cf6':'鳥獣目撃','#6c7a89':'その他'};
+      let activeFilter='all'; const markerRegistry=[]; const originalMarker=L.marker.bind(L); const originalAddTo=L.Marker.prototype.addTo;
+      function detectMarkerType(marker){const html=String(marker?.options?.icon?.options?.html||'').toLowerCase();for(const [color,type] of Object.entries(MARKER_TYPES)){if(html.includes(color))return type;}return 'その他';}
+      L.marker=function(latlng,options={}){const marker=originalMarker(latlng,options);marker.__eventType=detectMarkerType(marker);marker.__registeredForFilter=false;marker.__originalAddTo=originalAddTo.bind(marker);marker.addTo=function(targetMap){if(!marker.__registeredForFilter){markerRegistry.push({marker,targetMap});marker.__registeredForFilter=true;}if(activeFilter==='all'||activeFilter===marker.__eventType)marker.__originalAddTo(targetMap);return marker;};return marker;};
+      window.setMapEventFilter=(filter)=>{activeFilter=filter;markerRegistry.forEach(({marker,targetMap})=>{const visible=filter==='all'||filter===marker.__eventType;if(visible)targetMap.addLayer(marker);else if(targetMap.hasLayer(marker))targetMap.removeLayer(marker);});document.querySelectorAll('.map-filter').forEach(button=>button.classList.toggle('active',button.dataset.filter===filter));};
+      document.addEventListener('click',event=>{const button=event.target.closest('.map-filter');if(!button)return;window.setMapEventFilter(button.dataset.filter||'all');});
     })();
   </script>
   <script src="/client.js"></script>
@@ -165,78 +98,11 @@
   <script src="/map-delete.js"></script>
   <script src="/chat-map-link.js"></script>
   <script>
-    const locationCheckbox = document.getElementById('location-checkbox');
-    const statusEl = document.getElementById('status');
-    locationCheckbox?.addEventListener('change', () => {
-      statusEl.textContent = locationCheckbox.checked
-        ? '場所を付けて投稿します。送信時にAIが場所を解析します。'
-        : '場所を付けずに投稿します。チャットのみ表示されます。';
-    });
-
-    /* 通話ボタンの状態を、アイコン＋色＋説明で直感的に表示します。 */
-    (() => {
-      const muteBtn = document.getElementById('mute-btn');
-      const camBtn = document.getElementById('cam-toggle-btn');
-      const minimizeBtn = document.getElementById('minimize-btn');
-      const endBtn = document.getElementById('call-end-btn');
-      const acceptBtn = document.getElementById('call-accept-btn');
-      const declineBtn = document.getElementById('call-decline-btn');
-      const miniUnminimize = document.getElementById('mini-unminimize');
-      const miniEnd = document.getElementById('mini-end');
-
-      const decorateCallButton = (button, type) => {
-        if (!button) return;
-        const text = button.textContent.trim();
-        button.classList.remove('is-active', 'is-off');
-        if (type === 'mute') {
-          const muted = text.includes('解除');
-          button.textContent = muted ? '🔇 ミュート解除' : '🎤 ミュート';
-          button.title = muted ? 'マイクをオンにします' : 'マイクをオフにします';
-          button.setAttribute('aria-label', button.title);
-          button.classList.toggle('is-off', muted);
-        } else if (type === 'camera') {
-          const cameraOff = text.includes('カメラON');
-          button.textContent = cameraOff ? '📷 カメラON' : '📹 カメラOFF';
-          button.title = cameraOff ? 'カメラをオンにします' : 'カメラをオフにします';
-          button.setAttribute('aria-label', button.title);
-          button.classList.toggle('is-off', cameraOff);
-        } else if (type === 'minimize') {
-          button.textContent = '↙️ 小さくする';
-          button.title = '通話画面を小さくします';
-        } else if (type === 'end') {
-          button.textContent = '📞 通話終了';
-          button.title = '通話を終了します';
-        } else if (type === 'accept') {
-          button.textContent = '✅ 応答';
-          button.title = '通話に応答します';
-        } else if (type === 'decline') {
-          button.textContent = '✖️ 拒否';
-          button.title = '通話を拒否します';
-        } else if (type === 'open-mini') {
-          button.textContent = '↗️ 通話を開く';
-          button.title = '通話画面を開きます';
-        } else if (type === 'mini-end') {
-          button.textContent = '📞 終了';
-          button.title = '通話を終了します';
-        }
-      };
-
-      const refresh = () => {
-        decorateCallButton(muteBtn, 'mute');
-        decorateCallButton(camBtn, 'camera');
-        decorateCallButton(minimizeBtn, 'minimize');
-        decorateCallButton(endBtn, 'end');
-        decorateCallButton(acceptBtn, 'accept');
-        decorateCallButton(declineBtn, 'decline');
-        decorateCallButton(miniUnminimize, 'open-mini');
-        decorateCallButton(miniEnd, 'mini-end');
-      };
-
-      refresh();
-      const observer = new MutationObserver(refresh);
-      [muteBtn, camBtn, minimizeBtn, endBtn, acceptBtn, declineBtn, miniUnminimize, miniEnd]
-        .filter(Boolean)
-        .forEach(button => observer.observe(button, { childList: true, characterData: true, subtree: true }));
+    const locationCheckbox=document.getElementById('location-checkbox'); const statusEl=document.getElementById('status');
+    locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析します。':'場所を付けずに投稿します。チャットのみ表示されます。';});
+    (()=>{const muteBtn=document.getElementById('mute-btn');const camBtn=document.getElementById('cam-toggle-btn');const minimizeBtn=document.getElementById('minimize-btn');const endBtn=document.getElementById('call-end-btn');const acceptBtn=document.getElementById('call-accept-btn');const declineBtn=document.getElementById('call-decline-btn');const miniUnminimize=document.getElementById('mini-unminimize');const miniEnd=document.getElementById('mini-end');
+      const decorateCallButton=(button,type)=>{if(!button)return;const text=button.textContent.trim();button.classList.remove('is-active','is-off');if(type==='mute'){const muted=text.includes('解除');button.textContent=muted?'🔇 ミュート解除':'🎤 ミュート';button.title=muted?'マイクをオンにします':'マイクをオフにします';button.setAttribute('aria-label',button.title);button.classList.toggle('is-off',muted);}else if(type==='camera'){const cameraOff=text.includes('カメラON');button.textContent=cameraOff?'📷 カメラON':'📹 カメラOFF';button.title=cameraOff?'カメラをオンにします':'カメラをオフにします';button.setAttribute('aria-label',button.title);button.classList.toggle('is-off',cameraOff);}else if(type==='minimize'){button.textContent='↙️ 小さくする';button.title='通話画面を小さくします';}else if(type==='end'){button.textContent='📞 通話終了';button.title='通話を終了します';}else if(type==='accept'){button.textContent='✅ 応答';button.title='通話に応答します';}else if(type==='decline'){button.textContent='✖️ 拒否';button.title='通話を拒否します';}else if(type==='open-mini'){button.textContent='↗️ 通話を開く';button.title='通話画面を開きます';}else if(type==='mini-end'){button.textContent='📞 終了';button.title='通話を終了します';}};
+      const refresh=()=>{decorateCallButton(muteBtn,'mute');decorateCallButton(camBtn,'camera');decorateCallButton(minimizeBtn,'minimize');decorateCallButton(endBtn,'end');decorateCallButton(acceptBtn,'accept');decorateCallButton(declineBtn,'decline');decorateCallButton(miniUnminimize,'open-mini');decorateCallButton(miniEnd,'mini-end');};refresh();const observer=new MutationObserver(refresh);[muteBtn,camBtn,minimizeBtn,endBtn,acceptBtn,declineBtn,miniUnminimize,miniEnd].filter(Boolean).forEach(button=>observer.observe(button,{childList:true,characterData:true,subtree:true}));
     })();
   </script>
 </body>
