@@ -351,6 +351,8 @@
   signoutBtn.addEventListener('click', signOutAccount);
   headerSignoutBtn?.addEventListener('click', signOutAccount);
 
+  // 自動ログイン時は、認証済みユーザーをチャット参加へつなぎます。
+  // 通常の「名前だけで参加」ボタンもそのまま利用できます。
   window.addEventListener('rural-account-authenticated', event => {
     const name = String(event.detail?.username || '').trim();
     if (!name || typeof socket === 'undefined') return;
