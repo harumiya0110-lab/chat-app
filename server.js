@@ -236,6 +236,17 @@ function safeVideoMime(value) {
   return typeof value === 'string' && /^video\/[a-z0-9.+-]+$/i.test(value) ? value : 'video/mp4';
 }
 
+function toAudioBuffer(audio) {
+  if (Buffer.isBuffer(audio)) return audio;
+  if (audio instanceof ArrayBuffer) return Buffer.from(new Uint8Array(audio));
+  if (ArrayBuffer.isView(audio)) return Buffer.from(audio.buffer, audio.byteOffset, audio.byteLength);
+  return null;
+}
+
+function safeAudioMime(value) {
+  return typeof value === 'string' && /^audio\/[a-z0-9.+-]+(?:;\s*codecs=[^;]+)?$/i.test(value) ? value : 'audio/webm';
+}
+
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
   socket.on('set-username', username => {
@@ -282,6 +293,39 @@ io.on('connection', socket => {
       video: bytes,
       videoType,
       filename: typeof data.filename === 'string' ? data.filename.slice(0, 200) : null,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: socket.id
+    });
+
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('send-audio', (data, ack) => {
+    const user = users[socket.id];
+    if (!user) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+      return;
+    }
+
+    const bytes = toAudioBuffer(data?.audio);
+    if (!bytes) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
+      return;
+    }
+
+    const MAX_AUDIO_SIZE = 8 * 1024 * 1024;
+    if (bytes.length > MAX_AUDIO_SIZE) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
+      return;
+    }
+
+    const audioType = safeAudioMime(data?.audioType);
+    io.emit('receive-audio', {
+      username: user.username,
+      audio: bytes,
+      audioType,
+      filename: typeof data.filename === 'string' ? data.filename.slice(0, 200) : 'voice-message.webm',
+      durationMs: Number.isFinite(Number(data.durationMs)) ? Math.min(180000, Math.max(0, Number(data.durationMs))) : null,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
       userId: socket.id
     });
