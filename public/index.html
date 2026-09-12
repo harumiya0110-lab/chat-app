@@ -40,14 +40,17 @@
   <script>
     (() => {
       const revealApp = () => {
-        /* 認証完了時ではなく、チャット参加が完了した時だけ画面を切り替える。 */
+        /* 認証完了後、チャット参加が完了した瞬間にUIを公開します。 */
         const chatMain = document.getElementById('chat-main');
         if (chatMain?.hidden) return;
         document.body.classList.remove('pre-auth');
-        setTimeout(() => { if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(); }, 100);
+        setTimeout(() => {
+          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize();
+        }, 100);
       };
-      window.addEventListener('rural-account-authenticated', revealApp);
-      if (typeof socket !== 'undefined') socket.on('username-accepted', revealApp);
+      /* account-auto-login.js がキャプチャ段階でイベントを止めても、
+         この先行リスナーで必ず地図・チャットUIを公開します。 */
+      window.addEventListener('rural-account-authenticated', revealApp, true);
     })();
   </script>
   <script>
