@@ -49,7 +49,6 @@
   async function registerAccount() {
     if (signupInProgress) return;
 
-    // auth.jsの現在の入力欄IDに合わせる。
     const nameInput = getAccountField('account-name');
     const emailInput = getAccountField('account-email-signup');
     const passwordInput = getAccountField('account-password-signup');
@@ -122,8 +121,7 @@
     }
   }
 
-  // auth.jsにある通常の新規登録処理を、重複アカウント名を確認する処理へ置き換える。
-  // 入力欄のIDが古い実装のままになっていたため、現在のIDを使用します。
+  // auth.jsにある通常の新規登録処理を、重複アカウント名を確認する処理へ置き換えます。
   document.addEventListener('click', event => {
     const button = event.target.closest('#email-signup-btn');
     if (!button) return;
@@ -132,7 +130,7 @@
     void registerAccount();
   }, true);
 
-  // auth.jsがログイン完了時に発火するイベントを、登録処理中だけ止める。
+  // auth.jsがログイン完了時に発火するイベントを、新規登録処理中だけ止めます。
   window.addEventListener('rural-account-authenticated', event => {
     if (window.__ruralSignupInProgress) event.stopImmediatePropagation();
   }, true);
@@ -144,13 +142,12 @@
 
     joiningUsername = cleanUsername;
     usernameInput.value = cleanUsername;
-
-    // 既存アカウントのログイン時は、すでに登録済みのaccountNamesを再claimしません。
-    // 毎回claimすると、自分が所有している名前でも競合扱いになる場合があるためです。
     setStatus('アカウントで自動的にチャットへ参加しています…');
     joinBtn.click();
   }
 
+  // メールログイン後のチャット参加はauth.jsの認証完了イベントから行います。
+  // このリスナーは残し、ページ再読み込み時などにイベントが先に届かない場合を補助します。
   window.addEventListener('rural-account-authenticated', event => {
     if (signupInProgress || window.__ruralSignupInProgress) return;
     const user = window.ruralFirebaseAuth?.currentUser;
