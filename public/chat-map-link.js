@@ -106,7 +106,6 @@
   });
   observer.observe(messages, { childList: true, subtree: true });
 
-  // マーカー生成とチャット表示が同じイベント内で行われるため、初回走査を少し遅らせます。
   setTimeout(scanMessages, 0);
 })();
 
@@ -139,7 +138,6 @@
     }
   }
 
-  // このスクリプトが読み込まれた時点ですでに作られているピンも数えます。
   map.eachLayer(layer => {
     if (!(layer instanceof L.Marker)) return;
     if (layer.__removedByMarkerLimit) return;
@@ -147,7 +145,6 @@
   });
   pruneOldMarkers();
 
-  // 今後追加されるピンを追跡します。
   const previousMarkerFactory = L.marker.bind(L);
   L.marker = function(latlng, options = {}) {
     const marker = previousMarkerFactory(latlng, options);
@@ -168,7 +165,6 @@
     return marker;
   };
 
-  // 投稿者が手動削除したピンは上限管理から除外します。
   socket.on('map-pin-deleted', ({ id } = {}) => {
     if (typeof id !== 'string' || !id) return;
 
@@ -184,4 +180,28 @@
     cleanupDeletedMarkers();
     return trackedMarkers.filter(marker => !marker.__removedByMarkerLimit).length;
   };
+})();
+
+/*
+ * ログイン後に表示されるまで #map が hidden の状態で初期化されるため、
+ * 表示されたタイミングでLeafletのサイズを再計算します。
+ */
+(() => {
+  const refreshMapSize = () => {
+    const map = window.ruralMap;
+    const chatMain = document.getElementById('chat-main');
+    const mapPanel = document.querySelector('.map-panel');
+    if (!map || !chatMain || chatMain.hidden || !mapPanel) return;
+    if (mapPanel.offsetWidth <= 0 || mapPanel.offsetHeight <= 0) return;
+    map.invalidateSize(true);
+  };
+
+  const observer = new MutationObserver(refreshMapSize);
+  const chatMain = document.getElementById('chat-main');
+  if (chatMain) observer.observe(chatMain, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+
+  window.addEventListener('resize', refreshMapSize);
+  setTimeout(refreshMapSize, 0);
+  setTimeout(refreshMapSize, 200);
+  setTimeout(refreshMapSize, 600);
 })();
