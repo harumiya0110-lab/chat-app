@@ -6,11 +6,11 @@
   if (!headerUser || typeof socket === 'undefined') return;
 
   const themes = {
-    forest: { name: '🌿 里山', description: '今の緑を基調にした標準テーマ', cost: 0 },
-    sakura: { name: '🌸 桜', description: '春らしい桜色のやさしいテーマ', cost: 50 },
-    ocean: { name: '🌊 海辺', description: '海と空をイメージした爽やかなテーマ', cost: 80 },
-    night: { name: '🌙 星空', description: '夜の地域をイメージした落ち着いたテーマ', cost: 100 },
-    matsuri: { name: '🏮 祭り', description: '地域のお祭りをイメージした元気なテーマ', cost: 150 }
+    forest: { name: '🟢 グリーン', description: '自然をイメージした緑色のテーマ', cost: 0 },
+    sakura: { name: '🌸 ピンク', description: '春らしいやさしいピンク色のテーマ', cost: 50 },
+    ocean: { name: '🔵 ブルー', description: '海と空をイメージした青色のテーマ', cost: 80 },
+    night: { name: '🔷 ネイビー', description: '夜空をイメージした落ち着いた紺色のテーマ', cost: 100 },
+    matsuri: { name: '🟠 オレンジ', description: 'お祭りをイメージした元気なオレンジ色のテーマ', cost: 150 }
   };
 
   const chatColors = {
@@ -49,7 +49,7 @@
     .chat-color-swatch{width:100%;height:30px;border-radius:8px;margin:0 0 8px;border:1px solid rgba(0,0,0,.08)}
     .theme-shop-note{margin-top:12px;color:#68796e;font-size:11px;line-height:1.5}
     @media(max-width:650px){.theme-shop-grid{grid-template-columns:1fr}.theme-shop-box{padding:14px}}
-    body[data-rural-theme="sakura"]{background:#fff1f6!important;color:#4f3040!important}.app-header[data-rural-theme="sakura"],body[data-rural-theme="sakura"] .app-header{background:#8d4867!important}
+    body[data-rural-theme="sakura"]{background:#fff1f6!important;color:#4f3040!important}body[data-rural-theme="sakura"] .app-header{background:#8d4867!important}
     body[data-rural-theme="sakura"] .setup-panel{background:linear-gradient(145deg,#fff7fa,#f9dde8)!important}body[data-rural-theme="sakura"] .chat-panel,body[data-rural-theme="sakura"] .map-panel{border-color:#ecc5d4!important}
     body[data-rural-theme="sakura"] .users-panel{background:#fff7fa!important;border-color:#ecc5d4!important}body[data-rural-theme="sakura"] .message{background:#fff2f7!important}
     body[data-rural-theme="sakura"] .input-area{background:#fff7fa!important;border-color:#ecc5d4!important}body[data-rural-theme="sakura"] .status{background:#fffafd!important;border-color:#ecc5d4!important}
@@ -70,7 +70,6 @@
     body[data-rural-chat-color] .app-header{border-bottom:4px solid var(--rural-chat)!important}
     body[data-rural-chat-color] .message.own{border-left:5px solid var(--rural-chat)!important}
     body[data-rural-chat-color] .send-button,body[data-rural-chat-color] #send-button{background:var(--rural-chat)!important;border-color:var(--rural-chat)!important}
-    body[data-rural-chat-color] .chat-panel:focus-within{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--rural-chat) 35%,transparent)}
     body[data-rural-chat-color] .chat-panel{border-top:3px solid var(--rural-chat)!important}
     body[data-rural-chat-color="blue"] .message.own{background:#eef7ff!important}body[data-rural-chat-color="sakura"] .message.own{background:#fff0f6!important}body[data-rural-chat-color="violet"] .message.own{background:#f4efff!important}
     body[data-rural-chat-color="sunset"] .message.own{background:#fff5ec!important}body[data-rural-chat-color="ink"] .message.own{background:#f2f2f2!important}
@@ -134,45 +133,6 @@
   button.addEventListener('click', open);
   modal.querySelector('.theme-shop-backdrop').addEventListener('click', close);
   modal.querySelector('.theme-shop-close').addEventListener('click', close);
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
-
-  gridEl.addEventListener('click', event => {
-    const action = event.target.closest('[data-theme-id]');
-    if (!action) return;
-    const themeId = action.dataset.themeId;
-    if (!currentUsername || !socket?.connected) return alert('先にチャットへ参加してください。');
-    action.disabled = true;
-    socket.emit(state.themes.includes(themeId) ? 'select-theme' : 'exchange-theme', { themeId }, result => {
-      action.disabled = false;
-      if (!result?.ok) {
-        const messages = {
-          'insufficient-points': `地域ポイントが足りません。（必要：${result.cost}pt / 所持：${result.points}pt）`,
-          'not-owned': 'この見た目はまだ交換していません。',
-          'server-error': '交換中にエラーが発生しました。しばらくしてから再試行してください。'
-        };
-        alert(messages[result.reason] || '見た目の変更に失敗しました。');
-      }
-    });
-  });
-
-  colorGridEl.addEventListener('click', event => {
-    const action = event.target.closest('[data-color-id]');
-    if (!action) return;
-    const colorId = action.dataset.colorId;
-    if (!currentUsername || !socket?.connected) return alert('先にチャットへ参加してください。');
-    action.disabled = true;
-    socket.emit(state.chatColors.includes(colorId) ? 'select-chat-color' : 'exchange-chat-color', { colorId }, result => {
-      action.disabled = false;
-      if (!result?.ok) {
-        const messages = {
-          'insufficient-points': `地域ポイントが足りません。（必要：${result.cost}pt / 所持：${result.points}pt）`,
-          'not-owned': 'このチャットカラーはまだ交換していません。',
-          'server-error': 'カラー変更中にエラーが発生しました。しばらくしてから再試行してください。'
-        };
-        alert(messages[result.reason] || 'チャットの色の変更に失敗しました。');
-      }
-    });
-  });
 
   socket.on('theme-state', data => {
     if (!data || data.username !== currentUsername) return;
@@ -183,15 +143,18 @@
       chatColors: Array.isArray(data.chatColors) ? data.chatColors : ['forest'],
       currentChatColor: data.currentChatColor || 'forest'
     };
-    catalog = data.catalog || catalog;
-    colorCatalog = data.chatColorCatalog || colorCatalog;
+    catalog = data.catalog && typeof data.catalog === 'object' ? data.catalog : themes;
+    colorCatalog = data.chatColorCatalog && typeof data.chatColorCatalog === 'object' ? data.chatColorCatalog : chatColors;
     applyTheme(state.currentTheme);
     applyChatColor(state.currentChatColor);
     render();
   });
 
-  const savedTheme = localStorage.getItem('rural-theme');
-  if (themes[savedTheme]) applyTheme(savedTheme);
-  const savedColor = localStorage.getItem('rural-chat-color');
-  if (chatColors[savedColor]) applyChatColor(savedColor);
+  socket.on('region-points-updated', data => {
+    if (!data || data.username !== currentUsername) return;
+    state.points = Math.max(0, Math.floor(Number(data.points || 0)));
+    render();
+  });
+
+  // 交換処理はtheme-exchange-fix.jsが担当します。
 })();
