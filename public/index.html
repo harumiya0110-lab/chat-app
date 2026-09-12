@@ -105,6 +105,7 @@
     })();
   </script>
   <script src="/client.js"></script>
+  <script src="/video-upload-fix.js"></script>
   <script src="/auth.js"></script>
   <script src="/account-auto-login.js"></script>
   <script src="/chat-delete.js"></script>
@@ -118,7 +119,6 @@
     locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析して地図に表示します。':'場所を付けずに投稿します。チャットのみ表示されます。';});
     (()=>{const muteBtn=document.getElementById('mute-btn');const camBtn=document.getElementById('cam-toggle-btn');const minimizeBtn=document.getElementById('minimize-btn');const endBtn=document.getElementById('call-end-btn');const acceptBtn=document.getElementById('call-accept-btn');const declineBtn=document.getElementById('call-decline-btn');const miniUnminimize=document.getElementById('mini-unminimize');const miniEnd=document.getElementById('mini-end');
       const decorateCallButton=(button,type)=>{if(!button)return;const set=(value,title)=>{if(button.textContent!==value)button.textContent=value;button.title=title;button.setAttribute('aria-label',title);}; if(type==='mute'){const muted=button.textContent.includes('解除');set(muted?'🔇 ミュート解除':'🎤 ミュート',muted?'マイクをオンにします':'マイクをオフにします');button.classList.toggle('is-off',muted);}else if(type==='camera'){const cameraOff=button.textContent.includes('カメラON');set(cameraOff?'📷 カメラON':'📹 カメラOFF',cameraOff?'カメラをオンにします':'カメラをオフにします');button.classList.toggle('is-off',cameraOff);}else if(type==='minimize'){set('↙️ 小さくする','通話画面を小さくします');}else if(type==='end'){set('📞 通話終了','通話を終了します');}else if(type==='accept'){set('✅ 応答','通話に応答します');}else if(type==='decline'){set('✖️ 拒否','通話を拒否します');}else if(type==='open-mini'){set('↗️ 通話を開く','通話画面を開きます');}else if(type==='mini-end'){set('📞 終了','通話を終了します');}};
-      // 初期表示だけ整えます。MutationObserverは使用せず、通話中の無限更新・高負荷を防ぎます。
       decorateCallButton(muteBtn,'mute');decorateCallButton(camBtn,'camera');decorateCallButton(minimizeBtn,'minimize');decorateCallButton(endBtn,'end');decorateCallButton(acceptBtn,'accept');decorateCallButton(declineBtn,'decline');decorateCallButton(miniUnminimize,'open-mini');decorateCallButton(miniEnd,'mini-end');
     })();
   </script>
