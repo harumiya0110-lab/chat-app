@@ -5,9 +5,9 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs --import=./chat-background-persistence.mjs server.js",
+    "start": "node --import=./account-name-guard.mjs --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs --import=./chat-background-persistence.mjs server.js",
     "build": "echo \"No build step required for this Node.js server\"",
-    "dev": "node --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs --import=./chat-background-persistence.mjs server.js"
+    "dev": "node --import=./account-name-guard.mjs --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs --import=./chat-background-persistence.mjs server.js"
   },
   "keywords": [
     "chat",
@@ -23,7 +23,6 @@
     "@google/genai": "^1.52.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
-    "express": "^4.18.2",
     "socket.io": "^4.7.2"
   }
 }
