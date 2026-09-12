@@ -9,6 +9,7 @@ let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
 const POINTS_PER_HELP = 10;
+const HELPABLE_EVENT_TYPES = new Set(['イベント', '助け合い']);
 
 function base64Url(value) {
   return Buffer.from(value)
@@ -136,6 +137,7 @@ async function getMessage(id) {
   const fields = fromFirestoreFields(result.fields);
   return {
     username: String(fields.username || ''),
+    eventType: String(fields.locationData?.eventType || ''),
     helpUsers: Array.isArray(fields.helpUsers) ? fields.helpUsers : [],
     helpConfirmedUsers: Array.isArray(fields.helpConfirmedUsers) ? fields.helpConfirmedUsers : []
   };
@@ -204,6 +206,11 @@ async function confirmHelp(socket, payload = {}, ack) {
     const saved = await getMessage(id);
     if (!saved) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+      return;
+    }
+
+    if (!HELPABLE_EVENT_TYPES.has(saved.eventType)) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'not-helpable' });
       return;
     }
 
@@ -283,6 +290,12 @@ SocketIOServer.prototype.on = function(eventName, listener) {
             const saved = await getMessage(id);
             if (!saved) {
               if (typeof ack === 'function') ack({ ok: false, reason: 'not-found' });
+              return;
+            }
+
+            // 「手伝える」は「イベント」と「助け合い」の投稿だけで利用できます。
+            if (!HELPABLE_EVENT_TYPES.has(saved.eventType)) {
+              if (typeof ack === 'function') ack({ ok: false, reason: 'not-helpable' });
               return;
             }
 
