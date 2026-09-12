@@ -24,35 +24,41 @@ export const CHAT_COLOR_CATALOG = {
   ink: { name: '🌑 墨ブラック', description: '引き締まったシックな黒', color: '#333333', cost: 80 }
 };
 
-const defaultState = () => ({
+const DEFAULT_STATE = {
   points: 0,
   themes: ['forest'],
   currentTheme: 'forest',
   chatColors: ['forest'],
   currentChatColor: 'forest'
-});
+};
 
+const stateCache = new Map();
+const stateLoads = new Map();
+const writeQueues = new Map();
 const operationLocks = new Map();
+
+function cloneState(state = DEFAULT_STATE) {
+  return {
+    points: Math.max(0, Math.floor(Number(state.points || 0))),
+    themes: [...new Set(['forest', ...(Array.isArray(state.themes) ? state.themes : [])])].filter(id => THEME_CATALOG[id]),
+    currentTheme: THEME_CATALOG[state.currentTheme] ? state.currentTheme : 'forest',
+    chatColors: [...new Set(['forest', ...(Array.isArray(state.chatColors) ? state.chatColors : [])])].filter(id => CHAT_COLOR_CATALOG[id]),
+    currentChatColor: CHAT_COLOR_CATALOG[state.currentChatColor] ? state.currentChatColor : 'forest'
+  };
+}
 
 function withUserLock(username, task) {
   const key = String(username);
   const previous = operationLocks.get(key) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(task)
-    .finally(() => {
-      if (operationLocks.get(key) === next) operationLocks.delete(key);
-    });
+  const next = previous.catch(() => {}).then(task).finally(() => {
+    if (operationLocks.get(key) === next) operationLocks.delete(key);
+  });
   operationLocks.set(key, next);
   return next;
 }
 
 function base64Url(value) {
-  return Buffer.from(value)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
+  return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function firestoreValue(value) {
@@ -62,11 +68,9 @@ function firestoreValue(value) {
   if (typeof value === 'number') return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
   if (Array.isArray(value)) return { arrayValue: { values: value.map(firestoreValue) } };
   if (typeof value === 'object') {
-    return {
-      mapValue: {
-        fields: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, firestoreValue(item)]))
-      }
-    };
+    const fields = {};
+    for (const [key, item] of Object.entries(value)) fields[key] = firestoreValue(item);
+    return { mapValue: { fields } };
   }
   return { stringValue: String(value) };
 }
@@ -78,36 +82,26 @@ function fromFirestoreValue(value) {
   if ('doubleValue' in value) return Number(value.doubleValue);
   if ('booleanValue' in value) return Boolean(value.booleanValue);
   if ('arrayValue' in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
-  if ('mapValue' in value) {
-    return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([key, item]) => [key, fromFirestoreValue(item)]));
-  }
+  if ('mapValue' in value) return fromFirestoreFields(value.mapValue.fields || {});
+  if ('nullValue' in value) return null;
   return null;
 }
 
-function fromFields(fields) {
-  return Object.fromEntries(Object.entries(fields || {}).map(([key, value]) => [key, fromFirestoreValue(value)]));
+function fromFirestoreFields(fields) {
+  const result = {};
+  for (const [key, value] of Object.entries(fields || {})) result[key] = fromFirestoreValue(value);
+  return result;
 }
 
-function normalizeState(fields = {}) {
-  const points = Math.max(0, Math.floor(Number(fields.points || 0)));
-  const themes = [...new Set(['forest', ...(Array.isArray(fields.themes) ? fields.themes : [])])]
-    .filter(id => THEME_CATALOG[id]);
-  const currentTheme = THEME_CATALOG[fields.currentTheme] ? fields.currentTheme : 'forest';
-  const chatColors = [...new Set(['forest', ...(Array.isArray(fields.chatColors) ? fields.chatColors : [])])]
-    .filter(id => CHAT_COLOR_CATALOG[id]);
-  const currentChatColor = CHAT_COLOR_CATALOG[fields.currentChatColor]
-    ? fields.currentChatColor
-    : 'forest';
-  return { points, themes, currentTheme, chatColors, currentChatColor };
+function normalizeState(raw = {}) {
+  return cloneState(raw);
 }
 
 try {
   if (rawServiceAccount) {
     serviceAccount = JSON.parse(rawServiceAccount);
     projectId = String(serviceAccount.project_id || '').trim();
-    if (!serviceAccount.client_email || !serviceAccount.private_key || !projectId) {
-      throw new Error('service account JSON is incomplete');
-    }
+    if (!serviceAccount.client_email || !serviceAccount.private_key || !projectId) throw new Error('service account JSON is incomplete');
     enabled = true;
     console.log(`Theme persistence enabled: project=${projectId}`);
   } else {
@@ -139,13 +133,11 @@ async function getAccessToken() {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion
-    })
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+    signal: AbortSignal.timeout(8000)
   });
-
   if (!response.ok) throw new Error(`Google OAuth token request failed: ${response.status}`);
+
   const result = await response.json();
   cachedAccessToken = result.access_token;
   cachedAccessTokenExpiresAt = now + Number(result.expires_in || 3600);
@@ -156,9 +148,9 @@ function documentsUrl(path = '') {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents${path}`;
 }
 
-async function firestoreRequest(path, options = {}) {
+async function firestoreRequest(label, path, options = {}) {
   const token = await getAccessToken();
-  if (!token) return null;
+  if (!token) throw new Error('theme persistence is disabled');
 
   const response = await fetch(documentsUrl(path), {
     ...options,
@@ -166,91 +158,121 @@ async function firestoreRequest(path, options = {}) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       ...(options.headers || {})
-    }
+    },
+    signal: options.signal || AbortSignal.timeout(8000)
   });
 
+  const text = await response.text().catch(() => '');
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    const error = new Error(`Firestore request failed: ${response.status} ${body.slice(0, 500)}`);
+    const error = new Error(`Firestore request failed: ${response.status} ${text.slice(0, 500)}`);
     error.status = response.status;
     throw error;
   }
-
-  if (response.status === 204) return null;
-  return response.json();
+  console.log(`[theme-exchange] firestore ${label} ok: ${response.status}`);
+  return text ? JSON.parse(text) : null;
 }
 
-async function loadState(username) {
-  if (!enabled) return defaultState();
+async function loadStateFromFirestore(username) {
+  if (!enabled) return cloneState();
   const safeUsername = encodeURIComponent(String(username));
   try {
-    const result = await firestoreRequest(`/regionalPoints/${safeUsername}`, { method: 'GET' });
-    return normalizeState(fromFields(result?.fields || {}));
+    const result = await firestoreRequest('load', `/regionalPoints/${safeUsername}`, { method: 'GET' });
+    return normalizeState(fromFirestoreFields(result?.fields || {}));
   } catch (error) {
-    if (error.status === 404) return defaultState();
+    if (error.status === 404) return cloneState();
     throw error;
   }
 }
 
-async function saveState(username, state) {
+async function loadState(username) {
+  const key = String(username);
+  if (stateCache.has(key)) return cloneState(stateCache.get(key));
+  if (stateLoads.has(key)) return cloneState(await stateLoads.get(key));
+
+  const loadPromise = loadStateFromFirestore(key)
+    .then(state => {
+      const clean = cloneState(state);
+      stateCache.set(key, clean);
+      return clean;
+    })
+    .finally(() => {
+      if (stateLoads.get(key) === loadPromise) stateLoads.delete(key);
+    });
+
+  stateLoads.set(key, loadPromise);
+  return cloneState(await loadPromise);
+}
+
+async function saveStateToFirestore(username, state) {
   if (!enabled) return;
   const safeUsername = encodeURIComponent(String(username));
-  const clean = normalizeState(state);
-  await firestoreRequest(
-    `/regionalPoints/${safeUsername}?updateMask.fieldPaths=points&updateMask.fieldPaths=themes&updateMask.fieldPaths=currentTheme&updateMask.fieldPaths=chatColors&updateMask.fieldPaths=currentChatColor`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({
-        fields: {
-          points: firestoreValue(clean.points),
-          themes: firestoreValue(clean.themes),
-          currentTheme: firestoreValue(clean.currentTheme),
-          chatColors: firestoreValue(clean.chatColors),
-          currentChatColor: firestoreValue(clean.currentChatColor)
-        }
-      })
-    }
-  );
+  const clean = cloneState(state);
+  await firestoreRequest('save', `/regionalPoints/${safeUsername}?updateMask.fieldPaths=points&updateMask.fieldPaths=themes&updateMask.fieldPaths=currentTheme&updateMask.fieldPaths=chatColors&updateMask.fieldPaths=currentChatColor`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      fields: {
+        points: firestoreValue(clean.points),
+        themes: firestoreValue(clean.themes),
+        currentTheme: firestoreValue(clean.currentTheme),
+        chatColors: firestoreValue(clean.chatColors),
+        currentChatColor: firestoreValue(clean.currentChatColor)
+      }
+    })
+  });
+}
+
+function queueSave(username, state) {
+  const key = String(username);
+  const snapshot = cloneState(state);
+  stateCache.set(key, snapshot);
+
+  const previous = writeQueues.get(key) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(async () => {
+      try {
+        await saveStateToFirestore(key, snapshot);
+        console.log(`[theme-exchange] firestore save complete user=${key}`);
+      } catch (error) {
+        console.error(`[theme-exchange] firestore save failed user=${key}:`, error.message);
+      }
+    });
+  writeQueues.set(key, next);
 }
 
 function emitState(socket, username, state) {
+  const clean = cloneState(state);
   socket.emit('theme-state', {
     username,
-    ...state,
+    ...clean,
     catalog: THEME_CATALOG,
     chatColorCatalog: CHAT_COLOR_CATALOG
   });
-  socket.emit('region-points-updated', {
-    username,
-    points: state.points,
-    earned: 0
-  });
+  socket.emit('region-points-updated', { username, points: clean.points, earned: 0 });
 }
 
-function fail(ack, reason, extra = {}) {
+function ackFail(ack, reason, extra = {}) {
   if (typeof ack === 'function') ack({ ok: false, reason, ...extra });
 }
 
 async function exchangeTheme(socket, themeId, ack) {
-  const username = socket.__themeUsername || '';
-  if (!username || !THEME_CATALOG[themeId]) return fail(ack, 'invalid');
+  const username = String(socket.__themeUsername || '').trim();
+  if (!username || !THEME_CATALOG[themeId]) return ackFail(ack, 'invalid');
 
   return withUserLock(username, async () => {
+    console.log(`[theme-exchange] exchange-theme start user=${username} theme=${themeId}`);
     try {
       const state = await loadState(username);
       if (state.themes.includes(themeId)) {
         state.currentTheme = themeId;
-        await saveState(username, state);
+        queueSave(username, state);
         emitState(socket, username, state);
         if (typeof ack === 'function') ack({ ok: true, alreadyOwned: true, ...state });
         return;
       }
 
       const cost = Number(THEME_CATALOG[themeId].cost || 0);
-      if (state.points < cost) {
-        fail(ack, 'insufficient-points', { points: state.points, cost });
-        return;
-      }
+      if (state.points < cost) return ackFail(ack, 'insufficient-points', { points: state.points, cost });
 
       const nextState = {
         ...state,
@@ -258,55 +280,56 @@ async function exchangeTheme(socket, themeId, ack) {
         themes: [...state.themes, themeId],
         currentTheme: themeId
       };
-      await saveState(username, nextState);
+
+      // UIへの応答をFirestore保存より先に返し、Firestoreの一時的な遅延で交換がタイムアウトしないようにします。
+      queueSave(username, nextState);
       emitState(socket, username, nextState);
       if (typeof ack === 'function') ack({ ok: true, purchased: true, cost, ...nextState });
+      console.log(`[theme-exchange] exchange-theme accepted user=${username} theme=${themeId}`);
     } catch (error) {
-      console.error(`Theme exchange failed for ${username}:`, error);
-      fail(ack, 'server-error');
+      console.error(`[theme-exchange] exchange-theme failed user=${username}:`, error);
+      ackFail(ack, 'server-error', { message: '交換処理に失敗しました。' });
     }
   });
 }
 
 async function selectTheme(socket, themeId, ack) {
-  const username = socket.__themeUsername || '';
-  if (!username || !THEME_CATALOG[themeId]) return fail(ack, 'invalid');
+  const username = String(socket.__themeUsername || '').trim();
+  if (!username || !THEME_CATALOG[themeId]) return ackFail(ack, 'invalid');
 
   return withUserLock(username, async () => {
     try {
       const state = await loadState(username);
-      if (!state.themes.includes(themeId)) return fail(ack, 'not-owned');
+      if (!state.themes.includes(themeId)) return ackFail(ack, 'not-owned');
       state.currentTheme = themeId;
-      await saveState(username, state);
+      queueSave(username, state);
       emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
     } catch (error) {
-      console.error(`Theme selection failed for ${username}:`, error);
-      fail(ack, 'server-error');
+      console.error(`[theme-exchange] select-theme failed user=${username}:`, error);
+      ackFail(ack, 'server-error', { message: '見た目の切り替えに失敗しました。' });
     }
   });
 }
 
 async function exchangeChatColor(socket, colorId, ack) {
-  const username = socket.__themeUsername || '';
-  if (!username || !CHAT_COLOR_CATALOG[colorId]) return fail(ack, 'invalid');
+  const username = String(socket.__themeUsername || '').trim();
+  if (!username || !CHAT_COLOR_CATALOG[colorId]) return ackFail(ack, 'invalid');
 
   return withUserLock(username, async () => {
+    console.log(`[theme-exchange] exchange-chat-color start user=${username} color=${colorId}`);
     try {
       const state = await loadState(username);
       if (state.chatColors.includes(colorId)) {
         state.currentChatColor = colorId;
-        await saveState(username, state);
+        queueSave(username, state);
         emitState(socket, username, state);
         if (typeof ack === 'function') ack({ ok: true, alreadyOwned: true, ...state });
         return;
       }
 
       const cost = Number(CHAT_COLOR_CATALOG[colorId].cost || 0);
-      if (state.points < cost) {
-        fail(ack, 'insufficient-points', { points: state.points, cost });
-        return;
-      }
+      if (state.points < cost) return ackFail(ack, 'insufficient-points', { points: state.points, cost });
 
       const nextState = {
         ...state,
@@ -314,45 +337,48 @@ async function exchangeChatColor(socket, colorId, ack) {
         chatColors: [...state.chatColors, colorId],
         currentChatColor: colorId
       };
-      await saveState(username, nextState);
+      queueSave(username, nextState);
       emitState(socket, username, nextState);
       if (typeof ack === 'function') ack({ ok: true, purchased: true, cost, ...nextState });
+      console.log(`[theme-exchange] exchange-chat-color accepted user=${username} color=${colorId}`);
     } catch (error) {
-      console.error(`Chat color exchange failed for ${username}:`, error);
-      fail(ack, 'server-error');
+      console.error(`[theme-exchange] exchange-chat-color failed user=${username}:`, error);
+      ackFail(ack, 'server-error', { message: '色の交換処理に失敗しました。' });
     }
   });
 }
 
 async function selectChatColor(socket, colorId, ack) {
-  const username = socket.__themeUsername || '';
-  if (!username || !CHAT_COLOR_CATALOG[colorId]) return fail(ack, 'invalid');
+  const username = String(socket.__themeUsername || '').trim();
+  if (!username || !CHAT_COLOR_CATALOG[colorId]) return ackFail(ack, 'invalid');
 
   return withUserLock(username, async () => {
     try {
       const state = await loadState(username);
-      if (!state.chatColors.includes(colorId)) return fail(ack, 'not-owned');
+      if (!state.chatColors.includes(colorId)) return ackFail(ack, 'not-owned');
       state.currentChatColor = colorId;
-      await saveState(username, state);
+      queueSave(username, state);
       emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
     } catch (error) {
-      console.error(`Chat color selection failed for ${username}:`, error);
-      fail(ack, 'server-error');
+      console.error(`[theme-exchange] select-chat-color failed user=${username}:`, error);
+      ackFail(ack, 'server-error', { message: 'チャットの色の切り替えに失敗しました。' });
     }
   });
 }
 
 export async function initializeThemeForSocket(socket, username) {
-  socket.__themeUsername = String(username || '').trim();
-  if (!socket.__themeUsername) return;
+  const cleanUsername = String(username || '').trim();
+  socket.__themeUsername = cleanUsername;
+  if (!cleanUsername) return;
 
   try {
-    const state = await loadState(socket.__themeUsername);
-    emitState(socket, socket.__themeUsername, state);
+    const state = await loadState(cleanUsername);
+    emitState(socket, cleanUsername, state);
+    console.log(`[theme-exchange] state initialized user=${cleanUsername} points=${state.points}`);
   } catch (error) {
-    console.error(`Theme state load failed for ${socket.__themeUsername}:`, error);
-    emitState(socket, socket.__themeUsername, defaultState());
+    console.error(`[theme-exchange] initial state load failed user=${cleanUsername}:`, error.message);
+    emitState(socket, cleanUsername, cloneState());
   }
 }
 
