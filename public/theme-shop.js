@@ -76,34 +76,39 @@
     colorGridEl.querySelectorAll('button,[data-color-id]').forEach(b => b.disabled = exchangeInFlight || b.disabled);
   }
 
-  function setBusy(button) { exchangeInFlight = true; if (button) button.textContent = '⏳ 処理中…'; render(); }
   function finish(result, fallback) {
     exchangeInFlight = false;
     if (!result?.ok) {
       if (result?.reason === 'insufficient-points') status(`⭐ 地域ポイントが足りません（必要 ${Number(result.cost || 0)}pt / 所持 ${Number(result.points || 0)}pt）`);
+      else if (result?.reason === 'timeout') status('⚠️ サーバーからの応答がタイムアウトしました。交換状態を確認してください。');
       else status(fallback);
-    } else {
-      state = {
-        points: Number(result.points ?? state.points),
-        themes: Array.isArray(result.themes) ? result.themes : state.themes,
-        currentTheme: result.currentTheme || state.currentTheme,
-        chatColors: Array.isArray(result.chatColors) ? result.chatColors : state.chatColors,
-        currentChatColor: result.currentChatColor || state.currentChatColor
-      };
-      applyTheme(state.currentTheme);
-      applyChatColor(state.currentChatColor);
+      render();
+      return;
     }
+
+    state = {
+      points: Number(result.points ?? state.points),
+      themes: Array.isArray(result.themes) ? result.themes : state.themes,
+      currentTheme: result.currentTheme || state.currentTheme,
+      chatColors: Array.isArray(result.chatColors) ? result.chatColors : state.chatColors,
+      currentChatColor: result.currentChatColor || state.currentChatColor
+    };
+    applyTheme(state.currentTheme);
+    applyChatColor(state.currentChatColor);
     render();
   }
 
-  function sendExchange(eventName, payload, button, fallback) {
-    setBusy(button);
+  function sendExchange(eventName, payload, triggerButton, fallback) {
+    exchangeInFlight = true;
+    if (triggerButton) triggerButton.textContent = '⏳ 処理中…';
+    render();
     let settled = false;
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (settled) return;
       settled = true;
       finish({ ok: false, reason: 'timeout' }, fallback);
     }, 20000);
+
     socket.emit(eventName, payload, result => {
       if (settled) return;
       settled = true;
