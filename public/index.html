@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>チャットマップ</title>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HSK5TPMF7N"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-HSK5TPMF7N');
+  </script>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/style.css">
   <style>
@@ -102,7 +112,7 @@
   <script src="/chat-map-link.js"></script>
   <script>
     const locationCheckbox=document.getElementById('location-checkbox'); const statusEl=document.getElementById('status');
-    locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析します。':'場所を付けずに投稿します。チャットのみ表示されます。';});
+    locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析して地図に表示します。':'場所を付けずに投稿します。チャットのみ表示されます。';});
     (()=>{const muteBtn=document.getElementById('mute-btn');const camBtn=document.getElementById('cam-toggle-btn');const minimizeBtn=document.getElementById('minimize-btn');const endBtn=document.getElementById('call-end-btn');const acceptBtn=document.getElementById('call-accept-btn');const declineBtn=document.getElementById('call-decline-btn');const miniUnminimize=document.getElementById('mini-unminimize');const miniEnd=document.getElementById('mini-end');
       const decorateCallButton=(button,type)=>{if(!button)return;const text=button.textContent.trim();button.classList.remove('is-active','is-off');if(type==='mute'){const muted=text.includes('解除');button.textContent=muted?'🔇 ミュート解除':'🎤 ミュート';button.title=muted?'マイクをオンにします':'マイクをオフにします';button.setAttribute('aria-label',button.title);button.classList.toggle('is-off',muted);}else if(type==='camera'){const cameraOff=text.includes('カメラON');button.textContent=cameraOff?'📷 カメラON':'📹 カメラOFF';button.title=cameraOff?'カメラをオンにします':'カメラをオフにします';button.setAttribute('aria-label',button.title);button.classList.toggle('is-off',cameraOff);}else if(type==='minimize'){button.textContent='↙️ 小さくする';button.title='通話画面を小さくします';}else if(type==='end'){button.textContent='📞 通話終了';button.title='通話を終了します';}else if(type==='accept'){button.textContent='✅ 応答';button.title='通話に応答します';}else if(type==='decline'){button.textContent='✖️ 拒否';button.title='通話を拒否します';}else if(type==='open-mini'){button.textContent='↗️ 通話を開く';button.title='通話画面を開きます';}else if(type==='mini-end'){button.textContent='📞 終了';button.title='通話を終了します';}};
       const refresh=()=>{decorateCallButton(muteBtn,'mute');decorateCallButton(camBtn,'camera');decorateCallButton(minimizeBtn,'minimize');decorateCallButton(endBtn,'end');decorateCallButton(acceptBtn,'accept');decorateCallButton(declineBtn,'decline');decorateCallButton(miniUnminimize,'open-mini');decorateCallButton(miniEnd,'mini-end');};refresh();const observer=new MutationObserver(refresh);[muteBtn,camBtn,minimizeBtn,endBtn,acceptBtn,declineBtn,miniUnminimize,miniEnd].filter(Boolean).forEach(button=>observer.observe(button,{childList:true,characterData:true,subtree:true}));
