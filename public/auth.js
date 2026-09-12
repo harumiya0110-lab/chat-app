@@ -274,9 +274,6 @@
     try {
       await ensureFirebase();
       await window.ruralFirebaseAuth.signInWithEmailAndPassword(email, password);
-      // ログイン完了後のチャット参加は onAuthStateChanged に一本化します。
-      // ここでもannounceAuthenticatedを呼ぶと、同じソケットへ2回参加要求を送って
-      // 「この名前は既に使用されています」と表示される原因になります。
     } catch (error) {
       console.error(error);
       setAccountStatus(friendlyError(error), true);
@@ -356,6 +353,7 @@
     if (!name || typeof socket === 'undefined') return;
     window.__ruralSignupInProgress = false;
     usernameInput.value = name;
+    socket.emit('email-account-session', { username: name, uid: String(event.detail?.uid || '') });
     joinBtn.click();
   });
 })();
