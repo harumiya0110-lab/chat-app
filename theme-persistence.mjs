@@ -16,6 +16,15 @@ export const THEME_CATALOG = {
   matsuri: { name: '🏮 祭り', cost: 150 }
 };
 
+export const CHAT_COLOR_CATALOG = {
+  forest: { name: '🌿 里山グリーン', color: '#2f7d4a', cost: 0 },
+  blue: { name: '🌊 青空ブルー', color: '#2d78b8', cost: 30 },
+  sakura: { name: '🌸 さくらピンク', color: '#d85c86', cost: 40 },
+  violet: { name: '🔮 バイオレット', color: '#7657b8', cost: 50 },
+  sunset: { name: '🌇 夕焼けオレンジ', color: '#d97932', cost: 60 },
+  ink: { name: '🌑 墨ブラック', color: '#333333', cost: 80 }
+};
+
 function base64Url(value) {
   return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
@@ -35,6 +44,7 @@ function fromFirestoreValue(value) {
   if ('stringValue' in value) return value.stringValue;
   if ('integerValue' in value) return Number(value.integerValue);
   if ('doubleValue' in value) return Number(value.doubleValue);
+  if ('booleanValue' in value) return Boolean(value.booleanValue);
   if ('arrayValue' in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
   if ('mapValue' in value) return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([k, v]) => [k, fromFirestoreValue(v)]));
   return null;
@@ -52,7 +62,7 @@ try {
     enabled = true;
     console.log(`Theme persistence enabled: project=${projectId}`);
   } else {
-    console.warn('FIREBASE_SERVICE_ACCOUNT_JSON is not set. Theme purchases are disabled.');
+    console.warn('FIREBASE_SERVICE_ACCOUNT_JSON is not set. Theme and chat-color purchases are disabled.');
   }
 } catch (error) {
   console.error('Theme persistence initialization failed:', error.message);
@@ -107,52 +117,54 @@ async function loadThemeState(username) {
     const points = Math.max(0, Math.floor(Number(fields.points || 0)));
     const themes = [...new Set(['forest', ...(Array.isArray(fields.themes) ? fields.themes : [])])].filter(id => THEME_CATALOG[id]);
     const currentTheme = THEME_CATALOG[fields.currentTheme] ? fields.currentTheme : 'forest';
-    return { points, themes, currentTheme };
+    const chatColors = [...new Set(['forest', ...(Array.isArray(fields.chatColors) ? fields.chatColors : [])])].filter(id => CHAT_COLOR_CATALOG[id]);
+    const currentChatColor = CHAT_COLOR_CATALOG[fields.currentChatColor] ? fields.currentChatColor : 'forest';
+    return { points, themes, currentTheme, chatColors, currentChatColor };
   } catch (error) {
-    if (error.status === 404) return { points: 0, themes: ['forest'], currentTheme: 'forest' };
+    if (error.status === 404) return { points: 0, themes: ['forest'], currentTheme: 'forest', chatColors: ['forest'], currentChatColor: 'forest' };
     throw error;
   }
 }
 
-async function patchThemeState(username, points, themes, currentTheme) {
+async function patchThemeState(username, points, themes, currentTheme, chatColors, currentChatColor) {
   const safeUsername = encodeURIComponent(String(username));
-  await firestoreRequest(`/regionalPoints/${safeUsername}?updateMask.fieldPaths=points&updateMask.fieldPaths=themes&updateMask.fieldPaths=currentTheme`, {
+  await firestoreRequest(`/regionalPoints/${safeUsername}?updateMask.fieldPaths=points&updateMask.fieldPaths=themes&updateMask.fieldPaths=currentTheme&updateMask.fieldPaths=chatColors&updateMask.fieldPaths=currentChatColor`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
         points: firestoreValue(Math.max(0, Math.floor(points))),
         themes: firestoreValue([...new Set(['forest', ...themes])].filter(id => THEME_CATALOG[id])),
-        currentTheme: firestoreValue(THEME_CATALOG[currentTheme] ? currentTheme : 'forest')
+        currentTheme: firestoreValue(THEME_CATALOG[currentTheme] ? currentTheme : 'forest'),
+        chatColors: firestoreValue([...new Set(['forest', ...chatColors])].filter(id => CHAT_COLOR_CATALOG[id])),
+        currentChatColor: firestoreValue(CHAT_COLOR_CATALOG[currentChatColor] ? currentChatColor : 'forest')
       }
     })
   });
 }
 
 function emitState(socket, username, state) {
-  socket.emit('theme-state', { username, ...state, catalog: THEME_CATALOG });
+  socket.emit('theme-state', { username, ...state, catalog: THEME_CATALOG, chatColorCatalog: CHAT_COLOR_CATALOG });
   socket.emit('region-points-updated', { username, points: state.points, earned: 0 });
 }
 
 async function exchangeTheme(socket, payload = {}, ack) {
-  const username = socket.__regionalPointsUsername || '';
+  const username = socket.__themeUsername || '';
   const themeId = typeof payload.themeId === 'string' ? payload.themeId.trim() : '';
   if (!username || !THEME_CATALOG[themeId]) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
-
   try {
     const state = await loadThemeState(username);
     if (state.themes.includes(themeId)) {
       state.currentTheme = themeId;
-      await patchThemeState(username, state.points, state.themes, state.currentTheme);
+      await patchThemeState(username, state.points, state.themes, state.currentTheme, state.chatColors, state.currentChatColor);
       emitState(socket, username, state);
       return typeof ack === 'function' && ack({ ok: true, alreadyOwned: true, ...state });
     }
     const cost = THEME_CATALOG[themeId].cost;
     if (state.points < cost) return typeof ack === 'function' && ack({ ok: false, reason: 'insufficient-points', points: state.points, cost });
-
     const newPoints = state.points - cost;
     const newThemes = [...state.themes, themeId];
-    await patchThemeState(username, newPoints, newThemes, themeId);
-    const nextState = { points: newPoints, themes: newThemes, currentTheme: themeId };
+    await patchThemeState(username, newPoints, newThemes, themeId, state.chatColors, state.currentChatColor);
+    const nextState = { ...state, points: newPoints, themes: newThemes, currentTheme: themeId };
     emitState(socket, username, nextState);
     if (typeof ack === 'function') ack({ ok: true, purchased: true, cost, ...nextState });
   } catch (error) {
@@ -162,18 +174,61 @@ async function exchangeTheme(socket, payload = {}, ack) {
 }
 
 async function selectTheme(socket, payload = {}, ack) {
-  const username = socket.__regionalPointsUsername || '';
+  const username = socket.__themeUsername || '';
   const themeId = typeof payload.themeId === 'string' ? payload.themeId.trim() : '';
   if (!username || !THEME_CATALOG[themeId]) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
   try {
     const state = await loadThemeState(username);
     if (!state.themes.includes(themeId)) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owned' });
     state.currentTheme = themeId;
-    await patchThemeState(username, state.points, state.themes, state.currentTheme);
+    await patchThemeState(username, state.points, state.themes, state.currentTheme, state.chatColors, state.currentChatColor);
     emitState(socket, username, state);
     if (typeof ack === 'function') ack({ ok: true, ...state });
   } catch (error) {
     console.error('Theme selection failed:', error);
+    if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+  }
+}
+
+async function exchangeChatColor(socket, payload = {}, ack) {
+  const username = socket.__themeUsername || '';
+  const colorId = typeof payload.colorId === 'string' ? payload.colorId.trim() : '';
+  if (!username || !CHAT_COLOR_CATALOG[colorId]) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
+  try {
+    const state = await loadThemeState(username);
+    if (state.chatColors.includes(colorId)) {
+      state.currentChatColor = colorId;
+      await patchThemeState(username, state.points, state.themes, state.currentTheme, state.chatColors, state.currentChatColor);
+      emitState(socket, username, state);
+      return typeof ack === 'function' && ack({ ok: true, alreadyOwned: true, ...state });
+    }
+    const cost = CHAT_COLOR_CATALOG[colorId].cost;
+    if (state.points < cost) return typeof ack === 'function' && ack({ ok: false, reason: 'insufficient-points', points: state.points, cost });
+    const newPoints = state.points - cost;
+    const newChatColors = [...state.chatColors, colorId];
+    await patchThemeState(username, newPoints, state.themes, state.currentTheme, newChatColors, colorId);
+    const nextState = { ...state, points: newPoints, chatColors: newChatColors, currentChatColor: colorId };
+    emitState(socket, username, nextState);
+    if (typeof ack === 'function') ack({ ok: true, purchased: true, cost, ...nextState });
+  } catch (error) {
+    console.error('Chat color exchange failed:', error);
+    if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+  }
+}
+
+async function selectChatColor(socket, payload = {}, ack) {
+  const username = socket.__themeUsername || '';
+  const colorId = typeof payload.colorId === 'string' ? payload.colorId.trim() : '';
+  if (!username || !CHAT_COLOR_CATALOG[colorId]) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
+  try {
+    const state = await loadThemeState(username);
+    if (!state.chatColors.includes(colorId)) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owned' });
+    state.currentChatColor = colorId;
+    await patchThemeState(username, state.points, state.themes, state.currentTheme, state.chatColors, state.currentChatColor);
+    emitState(socket, username, state);
+    if (typeof ack === 'function') ack({ ok: true, ...state });
+  } catch (error) {
+    console.error('Chat color selection failed:', error);
     if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
   }
 }
@@ -186,6 +241,8 @@ SocketIOServer.prototype.on = function(eventName, listener) {
     socket.on = (socketEventName, handler) => {
       if (socketEventName === 'exchange-theme') return originalSocketOn(socketEventName, (payload, ack) => void exchangeTheme(socket, payload, ack));
       if (socketEventName === 'select-theme') return originalSocketOn(socketEventName, (payload, ack) => void selectTheme(socket, payload, ack));
+      if (socketEventName === 'exchange-chat-color') return originalSocketOn(socketEventName, (payload, ack) => void exchangeChatColor(socket, payload, ack));
+      if (socketEventName === 'select-chat-color') return originalSocketOn(socketEventName, (payload, ack) => void selectChatColor(socket, payload, ack));
       return originalSocketOn(socketEventName, handler);
     };
 
@@ -198,7 +255,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         if (enabled) {
           void loadThemeState(username).then(state => emitState(socket, username, state)).catch(error => console.error('Theme state load failed:', error));
         } else {
-          previousEmit('theme-state', { username, points: 0, themes: ['forest'], currentTheme: 'forest', catalog: THEME_CATALOG });
+          previousEmit('theme-state', { username, points: 0, themes: ['forest'], currentTheme: 'forest', chatColors: ['forest'], currentChatColor: 'forest', catalog: THEME_CATALOG, chatColorCatalog: CHAT_COLOR_CATALOG });
         }
         return accepted;
       }
