@@ -8,6 +8,7 @@ let pendingIncoming = null;
 let isMuted = false;
 let isVideoOn = true;
 let isMinimized = false;
+let isJoiningChat = false;
 
 const MAX_CHAT_MESSAGES = 50;
 
@@ -184,8 +185,9 @@ function joinChat() {
   const username = usernameInput.value.trim();
   if (!username) return alert('ニックネームを入力してください');
   if (username.length > 20) return alert('ニックネームは20文字以内にしてください');
-  // ログイン完了イベントが重複して発火しても、同じチャット参加要求を二重送信しません。
-  if (joinBtn.disabled) return;
+  // メールログイン時などに認証イベントが重複しても、参加要求は一度だけ送信します。
+  if (isJoiningChat || joinBtn.disabled) return;
+  isJoiningChat = true;
   joinBtn.disabled = true;
   socket.emit('set-username', username);
 }
@@ -194,6 +196,7 @@ joinBtn.addEventListener('click', joinChat);
 usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
 
 socket.on('username-accepted', ({ username }) => {
+  isJoiningChat = false;
   currentUsername = username;
   usernameDisplay.textContent = username;
   setupPanel.hidden = true;
@@ -204,6 +207,7 @@ socket.on('username-accepted', ({ username }) => {
 });
 
 socket.on('username-error', data => {
+  isJoiningChat = false;
   alert(data?.message || 'この名前は使用できません');
   joinBtn.disabled = false;
 });
