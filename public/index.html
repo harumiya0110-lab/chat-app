@@ -6,12 +6,12 @@
   <title>チャットマップ</title>
 
   <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HSK5TPMF7N"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-CMSLDR94M4"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-HSK5TPMF7N');
+    gtag('config', 'G-CMSLDR94M4');
   </script>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -53,7 +53,6 @@
         const chatMain = document.getElementById('chat-main');
         if (chatMain?.hidden) return false;
         document.body.classList.remove('pre-auth');
-        // Leafletは非表示状態で初期化されているため、表示後にサイズを再計算します。
         setTimeout(() => {
           if (window.ruralMap?.invalidateSize) {
             window.ruralMap.invalidateSize(true);
@@ -61,13 +60,11 @@
         }, 100);
         return true;
       };
-      // 認証完了時だけでなく、実際にチャット参加が完了した時にも公開します。
       window.addEventListener('rural-account-authenticated', () => {
         revealApp();
         setTimeout(revealApp, 300);
       }, true);
       window.addEventListener('username-accepted', revealApp, true);
-      // client.jsのSocket.IOイベントはDOMイベントではないため、下のフックで確実に再計算します。
       window.addEventListener('rural-chat-joined', revealApp, true);
     })();
   </script>
