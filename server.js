@@ -8,7 +8,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { claimAccountName, releaseAccountName, isAccountNameAvailable } from './firebase-persistence.mjs';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
-import { registerChatCustomizationPersistence } from './chat-customization-persistence.mjs';
+import { registerChatBackgroundPersistence } from './chat-background-persistence.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -17,7 +17,7 @@ const io = new SocketIOServer(server, {
   maxHttpBufferSize: 40 * 1024 * 1024
 });
 registerThemePersistence(io);
-registerChatCustomizationPersistence(io);
+registerChatBackgroundPersistence(io);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -291,27 +291,6 @@ io.on('connection', socket => {
     }
     const videoType = safeVideoMime(data?.videoType);
     io.emit('receive-video', { username: user.username, video: bytes, videoType, filename: typeof data.filename === 'string' ? data.filename.slice(0, 200) : null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
-    if (typeof ack === 'function') ack({ ok: true });
-  });
-
-  socket.on('send-audio', (data, ack) => {
-    const user = users[socket.id];
-    if (!user) {
-      if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
-      return;
-    }
-    const bytes = toAudioBuffer(data?.audio);
-    if (!bytes) {
-      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
-      return;
-    }
-    const MAX_AUDIO_SIZE = 8 * 1024 * 1024;
-    if (bytes.length > MAX_AUDIO_SIZE) {
-      if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
-      return;
-    }
-    const audioType = safeAudioMime(data?.audioType);
-    io.emit('receive-audio', { username: user.username, audio: bytes, audioType, filename: typeof data.filename === 'string' ? data.filename.slice(0, 200) : 'voice-message.webm', durationMs: Number.isFinite(Number(data.durationMs)) ? Math.min(180000, Math.max(0, Number(data.durationMs))) : null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
     if (typeof ack === 'function') ack({ ok: true });
   });
 
