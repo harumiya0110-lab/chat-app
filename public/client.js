@@ -9,6 +9,8 @@ let isMuted = false;
 let isVideoOn = true;
 let isMinimized = false;
 
+const MAX_CHAT_MESSAGES = 50;
+
 const $ = (id) => document.getElementById(id);
 const setupPanel = $('setup-panel');
 const chatMain = $('chat-main');
@@ -57,8 +59,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, ch => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  return String(value ?? '').replace(/[&<>'\"]/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;'
   }[ch]));
 }
 
@@ -68,6 +70,14 @@ function setStatus(text) {
 
 function scrollToBottom() {
   messages.scrollTop = messages.scrollHeight;
+}
+
+function trimChatMessages() {
+  if (!messages) return;
+  const chatItems = messages.querySelectorAll('.message');
+  while (chatItems.length > MAX_CHAT_MESSAGES) {
+    chatItems[0].remove();
+  }
 }
 
 function addNormalMessageDeleteControl(item, data) {
@@ -120,8 +130,10 @@ function addMessage(data) {
   const style = EVENT_STYLES[type];
   const badge = type && style ? `<span style="display:inline-block;background:${style.color};color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-bottom:4px">${escapeHtml(type)}</span><br>` : '';
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-bubble">${badge}${escapeHtml(data.message || data.text || '')}</div>`;
+  item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
   addNormalMessageDeleteControl(item, data);
   messages.appendChild(item);
+  trimChatMessages();
   scrollToBottom();
 }
 
@@ -147,6 +159,7 @@ function addImage(data) {
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(data.timestamp || '')}</span></div>`;
   item.appendChild(bubble);
   messages.appendChild(item);
+  trimChatMessages();
   scrollToBottom();
 }
 
@@ -163,6 +176,7 @@ function addVideo(data) {
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(data.timestamp || '')}</span></div>`;
   item.appendChild(bubble);
   messages.appendChild(item);
+  trimChatMessages();
   scrollToBottom();
 }
 
