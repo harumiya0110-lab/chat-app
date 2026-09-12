@@ -4,4 +4,16 @@
 .account-login .auth-choice .auth-login-choice:hover:not(:disabled){background:#234d3c!important;color:#fff!important;border-color:#234d3c!important}
 .account-login .auth-choice .auth-signup-choice:hover:not(:disabled){background:#eef5ec!important;color:#234d3c!important;border-color:#9fba9c!important}
 
-@media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
+/* 通話中の操作ボタンを「見た瞬間に役割が分かる」デザインにします。 */
+.call-controls button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:700;transition:transform .12s ease,filter .12s ease,background-color .12s ease;box-shadow:0 2px 5px rgba(0,0,0,.12)}
+.call-controls button:hover:not(:disabled){filter:brightness(.95);transform:translateY(-1px)}
+.call-controls .call-action-mute,.call-controls .call-action-camera{background:#234d3c;padding-inline:18px;min-width:145px}
+.call-controls .call-action-mute.is-off,.call-controls .call-action-camera.is-off{background:#c43d3d}
+.call-controls #call-accept-btn{background:#2d8a57;font-size:15px}
+.call-controls #call-decline-btn{background:#8a6666;font-size:15px}
+.call-controls #minimize-btn{background:#68796e}
+.call-controls #call-end-btn{background:#c43d3d;font-size:15px;min-width:125px}
+.call-controls button:focus-visible,.mini-call-bar button:focus-visible{outline:3px solid #f0b44c;outline-offset:2px}
+.mini-call-bar button{display:inline-flex;align-items:center;justify-content:center;gap:4px;font-weight:700}
+
+@media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
