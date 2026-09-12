@@ -12,7 +12,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: 20 * 1024 * 1024
+  // 動画はブラウザでDataURL化されるため元ファイルより大きくなります。
+  // 余裕を持たせてSocket.IOの受信上限を40MBにします。
+  maxHttpBufferSize: 40 * 1024 * 1024
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -248,7 +250,17 @@ io.on('connection', socket => {
 
   socket.on('send-video', data => {
     const user = users[socket.id];
-    if (user && data?.video) io.emit('receive-video', { username: user.username, video: data.video, filename: data.filename || null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
+    if (!user || typeof data?.video !== 'string' || !data.video) return;
+    // DataURL形式の動画だけを受け付け、異常に大きなペイロードを早期に弾きます。
+    if (!/^data:video\/[a-z0-9.+-]+;base64,/i.test(data.video)) return;
+    if (data.video.length > 35 * 1024 * 1024) return;
+    io.emit('receive-video', {
+      username: user.username,
+      video: data.video,
+      filename: typeof data.filename === 'string' ? data.filename.slice(0, 200) : null,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: socket.id
+    });
   });
 
   socket.on('send-message', data => {
