@@ -25,14 +25,7 @@ export const CHAT_ICON_FRAME_CATALOG = {
   matsuri: { name: '🏮 お祭りフレーム', description: '地域のお祭りをイメージ', cost: 100, css: 'matsuri' }
 };
 
-const DEFAULT_STATE = {
-  points: 0,
-  backgrounds: ['default'],
-  currentBackground: 'default',
-  iconFrames: ['default'],
-  currentIconFrame: 'default'
-};
-
+const DEFAULT_STATE = { points: 0, backgrounds: ['default'], currentBackground: 'default', iconFrames: ['default'], currentIconFrame: 'default' };
 const locks = new Map();
 const stateCache = new Map();
 
@@ -49,16 +42,12 @@ function cloneState(state = DEFAULT_STATE) {
 function withLock(username, task) {
   const key = String(username);
   const previous = locks.get(key) || Promise.resolve();
-  const next = previous.catch(() => {}).then(task).finally(() => {
-    if (locks.get(key) === next) locks.delete(key);
-  });
+  const next = previous.catch(() => {}).then(task).finally(() => { if (locks.get(key) === next) locks.delete(key); });
   locks.set(key, next);
   return next;
 }
 
-function base64Url(value) {
-  return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
+function base64Url(value) { return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, ''); }
 
 function firestoreValue(value) {
   if (value === null || value === undefined) return { nullValue: 'NULL_VALUE' };
@@ -66,11 +55,7 @@ function firestoreValue(value) {
   if (typeof value === 'boolean') return { booleanValue: value };
   if (typeof value === 'number') return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
   if (Array.isArray(value)) return { arrayValue: { values: value.map(firestoreValue) } };
-  if (typeof value === 'object') {
-    const fields = {};
-    for (const [key, item] of Object.entries(value)) fields[key] = firestoreValue(item);
-    return { mapValue: { fields } };
-  }
+  if (typeof value === 'object') { const fields = {}; for (const [key, item] of Object.entries(value)) fields[key] = firestoreValue(item); return { mapValue: { fields } }; }
   return { stringValue: String(value) };
 }
 
@@ -85,11 +70,7 @@ function fromFirestoreValue(value) {
   return null;
 }
 
-function fromFirestoreFields(fields) {
-  const result = {};
-  for (const [key, value] of Object.entries(fields || {})) result[key] = fromFirestoreValue(value);
-  return result;
-}
+function fromFirestoreFields(fields) { const result = {}; for (const [key, value] of Object.entries(fields || {})) result[key] = fromFirestoreValue(value); return result; }
 
 try {
   if (rawServiceAccount) {
@@ -98,78 +79,38 @@ try {
     if (!serviceAccount.client_email || !serviceAccount.private_key || !projectId) throw new Error('service account JSON is incomplete');
     enabled = true;
     console.log(`Chat customization persistence enabled: project=${projectId}`);
-  } else {
-    console.warn('FIREBASE_SERVICE_ACCOUNT_JSON is not set. Chat background and icon frame purchases are disabled.');
-  }
-} catch (error) {
-  console.error('Chat customization persistence initialization failed:', error.message);
-}
+  } else console.warn('FIREBASE_SERVICE_ACCOUNT_JSON is not set. Chat customization purchases are disabled.');
+} catch (error) { console.error('Chat customization persistence initialization failed:', error.message); }
 
 async function getAccessToken() {
   if (!enabled) return null;
   const now = Math.floor(Date.now() / 1000);
   if (cachedAccessToken && cachedAccessTokenExpiresAt - now > 60) return cachedAccessToken;
-
   const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/datastore',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600
-  };
+  const payload = { iss: serviceAccount.client_email, scope: 'https://www.googleapis.com/auth/datastore', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 };
   const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(unsigned);
-  signer.end();
+  const signer = crypto.createSign('RSA-SHA256'); signer.update(unsigned); signer.end();
   const assertion = `${unsigned}.${base64Url(signer.sign(serviceAccount.private_key))}`;
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
-    signal: AbortSignal.timeout(8000)
-  });
+  const response = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }), signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error(`Google OAuth token request failed: ${response.status}`);
-  const result = await response.json();
-  cachedAccessToken = result.access_token;
-  cachedAccessTokenExpiresAt = now + Number(result.expires_in || 3600);
-  return cachedAccessToken;
+  const result = await response.json(); cachedAccessToken = result.access_token; cachedAccessTokenExpiresAt = now + Number(result.expires_in || 3600); return cachedAccessToken;
 }
 
-function documentsUrl(path = '') {
-  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents${path}`;
-}
+function documentsUrl(path = '') { return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents${path}`; }
 
 async function firestoreRequest(label, path, options = {}) {
   const token = await getAccessToken();
   if (!token) throw new Error('chat customization persistence is disabled');
-  const response = await fetch(documentsUrl(path), {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    signal: options.signal || AbortSignal.timeout(8000)
-  });
+  const response = await fetch(documentsUrl(path), { ...options, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) }, signal: options.signal || AbortSignal.timeout(8000) });
   const text = await response.text().catch(() => '');
-  if (!response.ok) {
-    const error = new Error(`Firestore request failed: ${response.status} ${text.slice(0, 400)}`);
-    error.status = response.status;
-    throw error;
-  }
+  if (!response.ok) { const error = new Error(`Firestore request failed: ${response.status} ${text.slice(0, 400)}`); error.status = response.status; throw error; }
   return text ? JSON.parse(text) : null;
 }
 
 async function loadRegionalDocument(username) {
   const safeUsername = encodeURIComponent(String(username));
-  try {
-    return await firestoreRequest('load', `/regionalPoints/${safeUsername}`, { method: 'GET' });
-  } catch (error) {
-    if (error.status === 404) return { fields: {} };
-    throw error;
-  }
+  try { return await firestoreRequest('load', `/regionalPoints/${safeUsername}`, { method: 'GET' }); }
+  catch (error) { if (error.status === 404) return { fields: {} }; throw error; }
 }
 
 async function loadState(username) {
@@ -177,7 +118,7 @@ async function loadState(username) {
   if (stateCache.has(key)) return cloneState(stateCache.get(key));
   const result = await loadRegionalDocument(key);
   const raw = fromFirestoreFields(result?.fields || {});
-  const state = cloneState({ ...raw, points: raw.points || 0 });
+  const state = cloneState({ points: raw.points || 0, backgrounds: raw.chatBackgrounds || [], currentBackground: raw.currentChatBackground, iconFrames: raw.chatIconFrames || [], currentIconFrame: raw.currentChatIconFrame });
   stateCache.set(key, state);
   return cloneState(state);
 }
@@ -188,41 +129,22 @@ async function saveState(username, state) {
   const clean = cloneState(state);
   const fieldPaths = ['points', 'chatBackgrounds', 'currentChatBackground', 'chatIconFrames', 'currentChatIconFrame'];
   const params = fieldPaths.map(path => `updateMask.fieldPaths=${encodeURIComponent(path)}`).join('&');
-  await firestoreRequest('save', `/regionalPoints/${safeUsername}?${params}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      fields: {
-        points: firestoreValue(clean.points),
-        chatBackgrounds: firestoreValue(clean.backgrounds),
-        currentChatBackground: firestoreValue(clean.currentBackground),
-        chatIconFrames: firestoreValue(clean.iconFrames),
-        currentChatIconFrame: firestoreValue(clean.currentIconFrame)
-      }
-    })
-  });
+  await firestoreRequest('save', `/regionalPoints/${safeUsername}?${params}`, { method: 'PATCH', body: JSON.stringify({ fields: { points: firestoreValue(clean.points), chatBackgrounds: firestoreValue(clean.backgrounds), currentChatBackground: firestoreValue(clean.currentBackground), chatIconFrames: firestoreValue(clean.iconFrames), currentChatIconFrame: firestoreValue(clean.currentIconFrame) } }) });
   stateCache.set(String(username), clean);
 }
 
 function emitState(socket, username, state) {
   const clean = cloneState(state);
-  socket.emit('chat-customization-state', {
-    username,
-    ...clean,
-    backgroundCatalog: CHAT_BACKGROUND_CATALOG,
-    iconFrameCatalog: CHAT_ICON_FRAME_CATALOG
-  });
+  socket.emit('chat-customization-state', { username, ...clean, backgroundCatalog: CHAT_BACKGROUND_CATALOG, iconFrameCatalog: CHAT_ICON_FRAME_CATALOG });
   socket.emit('region-points-updated', { username, points: clean.points, earned: 0 });
 }
 
-function fail(ack, reason, extra = {}) {
-  if (typeof ack === 'function') ack({ ok: false, reason, ...extra });
-}
+function fail(ack, reason, extra = {}) { if (typeof ack === 'function') ack({ ok: false, reason, ...extra }); }
 
 async function changeCustomization(socket, kind, id, ack) {
   const username = String(socket.__chatCustomizationUsername || '').trim();
   const catalog = kind === 'background' ? CHAT_BACKGROUND_CATALOG : CHAT_ICON_FRAME_CATALOG;
   if (!username || !catalog[id]) return fail(ack, 'invalid');
-
   return withLock(username, async () => {
     try {
       const state = await loadState(username);
@@ -235,21 +157,13 @@ async function changeCustomization(socket, kind, id, ack) {
         if (typeof ack === 'function') ack({ ok: true, alreadyOwned: true, ...state });
         return;
       }
-
       const cost = Math.max(0, Number(catalog[id].cost || 0));
       if (state.points < cost) return fail(ack, 'insufficient-points', { points: state.points, cost });
-
-      state.points -= cost;
-      state[ownedKey].push(id);
-      state[currentKey] = id;
-      await saveState(username, state);
-      emitState(socket, username, state);
+      state.points -= cost; state[ownedKey].push(id); state[currentKey] = id;
+      await saveState(username, state); emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, purchased: true, cost, ...state });
       console.log(`[chat-customization] purchased user=${username} kind=${kind} id=${id} cost=${cost}`);
-    } catch (error) {
-      console.error(`[chat-customization] purchase failed user=${username} kind=${kind}:`, error.message);
-      fail(ack, 'server-error', { message: '交換処理に失敗しました。' });
-    }
+    } catch (error) { console.error(`[chat-customization] purchase failed user=${username} kind=${kind}:`, error.message); fail(ack, 'server-error', { message: '交換処理に失敗しました。' }); }
   });
 }
 
@@ -257,21 +171,15 @@ async function selectCustomization(socket, kind, id, ack) {
   const username = String(socket.__chatCustomizationUsername || '').trim();
   const catalog = kind === 'background' ? CHAT_BACKGROUND_CATALOG : CHAT_ICON_FRAME_CATALOG;
   if (!username || !catalog[id]) return fail(ack, 'invalid');
-
   return withLock(username, async () => {
     try {
       const state = await loadState(username);
       const ownedKey = kind === 'background' ? 'backgrounds' : 'iconFrames';
       const currentKey = kind === 'background' ? 'currentBackground' : 'currentIconFrame';
       if (!state[ownedKey].includes(id)) return fail(ack, 'not-owned');
-      state[currentKey] = id;
-      await saveState(username, state);
-      emitState(socket, username, state);
+      state[currentKey] = id; await saveState(username, state); emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
-    } catch (error) {
-      console.error(`[chat-customization] select failed user=${username} kind=${kind}:`, error.message);
-      fail(ack, 'server-error', { message: '見た目の切り替えに失敗しました。' });
-    }
+    } catch (error) { console.error(`[chat-customization] select failed user=${username} kind=${kind}:`, error.message); fail(ack, 'server-error', { message: '見た目の切り替えに失敗しました。' }); }
   });
 }
 
@@ -283,29 +191,12 @@ export function registerChatCustomizationPersistence(io) {
       const cleanUsername = String(username || '').trim().slice(0, 20);
       if (!cleanUsername) return;
       socket.__chatCustomizationUsername = cleanUsername;
-      try {
-        const state = await loadState(cleanUsername);
-        emitState(socket, cleanUsername, state);
-      } catch (error) {
-        console.error(`[chat-customization] initial load failed user=${cleanUsername}:`, error.message);
-      }
+      try { emitState(socket, cleanUsername, await loadState(cleanUsername)); }
+      catch (error) { console.error(`[chat-customization] initial load failed user=${cleanUsername}:`, error.message); }
     });
-
-    socket.on('exchange-chat-background', (payload, ack) => {
-      const id = typeof payload === 'string' ? payload : payload?.id;
-      return changeCustomization(socket, 'background', id, ack);
-    });
-    socket.on('select-chat-background', (payload, ack) => {
-      const id = typeof payload === 'string' ? payload : payload?.id;
-      return selectCustomization(socket, 'background', id, ack);
-    });
-    socket.on('exchange-chat-icon-frame', (payload, ack) => {
-      const id = typeof payload === 'string' ? payload : payload?.id;
-      return changeCustomization(socket, 'frame', id, ack);
-    });
-    socket.on('select-chat-icon-frame', (payload, ack) => {
-      const id = typeof payload === 'string' ? payload : payload?.id;
-      return selectCustomization(socket, 'frame', id, ack);
-    });
+    socket.on('exchange-chat-background', (payload, ack) => changeCustomization(socket, 'background', typeof payload === 'string' ? payload : payload?.id, ack));
+    socket.on('select-chat-background', (payload, ack) => selectCustomization(socket, 'background', typeof payload === 'string' ? payload : payload?.id, ack));
+    socket.on('exchange-chat-icon-frame', (payload, ack) => changeCustomization(socket, 'frame', typeof payload === 'string' ? payload : payload?.id, ack));
+    socket.on('select-chat-icon-frame', (payload, ack) => selectCustomization(socket, 'frame', typeof payload === 'string' ? payload : payload?.id, ack));
   });
 }
