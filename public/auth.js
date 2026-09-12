@@ -33,6 +33,7 @@
     .account-login .account-signout{background:#f7e9e9;color:#8d3333;border-color:#e7bcbc}
     .account-login .account-note{margin-top:8px;font-size:11px;color:#68796e;line-height:1.5}
     .account-login .account-status{margin-top:8px;font-size:12px;line-height:1.45;color:#234d3c}
+    .account-login .account-reset{margin-top:7px;width:100%;background:#f5f8f3}
     .account-error{color:#a52d2d!important}
   `;
   document.head.appendChild(style);
@@ -49,6 +50,7 @@
       <button id="email-login-btn" type="button">メールでログイン</button>
       <button id="email-signup-btn" type="button">新規登録</button>
     </div>
+    <button id="password-reset-btn" type="button" class="account-reset">📩 パスワードを忘れた場合</button>
     <div id="account-status" class="account-status"></div>
     <div id="account-actions" class="account-row" hidden>
       <button id="account-signout-btn" type="button" class="account-signout">ログアウト</button>
@@ -62,6 +64,7 @@
   const passwordInput = accountBox.querySelector('#account-password');
   const emailLoginBtn = accountBox.querySelector('#email-login-btn');
   const emailSignupBtn = accountBox.querySelector('#email-signup-btn');
+  const passwordResetBtn = accountBox.querySelector('#password-reset-btn');
   const signoutBtn = accountBox.querySelector('#account-signout-btn');
   const accountStatus = accountBox.querySelector('#account-status');
   const accountActions = accountBox.querySelector('#account-actions');
@@ -104,13 +107,14 @@
       'auth/invalid-credential': 'メールアドレスまたはパスワードが正しくありません。',
       'auth/user-not-found': 'このメールアドレスのアカウントが見つかりません。',
       'auth/invalid-api-key': 'Firebase Web APIキーが正しく設定されていません。',
-      'auth/unauthorized-domain': 'このサイトのドメインがFirebase Authenticationの承認済みドメインに登録されていません。'
+      'auth/unauthorized-domain': 'このサイトのドメインがFirebase Authenticationの承認済みドメインに登録されていません。',
+      'auth/too-many-requests': '試行回数が多すぎます。しばらく待ってから再試行してください。'
     };
     return messages[code] || `ログインに失敗しました${code ? `（${code}）` : ''}`;
   }
 
   function setButtonsDisabled(disabled) {
-    [emailLoginBtn, emailSignupBtn].forEach(button => { button.disabled = disabled; });
+    [emailLoginBtn, emailSignupBtn, passwordResetBtn].forEach(button => { button.disabled = disabled; });
   }
 
   async function ensureFirebase() {
@@ -192,8 +196,32 @@
     }
   }
 
+  async function sendPasswordReset() {
+    const email = emailInput.value.trim();
+    if (!email) return setAccountStatus('パスワード変更メールを送るメールアドレスを入力してください。', true);
+    setButtonsDisabled(true);
+    setAccountStatus('パスワード変更メールを送信しています…');
+    try {
+      await ensureFirebase();
+      await window.ruralFirebaseAuth.sendPasswordResetEmail(email);
+      passwordInput.value = '';
+      setAccountStatus('✅ パスワード変更メールを送信しました。メールに記載されたリンクから新しいパスワードを設定してください。');
+    } catch (error) {
+      console.error(error);
+      const code = error?.code || '';
+      if (code === 'auth/user-not-found') {
+        setAccountStatus('このメールアドレスのアカウントが見つかりません。', true);
+      } else {
+        setAccountStatus(friendlyError(error), true);
+      }
+    } finally {
+      setButtonsDisabled(false);
+    }
+  }
+
   emailLoginBtn.addEventListener('click', signInEmail);
   emailSignupBtn.addEventListener('click', signUpEmail);
+  passwordResetBtn.addEventListener('click', sendPasswordReset);
   signoutBtn.addEventListener('click', async () => {
     try {
       await ensureFirebase();
