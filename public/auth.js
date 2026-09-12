@@ -16,6 +16,7 @@
   const usernameInput = document.getElementById('username-input');
   const joinBtn = document.getElementById('join-btn');
   const statusEl = document.getElementById('status');
+  const headerSignoutBtn = document.getElementById('header-signout-btn');
   if (!setupPanel || !usernameInput || !joinBtn) return;
 
   const existing = setupPanel.querySelector('.account-login');
@@ -248,6 +249,7 @@
         accountStatus.textContent = '';
         accountStatus.classList.remove('account-error');
         accountActions.hidden = true;
+        if (headerSignoutBtn) headerSignoutBtn.hidden = true;
         showChoice();
         return;
       }
@@ -255,6 +257,10 @@
       accountStatus.textContent = `✅ ログイン中：${user.email || 'アカウント'} / ${user.displayName || '名前未設定'}`;
       accountStatus.classList.remove('account-error');
       accountActions.hidden = false;
+      if (headerSignoutBtn) {
+        headerSignoutBtn.hidden = false;
+        headerSignoutBtn.textContent = '🚪 ログアウト';
+      }
       announceAuthenticated(user, '✅ ログイン済みです。チャットへ移動しています…');
     });
   }
@@ -323,19 +329,27 @@
     }
   }
 
+  async function signOutAccount() {
+    try {
+      await ensureFirebase();
+      if (headerSignoutBtn) headerSignoutBtn.disabled = true;
+      if (signoutBtn) signoutBtn.disabled = true;
+      await window.ruralFirebaseAuth.signOut();
+      usernameInput.value = '';
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      if (headerSignoutBtn) headerSignoutBtn.disabled = false;
+      if (signoutBtn) signoutBtn.disabled = false;
+      setAccountStatus(friendlyError(error), true);
+    }
+  }
+
   emailLoginBtn.addEventListener('click', signInEmail);
   emailSignupBtn.addEventListener('click', signUpEmail);
   passwordResetBtn.addEventListener('click', sendPasswordReset);
-  signoutBtn.addEventListener('click', async () => {
-    try {
-      await ensureFirebase();
-      await window.ruralFirebaseAuth.signOut();
-      usernameInput.value = '';
-    } catch (error) {
-      console.error(error);
-      setAccountStatus(friendlyError(error), true);
-    }
-  });
+  signoutBtn.addEventListener('click', signOutAccount);
+  headerSignoutBtn?.addEventListener('click', signOutAccount);
 
   // 自動ログイン時は、認証済みユーザーをチャット参加へつなぎます。
   // 通常の「名前だけで参加」ボタンもそのまま利用できます。
