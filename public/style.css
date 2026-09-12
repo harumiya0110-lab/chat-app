@@ -37,3 +37,61 @@ html body.pre-auth[data-rural-chat-color] .setup-panel button{
   border-color:#d96b3b!important;
   color:#fff!important;
 }
+
+/* ログイン完了直後にpre-authクラスが一瞬残っても、チャット本体が表示されたら通常レイアウトへ戻します。 */
+html body.pre-auth:has(#chat-main:not([hidden])){
+  background:var(--theme-bg,#eef2e9)!important;
+  color:var(--theme-text,#21342c)!important;
+  overflow-x:hidden!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) .app-header{
+  display:flex!important;
+  padding:16px 24px!important;
+  background:var(--theme-main,#234d3c)!important;
+  color:#fff!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) .header-user{
+  display:flex!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) #online-count{
+  display:inline!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) .app-main{
+  display:grid!important;
+  grid-template-columns:minmax(380px,1fr) minmax(420px,1.25fr)!important;
+  gap:14px!important;
+  max-width:1500px!important;
+  margin:14px auto!important;
+  padding:0 14px!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) .chat-panel,
+html body.pre-auth:has(#chat-main:not([hidden])) .map-panel{
+  display:block!important;
+  width:auto!important;
+  min-height:650px!important;
+  margin:0!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) #setup-panel{
+  display:none!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) #chat-main{
+  display:grid!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) #map{
+  display:block!important;
+}
+html body.pre-auth:has(#chat-main:not([hidden])) .regional-points,
+html body.pre-auth:has(#chat-main:not([hidden])) .theme-shop-open{
+  display:inline-flex!important;
+}
+
+@media(max-width:950px){
+  html body.pre-auth:has(#chat-main:not([hidden])) .app-main{grid-template-columns:1fr!important}
+  html body.pre-auth:has(#chat-main:not([hidden])) .chat-panel,
+  html body.pre-auth:has(#chat-main:not([hidden])) .map-panel{min-height:0!important}
+}
+
+@media(max-width:650px){
+  html body.pre-auth:has(#chat-main:not([hidden])) .app-main{padding:0 7px!important}
+  html body.pre-auth:has(#chat-main:not([hidden])) .header-user{display:flex!important}
+}
