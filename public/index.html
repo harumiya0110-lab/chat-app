@@ -50,17 +50,25 @@
   <script>
     (() => {
       const revealApp = () => {
-        /* 認証完了後、チャット参加が完了した瞬間にUIを公開します。 */
         const chatMain = document.getElementById('chat-main');
-        if (chatMain?.hidden) return;
+        if (chatMain?.hidden) return false;
         document.body.classList.remove('pre-auth');
+        // Leafletは非表示状態で初期化されているため、表示後にサイズを再計算します。
         setTimeout(() => {
-          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize();
+          if (window.ruralMap?.invalidateSize) {
+            window.ruralMap.invalidateSize(true);
+          }
         }, 100);
+        return true;
       };
-      /* account-auto-login.js がキャプチャ段階でイベントを止めても、
-         この先行リスナーで必ず地図・チャットUIを公開します。 */
-      window.addEventListener('rural-account-authenticated', revealApp, true);
+      // 認証完了時だけでなく、実際にチャット参加が完了した時にも公開します。
+      window.addEventListener('rural-account-authenticated', () => {
+        revealApp();
+        setTimeout(revealApp, 300);
+      }, true);
+      window.addEventListener('username-accepted', revealApp, true);
+      // client.jsのSocket.IOイベントはDOMイベントではないため、下のフックで確実に再計算します。
+      window.addEventListener('rural-chat-joined', revealApp, true);
     })();
   </script>
   <script>
