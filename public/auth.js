@@ -3,13 +3,13 @@
   window.__ruralAuthInitialized = true;
 
   const CONFIG = {
-    apiKey: 'AIzaSyAQk0FwLAp0lw7KsHGsgbStO3DFnC0tOE',
+    apiKey: 'AIzaSyAQk0FwLApOl0w7KsHGsgbStO3DFnC0tOE',
     authDomain: 'inakachat-29b24.firebaseapp.com',
     projectId: 'inakachat-29b24',
     storageBucket: 'inakachat-29b24.firebasestorage.app',
     messagingSenderId: '144875359478',
-    appId: '1:144875359478:web:cbf2b6413fd414cb98b0d7',
-    measurementId: 'G-HSK5TPMF7N'
+    appId: '1:144875359478:web:775f496fdb659a1098b0d7',
+    measurementId: 'G-CMSLDR94M4'
   };
 
   const setupPanel = document.getElementById('setup-panel');
@@ -237,8 +237,8 @@
       document.head.appendChild(script);
     });
 
-    await load('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
-    await load('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js');
+    await load('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
+    await load('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js');
 
     if (!window.firebase.apps.length) window.firebase.initializeApp(CONFIG);
     window.ruralFirebaseAuth = window.firebase.auth();
@@ -351,8 +351,6 @@
   signoutBtn.addEventListener('click', signOutAccount);
   headerSignoutBtn?.addEventListener('click', signOutAccount);
 
-  // 自動ログイン時は、認証済みユーザーをチャット参加へつなぎます。
-  // 通常の「名前だけで参加」ボタンもそのまま利用できます。
   window.addEventListener('rural-account-authenticated', event => {
     const name = String(event.detail?.username || '').trim();
     if (!name || typeof socket === 'undefined') return;
