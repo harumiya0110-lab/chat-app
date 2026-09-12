@@ -17,4 +17,63 @@
 .mini-call-bar button{display:inline-flex;align-items:center;justify-content:center;gap:4px;font-weight:700}
 @keyframes voicePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 
+/* 見た目交換：もともと緑色だったUI要素を、選択したテーマカラーへ一括で置き換えます。 */
+body[data-rural-theme]{
+  --theme-main:#234d3c;
+  --theme-main-strong:#1b3d30;
+  --theme-main-soft:#e8f2ea;
+  --theme-main-pale:#f7faf5;
+  --theme-border:#cbd7c8;
+  --theme-border-soft:#d9e2d6;
+  --theme-input:#b9c9b8;
+  --theme-text:#294237;
+  --theme-text-soft:#68796e;
+  --theme-bg:#eef2e9;
+  --theme-panel:#fff;
+}
+body[data-rural-theme="sakura"]{--theme-main:#c85b84;--theme-main-strong:#a94468;--theme-main-soft:#f8dce8;--theme-main-pale:#fff5f8;--theme-border:#e7b8cb;--theme-border-soft:#efd0dc;--theme-input:#ddaec1;--theme-text:#623348;--theme-text-soft:#856070;--theme-bg:#fff1f6;--theme-panel:#fff}
+body[data-rural-theme="ocean"]{--theme-main:#2d78b8;--theme-main-strong:#1d5f96;--theme-main-soft:#dceef9;--theme-main-pale:#f1f9fd;--theme-border:#b9d7e8;--theme-border-soft:#d1e6f0;--theme-input:#a9c9dc;--theme-text:#24516a;--theme-text-soft:#5d7786;--theme-bg:#eaf6fb;--theme-panel:#fff}
+body[data-rural-theme="night"]{--theme-main:#315b86;--theme-main-strong:#24466a;--theme-main-soft:#273b50;--theme-main-pale:#202f3d;--theme-border:#4b6278;--theme-border-soft:#3b4b59;--theme-input:#60758a;--theme-text:#dce8f1;--theme-text-soft:#aebdca;--theme-bg:#151c24;--theme-panel:#202b35}
+body[data-rural-theme="matsuri"]{--theme-main:#d97932;--theme-main-strong:#ad5520;--theme-main-soft:#ffe0c4;--theme-main-pale:#fff6eb;--theme-border:#e8bd98;--theme-border-soft:#edd3b9;--theme-input:#dcae83;--theme-text:#75421f;--theme-text-soft:#8a6a52;--theme-bg:#fff7e9;--theme-panel:#fff}
+
+body[data-rural-theme] .app-header{background:var(--theme-main)!important}
+body[data-rural-theme] .app-header p{color:rgba(255,255,255,.82)!important}
+body[data-rural-theme] .chat-panel,body[data-rural-theme] .map-panel{border-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .setup-panel{background:linear-gradient(145deg,var(--theme-panel),var(--theme-main-pale))!important}
+body[data-rural-theme] .setup-panel input{border-color:var(--theme-input)!important;color:var(--theme-text)!important}
+body[data-rural-theme] .setup-panel button{background:var(--theme-main)!important;border-color:var(--theme-main)!important}
+body[data-rural-theme] #send-btn{background:var(--theme-main)!important;border-color:var(--theme-main)!important}
+body[data-rural-theme] .users-panel{background:var(--theme-main-pale)!important;border-right-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .users-panel button{background:var(--theme-main)!important}
+body[data-rural-theme] .messages{background:var(--theme-panel)!important}
+body[data-rural-theme] .message{background:var(--theme-main-pale)!important}
+body[data-rural-theme] .message.own{border-left-color:var(--theme-main)!important}
+body[data-rural-theme] .message-header{color:var(--theme-text-soft)!important}
+body[data-rural-theme] .status{color:var(--theme-text-soft)!important;background:var(--theme-panel)!important;border-top-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .input-area{background:var(--theme-main-pale)!important;border-top-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .input-area input[type=text]{border-color:var(--theme-input)!important}
+body[data-rural-theme] .tool-btn{color:var(--theme-main)!important;border-color:var(--theme-border)!important}
+body[data-rural-theme] .panel-heading{border-bottom-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .panel-heading p,body[data-rural-theme] .filter-title{color:var(--theme-text-soft)!important}
+body[data-rural-theme] .map-filter{border-color:var(--theme-border)!important;background:var(--theme-main-pale)!important;color:var(--theme-text)!important}
+body[data-rural-theme] .map-filter:hover{background:var(--theme-main-soft)!important}
+body[data-rural-theme] .map-filter.active{background:var(--theme-main)!important;color:#fff!important;border-color:var(--theme-main)!important}
+body[data-rural-theme] .map-help-count{color:var(--theme-main)!important}
+body[data-rural-theme] .map-help-btn{background:var(--theme-main-soft)!important;color:var(--theme-main-strong)!important;border-color:var(--theme-border)!important}
+body[data-rural-theme] .map-help-btn:hover{background:var(--theme-main-soft)!important;filter:brightness(.97)}
+body[data-rural-theme] .map-help-btn.helping{background:var(--theme-main)!important;color:#fff!important;border-color:var(--theme-main)!important}
+body[data-rural-theme] .theme-shop-open{background:rgba(255,255,255,.15)!important}
+body[data-rural-theme] .theme-shop-box{border:2px solid var(--theme-border)!important}
+body[data-rural-theme] .theme-shop-balance{background:var(--theme-main-pale)!important;color:var(--theme-text)!important}
+body[data-rural-theme] .theme-shop-section h3{color:var(--theme-text)!important}
+body[data-rural-theme] .theme-card{border-color:var(--theme-border-soft)!important}
+body[data-rural-theme] .theme-card button{background:var(--theme-main)!important}
+body[data-rural-theme] .theme-card button.secondary{background:var(--theme-main-soft)!important;color:var(--theme-text)!important}
+body[data-rural-theme] .theme-card .theme-owned{color:var(--theme-main)!important}
+
+/* 夜テーマでは、交換したテーマカラーに合わせて白系のパネルも暗くします。 */
+body[data-rural-theme="night"] .chat-panel,body[data-rural-theme="night"] .map-panel,body[data-rural-theme="night"] .messages,body[data-rural-theme="night"] .call-box{background:var(--theme-panel)!important}
+body[data-rural-theme="night"] .users-panel li{background:#24313c!important;border-color:var(--theme-border-soft)!important;color:#e9f0f4!important}
+body[data-rural-theme="night"] .input-area input[type=text]{background:#26343f!important;color:#fff!important;border-color:var(--theme-input)!important}
+
 @media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
