@@ -36,4 +36,40 @@
     }
   `;
   document.head.appendChild(style);
+
+  // チャットの見た目交換機能が常時DOM全体を走査し続けないようにします。
+  // 既存UIの動作を変えず、問題の重い1.5秒ごとの走査だけを停止します。
+  const nativeSetInterval = window.setInterval.bind(window);
+  window.setInterval = (handler, delay, ...args) => {
+    const source = typeof handler === 'function' ? Function.prototype.toString.call(handler) : '';
+    if (delay === 1500 && source.includes('decorateAvatars')) return 0;
+    return nativeSetInterval(handler, delay, ...args);
+  };
+
+  // decorateAvatars用MutationObserverは、同一フレーム内の大量DOM変更を1回にまとめます。
+  const NativeMutationObserver = window.MutationObserver;
+  if (NativeMutationObserver) {
+    window.MutationObserver = class RuralMutationObserverThrottle extends NativeMutationObserver {
+      constructor(callback) {
+        let frameId = 0;
+        let pendingRecords = [];
+        const throttledCallback = (records, observer) => {
+          const source = typeof callback === 'function' ? Function.prototype.toString.call(callback) : '';
+          if (!source.includes('decorateAvatars')) {
+            callback(records, observer);
+            return;
+          }
+          pendingRecords.push(...records);
+          if (frameId) return;
+          frameId = requestAnimationFrame(() => {
+            frameId = 0;
+            const batch = pendingRecords;
+            pendingRecords = [];
+            callback(batch, observer);
+          });
+        };
+        super(throttledCallback);
+      }
+    };
+  }
 })();
