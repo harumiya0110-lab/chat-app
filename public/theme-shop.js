@@ -82,8 +82,34 @@
     if (!result?.ok) {
       if (result?.reason === 'insufficient-points') status(`⭐ 地域ポイントが足りません（必要 ${Number(result.cost || 0)}pt / 所持 ${Number(result.points || 0)}pt）`);
       else status(fallback);
+    } else {
+      state = {
+        points: Number(result.points ?? state.points),
+        themes: Array.isArray(result.themes) ? result.themes : state.themes,
+        currentTheme: result.currentTheme || state.currentTheme,
+        chatColors: Array.isArray(result.chatColors) ? result.chatColors : state.chatColors,
+        currentChatColor: result.currentChatColor || state.currentChatColor
+      };
+      applyTheme(state.currentTheme);
+      applyChatColor(state.currentChatColor);
     }
     render();
+  }
+
+  function sendExchange(eventName, payload, button, fallback) {
+    setBusy(button);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      finish({ ok: false, reason: 'timeout' }, fallback);
+    }, 20000);
+    socket.emit(eventName, payload, result => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      finish(result, fallback);
+    });
   }
 
   button.addEventListener('click', () => { modal.classList.add('is-open'); render(); });
@@ -95,16 +121,16 @@
     const b = e.target.closest('[data-theme-id]'); if (!b || exchangeInFlight) return;
     const id = b.dataset.themeId; if (!currentUsername || !socket.connected) return status('先にチャットへ参加してください。');
     const owned = state.themes.includes(id), current = state.currentTheme === id; if (current) return;
-    setBusy(b); status(owned ? '🎨 見た目を切り替えています…' : '⭐ 地域ポイントで交換しています…');
-    socket.timeout(12000).emit(owned ? 'select-theme' : 'exchange-theme', { themeId: id }, result => finish(result, '⚠️ 見た目の変更に失敗しました。もう一度試してください。'));
+    status(owned ? '🎨 見た目を切り替えています…' : '⭐ 地域ポイントで交換しています…');
+    sendExchange(owned ? 'select-theme' : 'exchange-theme', { themeId: id }, b, '⚠️ 見た目の変更に失敗しました。もう一度試してください。');
   });
 
   colorGridEl.addEventListener('click', e => {
     const b = e.target.closest('[data-color-id]'); if (!b || exchangeInFlight) return;
     const id = b.dataset.colorId; if (!currentUsername || !socket.connected) return status('先にチャットへ参加してください。');
     const owned = state.chatColors.includes(id), current = state.currentChatColor === id; if (current) return;
-    setBusy(b); status(owned ? '🎨 チャットの色を切り替えています…' : '⭐ 地域ポイントで色を交換しています…');
-    socket.timeout(12000).emit(owned ? 'select-chat-color' : 'exchange-chat-color', { colorId: id }, result => finish(result, '⚠️ チャットの色の変更に失敗しました。もう一度試してください。'));
+    status(owned ? '🎨 チャットの色を切り替えています…' : '⭐ 地域ポイントで色を交換しています…');
+    sendExchange(owned ? 'select-chat-color' : 'exchange-chat-color', { colorId: id }, b, '⚠️ チャットの色の変更に失敗しました。もう一度試してください。');
   });
 
   socket.on('theme-state', data => {
