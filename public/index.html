@@ -29,13 +29,14 @@
       flex-direction: column;
       justify-content: center;
     }
+    #initial-input-holder{display:contents}
   </style>
 </head>
 <body class="pre-auth">
   <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
   <main class="app-main">
     <section class="chat-panel">
-      <div id="setup-panel" class="setup-panel"><h2>チャットに参加</h2><p>ニックネームを入力してください</p><input id="username-input" maxlength="20" placeholder="ニックネーム"><button id="join-btn">参加する</button></div>
+      <div id="setup-panel" class="setup-panel"><h2>チャットに参加</h2><p>ニックネームを入力してください</p><div id="initial-input-holder"><input id="username-input" maxlength="20" placeholder="ニックネーム"></div><button id="join-btn">参加する</button></div>
       <div id="chat-main" class="chat-main" hidden>
         <aside class="users-panel"><h2>オンラインユーザー</h2><ul id="users-list"></ul></aside>
         <div class="chat-right"><div id="messages" class="messages" aria-live="polite"></div><div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div></div>
