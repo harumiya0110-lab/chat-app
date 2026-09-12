@@ -49,9 +49,10 @@
   async function registerAccount() {
     if (signupInProgress) return;
 
+    // auth.jsの現在の入力欄IDに合わせる。
     const nameInput = getAccountField('account-name');
-    const emailInput = getAccountField('account-email');
-    const passwordInput = getAccountField('account-password');
+    const emailInput = getAccountField('account-email-signup');
+    const passwordInput = getAccountField('account-password-signup');
     const name = String(nameInput?.value || '').normalize('NFC').trim().slice(0, 20);
     const email = String(emailInput?.value || '').trim();
     const password = String(passwordInput?.value || '');
@@ -121,7 +122,8 @@
     }
   }
 
-  // auth.jsにある通常の新規登録処理を、重複アカウント名を原子的に確認する処理へ置き換える。
+  // auth.jsにある通常の新規登録処理を、重複アカウント名を確認する処理へ置き換える。
+  // 入力欄のIDが古い実装のままになっていたため、現在のIDを使用します。
   document.addEventListener('click', event => {
     const button = event.target.closest('#email-signup-btn');
     if (!button) return;
@@ -130,7 +132,7 @@
     void registerAccount();
   }, true);
 
-  // auth.jsがログイン完了時に発火する自動参加イベントを、登録中だけ止める。
+  // auth.jsがログイン完了時に発火するイベントを、登録処理中だけ止める。
   window.addEventListener('rural-account-authenticated', event => {
     if (window.__ruralSignupInProgress) event.stopImmediatePropagation();
   }, true);
@@ -142,25 +144,15 @@
 
     joiningUsername = cleanUsername;
     usernameInput.value = cleanUsername;
-    setStatus('アカウント名を確認しています…');
 
-    const user = window.ruralFirebaseAuth?.currentUser || null;
-    if (user?.uid) {
-      const result = await claimName(cleanUsername, user.uid, user.email || '');
-      if (!result.ok) {
-        joiningUsername = '';
-        await window.ruralFirebaseAuth?.signOut?.();
-        setStatus('このアカウント名はすでに別のアカウントで使用されています。別のアカウント名が必要です。', true);
-        return;
-      }
-    }
-
+    // 既存アカウントのログイン時は、すでに登録済みのaccountNamesを再claimしません。
+    // 毎回claimすると、自分が所有している名前でも競合扱いになる場合があるためです。
     setStatus('アカウントで自動的にチャットへ参加しています…');
     joinBtn.click();
   }
 
   window.addEventListener('rural-account-authenticated', event => {
-    if (signupInProgress) return;
+    if (signupInProgress || window.__ruralSignupInProgress) return;
     const user = window.ruralFirebaseAuth?.currentUser;
     void enterChat(event.detail?.username || user?.displayName || '');
   });
