@@ -23,34 +23,78 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .account-login{width:min(390px,100%);padding:14px;border:1px solid #d6e1d3;border-radius:12px;background:rgba(255,255,255,.82);text-align:left}
-    .account-login h3{margin:0 0 8px;font-size:15px}
-    .account-login p{margin:0 0 10px;color:#68796e;font-size:12px;line-height:1.5}
-    .account-login input{width:100%;padding:9px 11px;border:1px solid #b9c9b8;border-radius:8px;font:inherit;box-sizing:border-box}
-    .account-row{display:flex;gap:7px;margin-top:7px}
-    .account-login button{flex:1;min-width:0;padding:9px 10px;border:1px solid #b9c9b8;border-radius:8px;background:#fff;color:#234d3c;cursor:pointer;font:inherit}
+    .setup-panel{position:relative;overflow:auto;min-height:650px;padding:34px 24px 42px;justify-content:flex-start;gap:0;background:linear-gradient(145deg,#f7faf5 0%,#e8f0e5 100%)}
+    .setup-panel::before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.42);top:-110px;right:-90px;pointer-events:none}
+    .setup-welcome{position:relative;z-index:1;width:min(500px,100%);text-align:center;margin:8px auto 18px}
+    .setup-welcome-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:rgba(35,77,60,.09);color:#31513f;font-size:12px;font-weight:700;letter-spacing:.02em}
+    .setup-welcome h2{margin:13px 0 7px;font-size:clamp(25px,4vw,34px);line-height:1.2;color:#234d3c}
+    .setup-welcome p{margin:0;color:#64746b;font-size:13px;line-height:1.65}
+    .guest-join{position:relative;z-index:1;width:min(500px,100%);margin:0 auto 14px;padding:16px;border:1px solid #d5e0d2;border-radius:14px;background:rgba(255,255,255,.8);box-shadow:0 5px 18px rgba(34,65,47,.06)}
+    .guest-join-title{margin:0 0 9px;font-size:14px;font-weight:700;color:#2d4639}
+    .guest-join-row{display:flex;gap:8px}
+    .guest-join-row #username-input{flex:1;min-width:0;width:auto;padding:11px 13px;border:1px solid #b9c9b8;border-radius:9px;background:#fff}
+    .guest-join-row #join-btn{flex:0 0 auto;min-width:96px;margin:0;padding:10px 14px;background:#234d3c}
+    .guest-join-note{margin:8px 0 0;color:#76837b;font-size:11px;text-align:left;line-height:1.45}
+    .account-login{position:relative;z-index:1;width:min(500px,100%);padding:18px;border:1px solid #d5e0d2;border-radius:14px;background:rgba(255,255,255,.94);text-align:left;box-shadow:0 8px 24px rgba(34,65,47,.08)}
+    .account-login h3{margin:0;font-size:17px;color:#234d3c;text-align:center}
+    .account-login>p{margin:6px auto 13px;max-width:400px;color:#68796e;font-size:12px;line-height:1.55;text-align:center}
+    .auth-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}
+    .auth-choice button{min-height:54px;padding:12px;font-size:14px;font-weight:700;border-radius:10px;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
+    .auth-choice button:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(35,77,60,.12)}
+    .auth-choice .auth-login-choice{background:#234d3c;color:#fff;border-color:#234d3c}
+    .auth-choice .auth-signup-choice{background:#f8fbf7;color:#234d3c;border-color:#bfd0bc}
+    .auth-view{margin-top:12px;padding-top:12px;border-top:1px solid #e4ebe1}
+    .auth-view input{display:block;width:100%;padding:11px 12px;border:1px solid #b9c9b8;border-radius:9px;background:#fff;font:inherit;outline:none}
+    .auth-view input:focus,.guest-join-row #username-input:focus{border-color:#558266;box-shadow:0 0 0 3px rgba(85,130,102,.12)}
+    .account-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+    .account-login button{min-width:0;padding:10px 12px;border:1px solid #b9c9b8;border-radius:9px;background:#fff;color:#234d3c;cursor:pointer;font:inherit}
     .account-login button:hover:not(:disabled){background:#f4f8f2}
     .account-login button:disabled{opacity:.55;cursor:wait}
     .account-login .account-signout{background:#f7e9e9;color:#8d3333;border-color:#e7bcbc}
-    .account-login .account-note{margin-top:8px;font-size:11px;color:#68796e;line-height:1.5}
-    .account-login .account-status{margin-top:8px;font-size:12px;line-height:1.45;color:#234d3c}
-    .account-login .account-reset{margin-top:7px;width:100%;background:#f5f8f3}
+    .account-login .account-note{margin-top:12px;text-align:center;font-size:11px;color:#728078;line-height:1.5}
+    .account-login .account-status{margin-top:9px;padding:0 2px;font-size:12px;line-height:1.45;color:#234d3c;text-align:center}
+    .account-login .account-reset{margin-top:8px;width:100%;background:#f5f8f3}
     .account-error{color:#a52d2d!important}
-    .auth-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-    .auth-choice button{padding:12px 10px;font-weight:700;border-radius:10px}
-    .auth-choice .auth-login-choice{background:#234d3c;color:#fff;border-color:#234d3c}
-    .auth-choice .auth-signup-choice{background:#fff;color:#234d3c;border-color:#b9c9b8}
-    .auth-view{margin-top:10px}
-    .auth-back{width:100%;margin-top:8px;background:#eef2ee!important;color:#31513f!important}
+    .auth-back{background:#eef2ee!important;color:#31513f!important}
     .auth-view[hidden]{display:none}
-    @media(max-width:430px){.auth-choice{grid-template-columns:1fr}}
+    @media(max-width:650px){
+      .setup-panel{padding:26px 14px 32px}
+      .guest-join-row{flex-direction:column}
+      .guest-join-row #join-btn{width:100%}
+      .account-row{grid-template-columns:1fr}
+    }
+    @media(max-width:430px){
+      .auth-choice{grid-template-columns:1fr}
+      .setup-welcome h2{font-size:27px}
+    }
   `;
   document.head.appendChild(style);
+
+  const setupWelcome = document.createElement('div');
+  setupWelcome.className = 'setup-welcome';
+  setupWelcome.innerHTML = `
+    <div class="setup-welcome-badge">🌿 地域コミュニティ</div>
+    <h2>チャットマップへようこそ</h2>
+    <p>地域の出来事を共有したり、困っている人を手伝ったりできる場所です。</p>
+  `;
+  setupPanel.insertBefore(setupWelcome, usernameInput.parentElement || usernameInput);
+
+  const guestJoin = document.createElement('div');
+  guestJoin.className = 'guest-join';
+  guestJoin.innerHTML = `
+    <div class="guest-join-title">👤 名前だけで参加</div>
+    <div class="guest-join-row"></div>
+    <div class="guest-join-note">アカウントを作成しなくても、ニックネームだけですぐ参加できます。</div>
+  `;
+  const guestRow = guestJoin.querySelector('.guest-join-row');
+  guestRow.appendChild(usernameInput);
+  guestRow.appendChild(joinBtn);
+  setupPanel.appendChild(guestJoin);
 
   const accountBox = document.createElement('div');
   accountBox.className = 'account-login';
   accountBox.innerHTML = `
-    <h3>🔐 アカウント</h3>
+    <h3>🔐 アカウントを使う</h3>
     <p>アカウントを作成すると、登録したメールアドレスとパスワードで次回からログインできます。</p>
 
     <div id="auth-choice" class="auth-choice">
@@ -82,7 +126,7 @@
     <div id="account-actions" class="account-row" hidden>
       <button id="account-signout-btn" type="button" class="account-signout">ログアウト</button>
     </div>
-    <div class="account-note">アカウントを使わず、名前だけで参加することもできます。</div>
+    <div class="account-note">アカウントなしでも「名前だけで参加」できます。</div>
   `;
   setupPanel.appendChild(accountBox);
 
@@ -287,21 +331,19 @@
       await ensureFirebase();
       await window.ruralFirebaseAuth.signOut();
       usernameInput.value = '';
-      accountNameInput.value = '';
-      emailLoginInput.value = '';
-      passwordLoginInput.value = '';
-      emailSignupInput.value = '';
-      passwordSignupInput.value = '';
-      setAccountStatus('ログアウトしました。');
-      showChoice();
     } catch (error) {
       console.error(error);
       setAccountStatus(friendlyError(error), true);
     }
   });
 
-  ensureFirebase().catch(error => {
-    console.warn('Firebase Authentication is not configured yet:', error.message);
-    setAccountStatus('Firebase Authenticationの初期化に失敗しました。Firebase Consoleの設定を確認してください。', true);
+  // 自動ログイン時は、認証済みユーザーをチャット参加へつなぎます。
+  // 通常の「名前だけで参加」ボタンもそのまま利用できます。
+  window.addEventListener('rural-account-authenticated', event => {
+    const name = String(event.detail?.username || '').trim();
+    if (!name || typeof socket === 'undefined') return;
+    window.__ruralSignupInProgress = false;
+    usernameInput.value = name;
+    joinBtn.click();
   });
 })();
