@@ -184,6 +184,7 @@ function joinChat() {
   const username = usernameInput.value.trim();
   if (!username) return alert('ニックネームを入力してください');
   if (username.length > 20) return alert('ニックネームは20文字以内にしてください');
+  // ログイン完了イベントが重複して発火しても、同じチャット参加要求を二重送信しません。
   if (joinBtn.disabled) return;
   joinBtn.disabled = true;
   socket.emit('set-username', username);
@@ -379,174 +380,171 @@ function showCallUI(text, incoming = false) {
   camToggleBtn.hidden = incoming;
   minimizeBtn.hidden = incoming;
   endBtn.hidden = incoming;
-  if (!incoming) {
-    muteBtn.textContent = isMuted ? '🔇 ミュート解除' : '🎤 ミュート';
-    camToggleBtn.textContent = isVideoOn ? '📹 カメラOFF' : '📷 カメラON';
+  miniBar.hidden = true;
+}
+
+function stopLocalStream() {
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
   }
+  localVideo.srcObject = null;
+  miniLocal.srcObject = null;
 }
 
-function updateMiniVideos() {
-  miniLocal.srcObject = localStream || null;
-  miniRemote.srcObject = remoteVideo.srcObject || null;
+function cleanupCall(sendEnd = false) {
+  if (sendEnd && currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+  if (peerConnection) {
+    try { peerConnection.close(); } catch {}
+  }
+  peerConnection = null;
+  stopLocalStream();
+  remoteVideo.srcObject = null;
+  miniRemote.srcObject = null;
+  currentCallTarget = null;
+  pendingIncoming = null;
+  isMuted = false;
+  isVideoOn = true;
+  isMinimized = false;
+  callModal.hidden = true;
+  miniBar.hidden = true;
+  muteBtn.textContent = 'ミュート';
+  camToggleBtn.textContent = 'カメラOFF';
 }
 
-async function createPeerConnection(targetId) {
-  peerConnection = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+function createPeerConnection(targetId) {
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
   });
-  currentCallTarget = targetId;
-  peerConnection.onicecandidate = event => {
-    if (event.candidate) socket.emit('webrtc-ice-candidate', { targetId, candidate: event.candidate });
+  pc.onicecandidate = event => {
+    if (event.candidate) socket.emit('ice-candidate', { targetId, candidate: event.candidate });
   };
-  peerConnection.ontrack = event => {
-    remoteVideo.srcObject = event.streams[0];
-    if (isMinimized) updateMiniVideos();
+  pc.ontrack = event => {
+    const stream = event.streams[0];
+    remoteVideo.srcObject = stream;
+    miniRemote.srcObject = stream;
   };
-  peerConnection.onconnectionstatechange = () => {
-    if (peerConnection && ['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
-      if (peerConnection.connectionState !== 'closed') endCall(false);
-    }
+  pc.onconnectionstatechange = () => {
+    if (['failed', 'closed'].includes(pc.connectionState)) cleanupCall(false);
+    else if (pc.connectionState === 'connected') callStatus.textContent = '通話中';
   };
-  return peerConnection;
+  return pc;
 }
 
-async function ensureLocalStream() {
-  if (localStream) return localStream;
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localVideo.srcObject = localStream;
-  miniLocal.srcObject = localStream;
-  return localStream;
+async function getMedia() {
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error('このブラウザではカメラ・マイクを利用できません');
+  return navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'user' } });
 }
 
-async function startCall(targetId, username) {
-  if (peerConnection || pendingIncoming) return;
+async function startCall(targetId, targetName) {
+  if (currentCallTarget) return alert('既に通話中です。');
   try {
-    await ensureLocalStream();
-    await createPeerConnection(targetId);
+    localStream = await getMedia();
+    currentCallTarget = targetId;
+    peerConnection = createPeerConnection(targetId);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    localVideo.srcObject = localStream;
+    miniLocal.srcObject = localStream;
+    showCallUI(`${targetName}さんへ発信中…`);
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    socket.emit('call-user', { targetId, caller: currentUsername, offer });
-    showCallUI(`${username}さんに発信中…`, false);
+    socket.emit('call-offer', { targetId, offer });
   } catch (error) {
     console.error(error);
-    alert('カメラ・マイクを利用できません。ブラウザの権限を確認してください。');
-    endCall(false);
+    cleanupCall(false);
+    alert(error.message || '通話を開始できませんでした');
   }
 }
 
-socket.on('incoming-call', ({ fromId, fromUsername, offer }) => {
-  if (peerConnection || pendingIncoming) {
-    socket.emit('call-declined', { targetId: fromId, reason: 'busy' });
-    return;
-  }
-  pendingIncoming = { fromId, fromUsername, offer };
-  callStatus.textContent = `${fromUsername}さんから着信中`;
-  showCallUI(`${fromUsername}さんから着信中`, true);
+socket.on('incoming-call', data => {
+  if (currentCallTarget) return;
+  pendingIncoming = data;
+  currentCallTarget = data.from;
+  showCallUI(`${data.username}さんから着信`, true);
 });
 
 acceptBtn.addEventListener('click', async () => {
   if (!pendingIncoming) return;
-  const incoming = pendingIncoming;
-  pendingIncoming = null;
   try {
-    await ensureLocalStream();
-    await createPeerConnection(incoming.fromId);
+    localStream = await getMedia();
+    peerConnection = createPeerConnection(pendingIncoming.from);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    await peerConnection.setRemoteDescription(incoming.offer);
+    localVideo.srcObject = localStream;
+    miniLocal.srcObject = localStream;
+    showCallUI(`${pendingIncoming.username}さんと接続中…`);
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingIncoming.offer));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    socket.emit('call-accepted', { targetId: incoming.fromId, answer });
-    showCallUI(`${incoming.fromUsername}さんと通話中`, false);
+    socket.emit('call-answer', { targetId: pendingIncoming.from, answer });
+    pendingIncoming = null;
   } catch (error) {
     console.error(error);
-    socket.emit('call-declined', { targetId: incoming.fromId, reason: 'media-error' });
-    endCall(false);
+    cleanupCall(true);
+    alert(error.message || '通話に応答できませんでした');
   }
 });
 
 declineBtn.addEventListener('click', () => {
-  if (!pendingIncoming) return;
-  const incoming = pendingIncoming;
-  pendingIncoming = null;
-  socket.emit('call-declined', { targetId: incoming.fromId, reason: 'declined' });
-  callModal.hidden = true;
+  if (pendingIncoming?.from) socket.emit('end-call', { targetId: pendingIncoming.from });
+  cleanupCall(false);
 });
 
-socket.on('call-answer', async ({ answer }) => {
-  if (!peerConnection) return;
+socket.on('call-answered', async data => {
+  if (!peerConnection || data.from !== currentCallTarget) return;
   try {
-    await peerConnection.setRemoteDescription(answer);
-    showCallUI(`${callStatus.textContent.replace('発信中…', '').trim()}と通話中`, false);
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    callStatus.textContent = '接続中…';
   } catch (error) {
     console.error(error);
-    endCall(false);
+    cleanupCall(true);
   }
 });
 
-socket.on('webrtc-ice-candidate', async ({ candidate }) => {
-  if (!peerConnection || !candidate) return;
-  try { await peerConnection.addIceCandidate(candidate); } catch (error) { console.error(error); }
+socket.on('ice-candidate', async data => {
+  if (!peerConnection || data.from !== currentCallTarget || !data.candidate) return;
+  try {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } catch (error) {
+    console.error(error);
+  }
 });
 
-socket.on('call-rejected', ({ reason }) => {
-  const reasonText = reason === 'busy' ? '相手は現在通話中です。' : reason === 'media-error' ? '相手側でカメラ・マイクを利用できませんでした。' : '通話が拒否されました。';
-  alert(reasonText);
-  endCall(false);
+socket.on('call-ended', data => {
+  if (data.from === currentCallTarget) cleanupCall(false);
 });
-
-socket.on('call-ended', () => endCall(false));
 
 muteBtn.addEventListener('click', () => {
   if (!localStream) return;
   isMuted = !isMuted;
   localStream.getAudioTracks().forEach(track => { track.enabled = !isMuted; });
-  muteBtn.textContent = isMuted ? '🔇 ミュート解除' : '🎤 ミュート';
+  muteBtn.textContent = isMuted ? 'ミュート解除' : 'ミュート';
 });
 
 camToggleBtn.addEventListener('click', () => {
   if (!localStream) return;
   isVideoOn = !isVideoOn;
   localStream.getVideoTracks().forEach(track => { track.enabled = isVideoOn; });
-  camToggleBtn.textContent = isVideoOn ? '📹 カメラOFF' : '📷 カメラON';
+  camToggleBtn.textContent = isVideoOn ? 'カメラOFF' : 'カメラON';
 });
 
-minimizeBtn.addEventListener('click', () => {
+function minimizeCall() {
+  if (!currentCallTarget) return;
   isMinimized = true;
   callModal.hidden = true;
   miniBar.hidden = false;
-  updateMiniVideos();
-});
+}
 
-miniUnminimize.addEventListener('click', () => {
+function unminimizeCall() {
+  if (!currentCallTarget) return;
   isMinimized = false;
   miniBar.hidden = true;
   callModal.hidden = false;
-  updateMiniVideos();
-});
-
-endBtn.addEventListener('click', () => endCall(true));
-miniEnd.addEventListener('click', () => endCall(true));
-
-function endCall(notify = true) {
-  if (notify && currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
-  pendingIncoming = null;
-  currentCallTarget = null;
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-  localVideo.srcObject = null;
-  remoteVideo.srcObject = null;
-  miniLocal.srcObject = null;
-  miniRemote.srcObject = null;
-  isMuted = false;
-  isVideoOn = true;
-  isMinimized = false;
-  callModal.hidden = true;
-  miniBar.hidden = true;
 }
+
+minimizeBtn.addEventListener('click', minimizeCall);
+miniUnminimize.addEventListener('click', unminimizeCall);
+endBtn.addEventListener('click', () => cleanupCall(true));
+miniEnd.addEventListener('click', () => cleanupCall(true));
