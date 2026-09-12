@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node --import=./one-time-points-grant.mjs --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs server.js",
+    "start": "node --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs server.js",
     "build": "echo \"No build step required for this Node.js server\"",
     "dev": "node --import=./geocoder-compat.mjs --import=./points-persistence.mjs --import=./media-delete.mjs --import=./firebase-persistence.mjs server.js"
   },
