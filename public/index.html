@@ -74,6 +74,10 @@
     body.pre-auth #setup-panel button{border:0!important;border-radius:8px!important;padding:10px 14px!important;background:#d96b3b!important;color:#fff!important;}
     body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main{display:none!important;}
     body.pre-auth .setup-welcome,body.pre-auth .auth-choice,body.pre-auth .auth-view{width:min(100%,520px)!important;}
+    /* ログイン画面中央のアカウント用ログアウト欄を表示しません。 */
+    body.pre-auth .account-login #account-actions,
+    body.pre-auth .account-login #account-signout-btn,
+    body.pre-auth .account-login .account-signout{display:none!important;}
   </style>
 </body>
 </html>
