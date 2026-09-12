@@ -27,7 +27,6 @@ export const CHAT_ICON_FRAME_CATALOG = {
 
 const DEFAULT_STATE = { points: 0, backgrounds: ['default'], currentBackground: 'default', iconFrames: ['default'], currentIconFrame: 'default' };
 const locks = new Map();
-const stateCache = new Map();
 
 function cloneState(state = DEFAULT_STATE) {
   return {
@@ -69,7 +68,6 @@ function fromFirestoreValue(value) {
   if ('mapValue' in value) return fromFirestoreFields(value.mapValue.fields || {});
   return null;
 }
-
 function fromFirestoreFields(fields) { const result = {}; for (const [key, value] of Object.entries(fields || {})) result[key] = fromFirestoreValue(value); return result; }
 
 try {
@@ -97,7 +95,6 @@ async function getAccessToken() {
 }
 
 function documentsUrl(path = '') { return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents${path}`; }
-
 async function firestoreRequest(label, path, options = {}) {
   const token = await getAccessToken();
   if (!token) throw new Error('chat customization persistence is disabled');
@@ -106,23 +103,16 @@ async function firestoreRequest(label, path, options = {}) {
   if (!response.ok) { const error = new Error(`Firestore request failed: ${response.status} ${text.slice(0, 400)}`); error.status = response.status; throw error; }
   return text ? JSON.parse(text) : null;
 }
-
 async function loadRegionalDocument(username) {
   const safeUsername = encodeURIComponent(String(username));
   try { return await firestoreRequest('load', `/regionalPoints/${safeUsername}`, { method: 'GET' }); }
   catch (error) { if (error.status === 404) return { fields: {} }; throw error; }
 }
-
 async function loadState(username) {
-  const key = String(username);
-  if (stateCache.has(key)) return cloneState(stateCache.get(key));
-  const result = await loadRegionalDocument(key);
+  const result = await loadRegionalDocument(username);
   const raw = fromFirestoreFields(result?.fields || {});
-  const state = cloneState({ points: raw.points || 0, backgrounds: raw.chatBackgrounds || [], currentBackground: raw.currentChatBackground, iconFrames: raw.chatIconFrames || [], currentIconFrame: raw.currentChatIconFrame });
-  stateCache.set(key, state);
-  return cloneState(state);
+  return cloneState({ points: raw.points || 0, backgrounds: raw.chatBackgrounds || [], currentBackground: raw.currentChatBackground, iconFrames: raw.chatIconFrames || [], currentIconFrame: raw.currentChatIconFrame });
 }
-
 async function saveState(username, state) {
   if (!enabled) return;
   const safeUsername = encodeURIComponent(String(username));
@@ -130,15 +120,20 @@ async function saveState(username, state) {
   const fieldPaths = ['points', 'chatBackgrounds', 'currentChatBackground', 'chatIconFrames', 'currentChatIconFrame'];
   const params = fieldPaths.map(path => `updateMask.fieldPaths=${encodeURIComponent(path)}`).join('&');
   await firestoreRequest('save', `/regionalPoints/${safeUsername}?${params}`, { method: 'PATCH', body: JSON.stringify({ fields: { points: firestoreValue(clean.points), chatBackgrounds: firestoreValue(clean.backgrounds), currentChatBackground: firestoreValue(clean.currentBackground), chatIconFrames: firestoreValue(clean.iconFrames), currentChatIconFrame: firestoreValue(clean.currentIconFrame) } }) });
-  stateCache.set(String(username), clean);
 }
-
+async function saveCustomizationOnly(username, state) {
+  if (!enabled) return;
+  const safeUsername = encodeURIComponent(String(username));
+  const clean = cloneState(state);
+  const fieldPaths = ['chatBackgrounds', 'currentChatBackground', 'chatIconFrames', 'currentChatIconFrame'];
+  const params = fieldPaths.map(path => `updateMask.fieldPaths=${encodeURIComponent(path)}`).join('&');
+  await firestoreRequest('save-customization', `/regionalPoints/${safeUsername}?${params}`, { method: 'PATCH', body: JSON.stringify({ fields: { chatBackgrounds: firestoreValue(clean.backgrounds), currentChatBackground: firestoreValue(clean.currentBackground), chatIconFrames: firestoreValue(clean.iconFrames), currentChatIconFrame: firestoreValue(clean.currentIconFrame) } }) });
+}
 function emitState(socket, username, state) {
   const clean = cloneState(state);
   socket.emit('chat-customization-state', { username, ...clean, backgroundCatalog: CHAT_BACKGROUND_CATALOG, iconFrameCatalog: CHAT_ICON_FRAME_CATALOG });
   socket.emit('region-points-updated', { username, points: clean.points, earned: 0 });
 }
-
 function fail(ack, reason, extra = {}) { if (typeof ack === 'function') ack({ ok: false, reason, ...extra }); }
 
 async function changeCustomization(socket, kind, id, ack) {
@@ -152,7 +147,7 @@ async function changeCustomization(socket, kind, id, ack) {
       const currentKey = kind === 'background' ? 'currentBackground' : 'currentIconFrame';
       if (state[ownedKey].includes(id)) {
         state[currentKey] = id;
-        await saveState(username, state);
+        await saveCustomizationOnly(username, state);
         emitState(socket, username, state);
         if (typeof ack === 'function') ack({ ok: true, alreadyOwned: true, ...state });
         return;
@@ -177,7 +172,7 @@ async function selectCustomization(socket, kind, id, ack) {
       const ownedKey = kind === 'background' ? 'backgrounds' : 'iconFrames';
       const currentKey = kind === 'background' ? 'currentBackground' : 'currentIconFrame';
       if (!state[ownedKey].includes(id)) return fail(ack, 'not-owned');
-      state[currentKey] = id; await saveState(username, state); emitState(socket, username, state);
+      state[currentKey] = id; await saveCustomizationOnly(username, state); emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
     } catch (error) { console.error(`[chat-customization] select failed user=${username} kind=${kind}:`, error.message); fail(ack, 'server-error', { message: '見た目の切り替えに失敗しました。' }); }
   });
