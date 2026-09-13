@@ -178,7 +178,13 @@
   }, true);
 
   window.addEventListener('rural-account-authenticated', event => {
-    if (window.__ruralSignupInProgress) event.stopImmediatePropagation();
+    if (window.__ruralSignupInProgress) {
+      const username = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
+      if (username && typeof socket !== 'undefined' && socket?.connected) {
+        socket.emit('email-account-session', { username, uid: event.detail?.uid || '', email: event.detail?.email || '' });
+      }
+      event.stopImmediatePropagation();
+    }
   }, true);
 
   async function enterChat(username) {
@@ -188,6 +194,13 @@
 
     joiningUsername = cleanUsername;
     usernameInput.value = cleanUsername;
+    if (typeof socket !== 'undefined' && socket?.connected) {
+      socket.emit('email-account-session', {
+        username: cleanUsername,
+        uid: window.ruralFirebaseAuth?.currentUser?.uid || '',
+        email: window.ruralFirebaseAuth?.currentUser?.email || ''
+      });
+    }
     setStatus('アカウントで自動的にチャットへ参加しています…');
     joinBtn.click();
   }
