@@ -6,8 +6,19 @@
   const statusEl = document.getElementById('status');
   if (!usernameInput || !joinBtn || !setupPanel || !chatMain) return;
 
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyAQk0FwLApOl0w7KsHGsgbStO3DFnC0tOE',
+    authDomain: 'inakachat-29b24.firebaseapp.com',
+    projectId: 'inakachat-29b24',
+    storageBucket: 'inakachat-29b24.firebasestorage.app',
+    messagingSenderId: '144875359478',
+    appId: '1:144875359478:web:775f496fdb659a1098b0d7',
+    measurementId: 'G-CMSLDR94M4'
+  };
+
   let joiningUsername = '';
   let signupInProgress = false;
+  let firebaseReadyPromise = null;
 
   function setStatus(message, error = false) {
     if (!statusEl) return;
@@ -19,12 +30,44 @@
     return document.getElementById(id);
   }
 
-  async function waitForAuth() {
-    for (let i = 0; i < 60; i += 1) {
-      if (window.ruralFirebaseAuth) return window.ruralFirebaseAuth;
-      await new Promise(resolve => setTimeout(resolve, 100));
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === '1') return resolve();
+        existing.addEventListener('load', resolve, { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Firebase SDKの読み込みに失敗しました: ${src}`)), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.addEventListener('load', () => { script.dataset.loaded = '1'; resolve(); }, { once: true });
+      script.addEventListener('error', () => reject(new Error(`Firebase SDKの読み込みに失敗しました: ${src}`)), { once: true });
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureAuthForSignup() {
+    if (window.ruralFirebaseAuth) return window.ruralFirebaseAuth;
+    if (firebaseReadyPromise) return firebaseReadyPromise;
+
+    firebaseReadyPromise = (async () => {
+      if (!window.firebase?.auth) {
+        await loadScript('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
+        await loadScript('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js');
+      }
+      if (!window.firebase) throw new Error('Firebase SDKを初期化できませんでした。');
+      if (!window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
+      window.ruralFirebaseAuth = window.firebase.auth();
+      window.ruralFirebaseAuth.useDeviceLanguage();
+      return window.ruralFirebaseAuth;
+    })();
+
+    try {
+      return await firebaseReadyPromise;
+    } finally {
+      firebaseReadyPromise = null;
     }
-    throw new Error('Firebase Authenticationの初期化を待っている間にタイムアウトしました。');
   }
 
   async function claimName(username, uid, email) {
@@ -46,6 +89,21 @@
     return result;
   }
 
+  function firebaseSignupError(error) {
+    const code = error?.code || '';
+    const messages = {
+      'auth/operation-not-allowed': 'メールアドレス／パスワードのログインがFirebaseで有効になっていません。',
+      'auth/invalid-email': 'メールアドレスの形式が正しくありません。',
+      'auth/missing-password': 'パスワードを入力してください。',
+      'auth/weak-password': 'パスワードが弱すぎます。より安全なパスワードを設定してください。',
+      'auth/email-already-in-use': 'このメールアドレスはすでに登録されています。ログインしてください。',
+      'auth/invalid-api-key': 'Firebaseの設定を確認できませんでした。',
+      'auth/unauthorized-domain': 'このサイトのドメインがFirebase Authenticationの承認済みドメインに登録されていません。',
+      'auth/network-request-failed': 'ネットワークエラーが発生しました。通信状態を確認してください。'
+    };
+    return messages[code] || error?.message || 'アカウント作成に失敗しました。';
+  }
+
   async function registerAccount() {
     if (signupInProgress) return;
 
@@ -57,7 +115,6 @@
     const password = String(passwordInput?.value || '');
 
     if (!name) return setStatus('新規登録時はアカウント名を入力してください。', true);
-    if (name.length > 20) return setStatus('アカウント名は20文字以内にしてください。', true);
     if (!email || !password) return setStatus('メールアドレスとパスワードを入力してください。', true);
 
     signupInProgress = true;
@@ -66,11 +123,11 @@
 
     let createdUser = null;
     try {
-      const auth = await waitForAuth();
+      const auth = await ensureAuthForSignup();
 
       const availability = await isNameAvailable(name);
       if (!availability.ok) {
-        setStatus('アカウント名の確認に失敗しました。しばらくしてから再試行してください。', true);
+        setStatus('アカウント名を確認できませんでした。しばらくしてから再試行してください。', true);
         return;
       }
       if (!availability.available) {
@@ -88,13 +145,11 @@
       setStatus('アカウント名を確定しています…');
       const claimResult = await claimName(name, createdUser.uid, createdUser.email || email);
       if (!claimResult.ok) {
-        try {
-          await createdUser.delete();
-        } catch (deleteError) {
-          console.error('重複名のため作成したFirebaseユーザーの削除に失敗:', deleteError);
-          await auth.signOut().catch(() => {});
-        }
-        setStatus('このアカウント名は登録中に他のアカウントで使用されました。別のアカウント名を入力してください。', true);
+        try { await createdUser.delete(); }
+        catch (deleteError) { console.error('Firebaseユーザーのロールバックに失敗:', deleteError); await auth.signOut().catch(() => {}); }
+        setStatus(claimResult.reason === 'name-taken'
+          ? 'このアカウント名は登録中に他のアカウントで使用されました。別のアカウント名を入力してください。'
+          : 'アカウント名を確定できませんでした。アカウントは作成されていません。', true);
         return;
       }
 
@@ -106,22 +161,14 @@
       }));
     } catch (error) {
       console.error('Account registration failed:', error);
-      if (createdUser) {
-        await createdUser.delete().catch(() => {});
-      }
-      setStatus(
-        error?.code === 'auth/email-already-in-use'
-          ? 'このメールアドレスはすでに登録されています。ログインしてください。'
-          : (error?.message || 'アカウント作成に失敗しました。'),
-        true
-      );
+      if (createdUser) await createdUser.delete().catch(() => {});
+      setStatus(firebaseSignupError(error), true);
     } finally {
       signupInProgress = false;
       window.__ruralSignupInProgress = false;
     }
   }
 
-  // auth.jsにある通常の新規登録処理を、重複アカウント名を確認する処理へ置き換えます。
   document.addEventListener('click', event => {
     const button = event.target.closest('#email-signup-btn');
     if (!button) return;
@@ -130,7 +177,6 @@
     void registerAccount();
   }, true);
 
-  // auth.jsがログイン完了時に発火するイベントを、新規登録処理中だけ止めます。
   window.addEventListener('rural-account-authenticated', event => {
     if (window.__ruralSignupInProgress) event.stopImmediatePropagation();
   }, true);
@@ -146,8 +192,6 @@
     joinBtn.click();
   }
 
-  // メールログイン後のチャット参加はauth.jsの認証完了イベントから行います。
-  // このリスナーは残し、ページ再読み込み時などにイベントが先に届かない場合を補助します。
   window.addEventListener('rural-account-authenticated', event => {
     if (signupInProgress || window.__ruralSignupInProgress) return;
     const user = window.ruralFirebaseAuth?.currentUser;
