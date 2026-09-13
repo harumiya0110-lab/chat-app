@@ -13,6 +13,17 @@
     statusEl.style.color = error ? '#a52d2d' : '';
   }
 
+  // メール連携アカウントが新規登録・ログイン後にチャットへ入る直前に、
+  // サーバーへ「この名前は認証済みアカウント本人」と先に通知します。
+  // captureで受けることで、auth.jsのjoinBtn.click()より前に実行されます。
+  window.addEventListener('rural-account-authenticated', event => {
+    const username = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
+    const uid = String(event.detail?.uid || '').trim();
+    const email = String(event.detail?.email || '').trim();
+    if (!username || typeof socket === 'undefined' || !socket?.connected) return;
+    socket.emit('email-account-session', { username, uid, email });
+  }, true);
+
   function enterChat(username) {
     const cleanUsername = String(username || '').normalize('NFC').trim().slice(0, 20);
     if (!cleanUsername || !chatMain.hidden || joiningUsername === cleanUsername) return;
@@ -31,12 +42,10 @@
   window.addEventListener('rural-account-authenticated', event => {
     const username = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
     if (!username) return;
-    if (window.__ruralSignupInProgress) return;
     enterChat(username);
   });
 
   const tryExistingUser = () => {
-    if (window.__ruralSignupInProgress) return;
     const user = window.ruralFirebaseAuth?.currentUser;
     if (user?.displayName) enterChat(user.displayName);
   };
