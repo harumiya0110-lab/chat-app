@@ -177,6 +177,18 @@
     void registerAccount();
   }, true);
 
+  // auth.js側に残っている古い新規登録click listenerを、対象ボタンだけ複製して除去します。
+  // その後も上のdocument capture listenerは新しいボタンを受け取るため、登録処理は維持されます。
+  const detachLegacySignupListener = () => {
+    const oldButton = document.getElementById('email-signup-btn');
+    if (!oldButton || !oldButton.parentNode || oldButton.dataset.signupHandlerFixed === '1') return;
+    const newButton = oldButton.cloneNode(true);
+    newButton.dataset.signupHandlerFixed = '1';
+    oldButton.replaceWith(newButton);
+  };
+  detachLegacySignupListener();
+  window.setTimeout(detachLegacySignupListener, 0);
+
   window.addEventListener('rural-account-authenticated', event => {
     if (window.__ruralSignupInProgress) {
       const username = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
