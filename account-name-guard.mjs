@@ -9,8 +9,19 @@ if (!SocketIOServer.prototype.__ruralAccountNameGuardInstalled) {
       return originalServerOn.call(this, eventName, listener);
     }
 
-    return originalServerOn.call(this, eventName, function guardedConnection(socket, ...args) {
+    return originalServerOn.call(this, function guardedConnection(socket, ...args) {
       const originalSocketOn = socket.on.bind(socket);
+
+      // メールアドレス連携アカウントの参加時だけ、予約済みのアカウント名を
+      // 「名前だけで参加」の重複チェックから除外できるように先に記録します。
+      // このリスナーは元のsocket.onを直接使うため、下のset-usernameラッパーにも
+      // 正常に値が渡ります。
+      originalSocketOn('email-account-session', payload => {
+        const username = typeof payload?.username === 'string'
+          ? payload.username.trim().slice(0, 20)
+          : '';
+        if (username) socket.__emailAccountName = username;
+      });
 
       socket.on = function guardedSocketOn(name, handler) {
         if (name === 'email-account-session') {
