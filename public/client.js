@@ -149,8 +149,11 @@ function buildMessageElement(data) {
   const style = EVENT_STYLES[type];
   const badge = type && style ? `<span class="message-type-badge" style="background:${style.color}">${escapeHtml(type)}</span>` : '';
   const resolved = data.status === 'resolved' ? '<span class="message-resolved-badge">✅ 解決済み</span>' : '';
-  const reply = data.replyToId
-    ? `<div class="message-reply">↩︎ ${escapeHtml(data.replyToUsername || '投稿者')}さんへの返信</div>`
+  const replyToId = String(data.replyToId || '').trim();
+  const replyToUsername = String(data.replyToUsername || '投稿者').trim() || '投稿者';
+  const replyToText = String(data.replyToText || '').trim().slice(0, 200);
+  const reply = replyToId
+    ? `<div class="message-reply" data-reply-target="${escapeHtml(replyToId)}" role="button" tabindex="0" title="返信元の投稿を表示"><span class="message-reply-label">↩︎ ${escapeHtml(replyToUsername)}さんへの返信</span>${replyToText ? `<span class="message-reply-quote">${escapeHtml(replyToText)}</span>` : ''}</div>`
     : '';
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-badges">${badge}${resolved}</div>${reply}<div class="message-bubble">${escapeHtml(data.message || data.text || '')}</div>`;
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
@@ -296,7 +299,8 @@ async function sendTextMessage() {
         text,
         userId: socket.id || `web-${crypto.randomUUID()}`,
         replyToId: ruralReplyTarget?.id || '',
-        replyToUsername: ruralReplyTarget?.username || ''
+        replyToUsername: ruralReplyTarget?.username || '',
+        replyToText: ruralReplyTarget?.message || ''
       })
     });
     const result = await response.json();
