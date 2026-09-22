@@ -649,3 +649,21 @@ body[data-rural-chat-color] .messages .message-reply-label,
 body[data-rural-chat-color] .messages .message-reply-quote{
   color:var(--theme-text,var(--chat-text,#294237))!important;
 }
+
+
+/* ユーザー投稿本文の背景色をチャット色で固定 */
+body[data-rural-chat-color="forest"]{--message-bubble-bg:#2f7d4a;--message-bubble-text:#fff}
+body[data-rural-chat-color="blue"]{--message-bubble-bg:#2d78b8;--message-bubble-text:#fff}
+body[data-rural-chat-color="sakura"]{--message-bubble-bg:#d85c86;--message-bubble-text:#3f1f2b}
+body[data-rural-chat-color="violet"]{--message-bubble-bg:#7657b8;--message-bubble-text:#fff}
+body[data-rural-chat-color="sunset"]{--message-bubble-bg:#d97932;--message-bubble-text:#402211}
+body[data-rural-chat-color="ink"]{--message-bubble-bg:#333;--message-bubble-text:#fff}
+
+body[data-rural-chat-color] .messages .message-bubble{
+  background:var(--message-bubble-bg)!important;
+  color:var(--message-bubble-text)!important;
+}
+body[data-rural-chat-color] .messages .message-bubble::selection{
+  background:rgba(255,255,255,.3);
+  color:var(--message-bubble-text);
+}
