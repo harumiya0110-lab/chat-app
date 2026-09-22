@@ -247,7 +247,7 @@ function addImage(data) {
     const bytes = data.image instanceof ArrayBuffer
       ? new Uint8Array(data.image)
       : new Uint8Array(data.image.buffer, data.image.byteOffset, data.image.byteLength);
-    const type = typeof data.imageType === 'string' && /^image\\/[a-z0-9.+-]+$/i.test(data.imageType) ? data.imageType : 'image/jpeg';
+    const type = typeof data.imageType === 'string' && /^image\/[a-z0-9.+-]+$/i.test(data.imageType) ? data.imageType : 'image/jpeg';
     const objectUrl = URL.createObjectURL(new Blob([bytes], { type }));
     image.src = objectUrl;
     image.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
@@ -281,7 +281,7 @@ function addVideo(data) {
     const bytes = data.video instanceof ArrayBuffer
       ? new Uint8Array(data.video)
       : new Uint8Array(data.video.buffer, data.video.byteOffset, data.video.byteLength);
-    const type = typeof data.videoType === 'string' && /^video\\/[a-z0-9.+-]+$/i.test(data.videoType) ? data.videoType : 'video/mp4';
+    const type = typeof data.videoType === 'string' && /^video\/[a-z0-9.+-]+$/i.test(data.videoType) ? data.videoType : 'video/mp4';
     objectUrl = URL.createObjectURL(new Blob([bytes], { type }));
     video.src = objectUrl;
     video.addEventListener('loadedmetadata', () => {
