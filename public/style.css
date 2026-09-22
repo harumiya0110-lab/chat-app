@@ -211,3 +211,56 @@ body[data-rural-chat-color="forest"] .system-message{color:#4f6b5b!important}
 .online-user-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#36a85b;box-shadow:0 0 0 3px rgba(54,168,91,.13)}
 .online-user-me{flex:0 0 auto;color:#68796e;font-size:10px;font-weight:700}
 .users-empty{justify-content:center!important;color:#7a877f!important;font-size:11px!important;background:transparent!important;border-style:dashed!important}
+
+
+/* 見た目交換のテーマごとに、他ユーザーを含むチャット本文の文字色を高コントラストに統一します。 */
+/* 明るいテーマは濃い文字、夜テーマは明るい文字にします。 */
+body[data-rural-theme="forest"] .messages,
+body[data-rural-theme="forest"] .message,
+body[data-rural-theme="forest"] .message-bubble{color:#20372a!important}
+body[data-rural-theme="forest"] .message-header{color:#50675a!important}
+
+body[data-rural-theme="sakura"] .messages,
+body[data-rural-theme="sakura"] .message,
+body[data-rural-theme="sakura"] .message-bubble{color:#633449!important}
+body[data-rural-theme="sakura"] .message-header{color:#805468!important}
+
+body[data-rural-theme="ocean"] .messages,
+body[data-rural-theme="ocean"] .message,
+body[data-rural-theme="ocean"] .message-bubble{color:#183f59!important}
+body[data-rural-theme="ocean"] .message-header{color:#476d82!important}
+
+body[data-rural-theme="matsuri"] .messages,
+body[data-rural-theme="matsuri"] .message,
+body[data-rural-theme="matsuri"] .message-bubble{color:#653818!important}
+body[data-rural-theme="matsuri"] .message-header{color:#80604b!important}
+
+body[data-rural-theme="night"] .messages,
+body[data-rural-theme="night"] .message,
+body[data-rural-theme="night"] .message-bubble{color:#eef5f9!important}
+body[data-rural-theme="night"] .message-header{color:#c8d6e0!important}
+
+/* 返信引用・返信先の名前も、各テーマで本文と同じ読みやすさを保ちます。 */
+body[data-rural-theme="forest"] .message-reply,
+body[data-rural-theme="forest"] .message-reply-quote{color:#50675a!important}
+body[data-rural-theme="forest"] .message-reply-label{color:#28573c!important}
+
+body[data-rural-theme="sakura"] .message-reply,
+body[data-rural-theme="sakura"] .message-reply-quote{color:#805468!important}
+body[data-rural-theme="sakura"] .message-reply-label{color:#9d4268!important}
+
+body[data-rural-theme="ocean"] .message-reply,
+body[data-rural-theme="ocean"] .message-reply-quote{color:#476d82!important}
+body[data-rural-theme="ocean"] .message-reply-label{color:#1d5f96!important}
+
+body[data-rural-theme="matsuri"] .message-reply,
+body[data-rural-theme="matsuri"] .message-reply-quote{color:#80604b!important}
+body[data-rural-theme="matsuri"] .message-reply-label{color:#ad5520!important}
+
+body[data-rural-theme="night"] .message-reply,
+body[data-rural-theme="night"] .message-reply-quote{color:#c8d6e0!important}
+body[data-rural-theme="night"] .message-reply-label{color:#9ec5e8!important}
+
+/* チャット色が別途設定されている場合でも、テーマの本文可読性を優先します。 */
+body[data-rural-theme] .message-bubble{font-weight:500}
+body[data-rural-theme] .message-header span:first-child{font-weight:700}
