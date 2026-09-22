@@ -6,7 +6,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
-import { claimAccountName, releaseAccountName, isAccountNameAvailable, isAccountNameLinkedToUser } from './firebase-persistence.mjs';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
 import { registerChatBackgroundPersistence } from './chat-background-persistence.mjs';
 
@@ -36,47 +35,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
-});
-
-app.post('/api/account-name/claim', async (req, res) => {
-  const { accountName, uid, email } = req.body || {};
-  const cleanName = typeof accountName === 'string' ? accountName.trim().slice(0, 20) : '';
-  const cleanUid = typeof uid === 'string' ? uid.trim() : '';
-  const cleanEmail = typeof email === 'string' ? email.trim().slice(0, 320) : '';
-  if (!cleanName || !cleanUid) return res.status(400).json({ ok: false, reason: 'invalid' });
-  try {
-    const result = await claimAccountName(cleanName, cleanUid, cleanEmail);
-    if (!result.ok && result.reason === 'name-taken') return res.status(409).json(result);
-    if (!result.ok) return res.status(503).json(result);
-    return res.json(result);
-  } catch (error) {
-    console.error('Account-name claim failed:', error);
-    return res.status(500).json({ ok: false, reason: 'server-error' });
-  }
-});
-
-app.get('/api/account-name/check', async (req, res) => {
-  const accountName = typeof req.query.name === 'string' ? req.query.name.trim().slice(0, 20) : '';
-  if (!accountName) return res.status(400).json({ ok: false, available: false, reason: 'invalid' });
-  try {
-    return res.json(await isAccountNameAvailable(accountName));
-  } catch (error) {
-    console.error('Account-name availability check failed:', error);
-    return res.status(500).json({ ok: false, available: false, reason: 'server-error' });
-  }
-});
-
-app.post('/api/account-name/release', async (req, res) => {
-  const { accountName, uid } = req.body || {};
-  const cleanName = typeof accountName === 'string' ? accountName.trim().slice(0, 20) : '';
-  const cleanUid = typeof uid === 'string' ? uid.trim() : '';
-  if (!cleanName || !cleanUid) return res.status(400).json({ ok: false, reason: 'invalid' });
-  try {
-    return res.json(await releaseAccountName(cleanName, cleanUid));
-  } catch (error) {
-    console.error('Account-name release failed:', error);
-    return res.status(500).json({ ok: false, reason: 'server-error' });
-  }
 });
 
 function normalizeAnalysis(value) {
@@ -302,71 +260,7 @@ function safeAudioMime(value) {
 
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
-  socket.on('email-account-session', payload => {
-    const username = typeof payload?.username === 'string'
-      ? payload.username.normalize('NFC').trim().slice(0, 20)
-      : '';
-    const uid = typeof payload?.uid === 'string' ? payload.uid.trim() : '';
-    const email = typeof payload?.email === 'string' ? payload.email.trim().slice(0, 320) : '';
-    if (!username || !uid) return;
-    socket.__emailAccountSession = { username, uid, email };
-  });
-
-  // メールアドレスログインは「名前だけで参加」の処理と完全に分離します。
-  // Firebaseで本人確認済みのアカウント名だけを、専用イベントで参加させます。
-  socket.on('join-email-account', async payload => {
-    const username = typeof payload?.username === 'string'
-      ? payload.username.normalize('NFC').trim().slice(0, 20)
-      : '';
-    const uid = typeof payload?.uid === 'string' ? payload.uid.trim() : '';
-    const email = typeof payload?.email === 'string' ? payload.email.trim().slice(0, 320) : '';
-    const session = socket.__emailAccountSession;
-
-    if (!username || !uid || !session) {
-      socket.emit('username-error', { message: 'メールアカウントの認証情報がありません。もう一度ログインしてください。' });
-      return;
-    }
-
-    const sessionName = String(session.username || '').normalize('NFC').trim();
-    const sessionUid = String(session.uid || '').trim();
-    const sessionEmail = String(session.email || '').trim().toLowerCase();
-    if (
-      sessionName.toLowerCase() !== username.toLowerCase() ||
-      sessionUid !== uid ||
-      (email && sessionEmail && sessionEmail !== email.toLowerCase())
-    ) {
-      socket.emit('username-error', { message: 'メールアカウントの認証情報が一致しません。もう一度ログインしてください。' });
-      return;
-    }
-
-    try {
-      const linked = await isAccountNameLinkedToUser(username, uid, email);
-      if (!linked) {
-        socket.emit('username-error', { message: 'このアカウント名はメールアドレスと正しく連携されていません。' });
-        return;
-      }
-    } catch (error) {
-      console.error('Linked account-name verification failed:', error);
-      socket.emit('username-error', { message: 'アカウントの確認に失敗しました。しばらくしてから再試行してください。' });
-      return;
-    }
-
-    users[socket.id] = {
-      id: socket.id,
-      username,
-      timestamp: new Date(),
-      authType: 'email',
-      uid,
-      email: email || sessionEmail
-    };
-    socket.emit('email-account-accepted', { username });
-    void initializeThemeForSocket(socket, username);
-    io.emit('user-joined', { username, message: `${username}さんがチャットに参加しました` });
-    io.emit('update-users', Object.values(users));
-  });
-
-  // ゲスト参加はメールアカウントとは別の名前空間として扱います。
-  // Firestoreのアカウント名予約状況は参照しないため、同じ表示名でも共存できます。
+  // 名前だけで参加するゲスト方式です。メールアドレス認証は使用しません。
   socket.on('set-username', async username => {
     if (typeof username !== 'string' || !username.trim()) return;
     const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
