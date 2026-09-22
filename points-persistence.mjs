@@ -143,6 +143,18 @@ async function getMessage(id) {
   };
 }
 
+async function loadPointsLeaderboard(limit = 10) {
+  if (!enabled) return [];
+  const pageSize = Math.min(50, Math.max(1, limit));
+  const result = await firestoreRequest(`/regionalPoints?pageSize=${pageSize}`, { method: 'GET' });
+  const entries = (Array.isArray(result?.documents) ? result.documents : []).map(doc => {
+    const name = String(doc.name || '').split('/').pop() || '';
+    const fields = fromFirestoreFields(doc.fields || {});
+    return { username: decodeURIComponent(name), points: Math.max(0, Math.floor(Number(fields.points || 0))) };
+  }).filter(item => item.username && item.username !== 'undefined');
+  return entries.sort((a,b) => b.points - a.points || a.username.localeCompare(b.username, 'ja')).slice(0, 10);
+}
+
 async function getPoints(username) {
   if (!enabled || !username) return 0;
   const safeUsername = encodeURIComponent(String(username));
@@ -317,6 +329,19 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 
     originalSocketOn('confirm-help', (payload = {}, ack) => {
       void confirmHelp(socket, payload, ack);
+    });
+    originalSocketOn('request-points-leaderboard', async (_payload, ack) => {
+      if (!socket.__regionalPointsUsername) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+        return;
+      }
+      try {
+        const leaderboard = await loadPointsLeaderboard(10);
+        if (typeof ack === 'function') ack({ ok: true, leaderboard });
+      } catch (error) {
+        console.error('Regional points leaderboard load failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
     });
 
     const previousEmit = socket.emit.bind(socket);
