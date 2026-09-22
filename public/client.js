@@ -10,6 +10,17 @@ let isVideoOn = true;
 let isMinimized = false;
 let isJoiningChat = false;
 let isHistoryLoading = false;
+let ruralReplyTarget = null;
+
+window.ruralSetReplyTarget = target => {
+  ruralReplyTarget = target && typeof target.id === 'string' ? {
+    id: target.id,
+    username: String(target.username || '投稿者').slice(0, 50),
+    message: String(target.message || '').slice(0, 2000)
+  } : null;
+  window.dispatchEvent(new CustomEvent('rural-reply-target-changed', { detail: ruralReplyTarget }));
+};
+window.ruralGetReplyTarget = () => ruralReplyTarget;
 
 const MAX_CHAT_MESSAGES = 50;
 const ruralMarkerByMessageId = new Map();
@@ -136,9 +147,19 @@ function buildMessageElement(data) {
   const timestamp = data.timestamp || (data.createdAt ? new Date(data.createdAt).toLocaleString('ja-JP') : '');
   const type = data.locationData?.eventType;
   const style = EVENT_STYLES[type];
-  const badge = type && style ? `<span style="display:inline-block;background:${style.color};color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;margin-bottom:4px">${escapeHtml(type)}</span><br>` : '';
-  item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-bubble">${badge}${escapeHtml(data.message || data.text || '')}</div>`;
+  const badge = type && style ? `<span class="message-type-badge" style="background:${style.color}">${escapeHtml(type)}</span>` : '';
+  const resolved = data.status === 'resolved' ? '<span class="message-resolved-badge">✅ 解決済み</span>' : '';
+  const reply = data.replyToId
+    ? `<div class="message-reply">↩︎ ${escapeHtml(data.replyToUsername || '投稿者')}さんへの返信</div>`
+    : '';
+  item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-badges">${badge}${resolved}</div>${reply}<div class="message-bubble">${escapeHtml(data.message || data.text || '')}</div>`;
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
+  item.dataset.username = typeof data.username === 'string' ? data.username : '';
+  item.dataset.userId = typeof data.userId === 'string' ? data.userId : '';
+  item.dataset.location = data.locationData ? '1' : '0';
+  item.dataset.status = data.status === 'resolved' ? 'resolved' : 'open';
+  item.dataset.reactions = JSON.stringify(data.reactions || { like: [], helpful: [], thanks: [] });
+  item.dataset.messageText = String(data.message || data.text || '').slice(0, 2000);
   addNormalMessageDeleteControl(item, data);
   return item;
 }
@@ -245,11 +266,18 @@ async function sendTextMessage() {
     const response = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, userId: socket.id || `web-${crypto.randomUUID()}` })
+      body: JSON.stringify({
+        text,
+        userId: socket.id || `web-${crypto.randomUUID()}`,
+        replyToId: ruralReplyTarget?.id || '',
+        replyToUsername: ruralReplyTarget?.username || ''
+      })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '送信に失敗しました');
     messageInput.value = '';
+    ruralReplyTarget = null;
+    window.dispatchEvent(new CustomEvent('rural-reply-target-changed', { detail: null }));
     if (result.locationData) {
       setStatus(`${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`);
     } else if (result.geocodeError) {
@@ -310,6 +338,9 @@ socket.on('chat-message-deleted', data => {
   messages.querySelectorAll('.message').forEach(item => {
     if (item.dataset.messageId === id) item.remove();
   });
+  const marker = ruralMarkerByMessageId.get(id);
+  if (marker && map.hasLayer(marker)) map.removeLayer(marker);
+  ruralMarkerByMessageId.delete(id);
 });
 
 socket.on('receive-image', addImage);
@@ -416,10 +447,12 @@ function addMarker(message) {
   const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
   const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
   const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
+  const messageId = typeof message.id === 'string' ? message.id.trim() : '';
+  marker.__messageId = messageId;
   marker.on('click', () => {
     void showMarkerAreaInChat(marker);
+    window.dispatchEvent(new CustomEvent('rural-map-marker-clicked', { detail: { marker, messageId } }));
   });
-  const messageId = typeof message.id === 'string' ? message.id.trim() : '';
   if (messageId) ruralMarkerByMessageId.set(messageId, marker);
   return marker;
 }
