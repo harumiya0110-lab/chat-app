@@ -605,3 +605,47 @@ body[data-rural-theme] .map-filter.active{
   color:#fff!important;
   border-color:var(--theme-main)!important;
 }
+
+
+/* 投稿本文だけをチャット色にする最終調整 */
+/* メッセージカードの外側は見た目交換のテーマ背景、入力した本文部分だけチャット色 */
+body[data-rural-chat-color] .messages .message,
+body[data-rural-chat-color] .messages .message.own,
+body[data-rural-chat-color] .messages .message.reply-message{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--theme-text,#294237)!important;
+  border-left-color:var(--rural-chat)!important;
+}
+
+/* 「事故が発生」などユーザーが入力した文字の表示領域 */
+body[data-rural-chat-color] .messages .message-bubble{
+  display:block;
+  padding:9px 11px;
+  border-radius:9px;
+  background:var(--rural-chat)!important;
+  color:var(--chat-contrast,#fff)!important;
+  font-weight:600;
+}
+
+/* 吹き出し内の文字・リンク等もチャット色に対するコントラストを維持 */
+body[data-rural-chat-color] .messages .message-bubble *{
+  color:var(--chat-contrast,#fff)!important;
+}
+
+/* 名前・時刻は本文外なので見た目交換のテーマ配色 */
+body[data-rural-chat-color] .messages .message-header,
+body[data-rural-chat-color] .messages .message-header span{
+  color:var(--theme-text-soft,var(--theme-text,#294237))!important;
+}
+
+/* 返信引用は本文とは別の情報なのでテーマ背景側で表示 */
+body[data-rural-chat-color] .messages .message-reply{
+  background:var(--theme-main-soft,#edf3eb)!important;
+  color:var(--theme-text,var(--chat-text,#294237))!important;
+  border-left-color:var(--rural-chat)!important;
+}
+body[data-rural-chat-color] .messages .message-reply *,
+body[data-rural-chat-color] .messages .message-reply-label,
+body[data-rural-chat-color] .messages .message-reply-quote{
+  color:var(--theme-text,var(--chat-text,#294237))!important;
+}
