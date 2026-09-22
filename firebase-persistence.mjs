@@ -268,4 +268,39 @@ SocketIOServer.prototype.on = function(eventName, listener) {
   return originalServerOn.call(this, eventName, wrappedListener);
 };
 
+
+export async function purgeAllSavedMessages() {
+  if (!enabled) return { ok: false, reason: 'persistence-disabled', deleted: 0 };
+
+  const names = [];
+  let pageToken = '';
+  do {
+    const query = pageToken
+      ? `/messages?pageSize=300&pageToken=${encodeURIComponent(pageToken)}`
+      : '/messages?pageSize=300';
+    const result = await firestoreRequest(query, { method: 'GET' });
+    for (const doc of Array.isArray(result?.documents) ? result.documents : []) {
+      if (doc?.name) names.push(doc.name);
+    }
+    pageToken = String(result?.nextPageToken || '');
+  } while (pageToken);
+
+  let deleted = 0;
+  for (let i = 0; i < names.length; i += 20) {
+    const chunk = names.slice(i, i + 20);
+    await Promise.all(chunk.map(async name => {
+      const id = String(name).split('/').pop();
+      if (!id) return;
+      try {
+        await firestoreRequest(`/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        deleted += 1;
+      } catch (error) {
+        if (error.status !== 404) throw error;
+      }
+    }));
+  }
+
+  return { ok: true, deleted };
+}
+
 export const firebasePersistenceEnabled = enabled;
