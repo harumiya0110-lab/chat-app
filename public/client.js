@@ -73,11 +73,31 @@ const EVENT_STYLES = {
   'その他': { color: '#6c7a89', symbol: '・' }
 };
 
-const map = L.map('map').setView([34.3853, 132.4553], 11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+let map = null;
+
+function initializeMap() {
+  if (typeof L === 'undefined' || typeof L.map !== 'function') {
+    console.warn('Leafletが読み込めないため、地図機能を一時的に無効にします。');
+    return null;
+  }
+
+  try {
+    map = L.map('map').setView([34.3853, 132.4553], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    window.ruralMap = map;
+    return map;
+  } catch (error) {
+    console.error('地図の初期化に失敗しました:', error);
+    map = null;
+    return null;
+  }
+}
+
+// 地図が失敗しても、ログイン機能まで止まらないようにします。
+initializeMap();
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'\"]/g, ch => ({
@@ -566,6 +586,7 @@ function updateUsersList(users) {
 
 function createEventIcon(eventType) {
   const style = EVENT_STYLES[eventType] || EVENT_STYLES['その他'];
+  if (typeof L === 'undefined' || typeof L.divIcon !== 'function') return null;
   return L.divIcon({
     className: '',
     html: `<div class="event-marker" style="background:${style.color}"><span>${style.symbol}</span></div>`,
@@ -642,7 +663,13 @@ function addMarker(message) {
   if (messageId && ruralMarkerByMessageId.has(messageId)) {
     return ruralMarkerByMessageId.get(messageId);
   }
-  const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
+  if (!map || typeof L === 'undefined' || typeof L.marker !== 'function') {
+    console.warn('地図が利用できないため、位置情報のピン表示をスキップします。');
+    return null;
+  }
+  const icon = createEventIcon(type);
+  if (!icon) return null;
+  const marker = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popup);
   marker.__messageId = messageId;
   marker.on('click', () => {
     void showMarkerAreaInChat(marker);
