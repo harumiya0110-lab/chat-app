@@ -204,3 +204,10 @@ body[data-rural-chat-color="forest"] .system-message{color:#4f6b5b!important}
 
 
 @media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
+
+/* オンラインユーザーを常に見やすく表示します。 */
+.users-panel li{color:#294237!important}
+.online-user-name{display:inline-flex;align-items:center;min-width:0;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.online-user-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#36a85b;box-shadow:0 0 0 3px rgba(54,168,91,.13)}
+.online-user-me{flex:0 0 auto;color:#68796e;font-size:10px;font-weight:700}
+.users-empty{justify-content:center!important;color:#7a877f!important;font-size:11px!important;background:transparent!important;border-style:dashed!important}
