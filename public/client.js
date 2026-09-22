@@ -826,8 +826,8 @@ socket.on('call-answered', async data => {
 });
 
 socket.on('ice-candidate', async data => {
-  if (!peerConnection || data.from !== currentCallTarget || !data.candidate) return;
-  if (!peerConnection.remoteDescription) {
+  if (data.from !== currentCallTarget || !data.candidate) return;
+  if (!peerConnection || !peerConnection.remoteDescription) {
     pendingIceCandidates.push(data.candidate);
     return;
   }
