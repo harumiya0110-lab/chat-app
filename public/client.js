@@ -5,6 +5,7 @@ let localStream = null;
 let peerConnection = null;
 let currentCallTarget = null;
 let pendingIncoming = null;
+let pendingIceCandidates = [];
 let isMuted = false;
 let isVideoOn = true;
 let isMinimized = false;
@@ -214,10 +215,22 @@ function addImage(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
   const image = document.createElement('img');
-  image.src = data.image;
   image.alt = data.filename || '画像';
   image.loading = 'lazy';
   image.style.maxWidth = '100%';
+
+  if (typeof data?.image === 'string') {
+    image.src = data.image;
+  } else if (data?.image instanceof ArrayBuffer || ArrayBuffer.isView(data?.image)) {
+    const bytes = data.image instanceof ArrayBuffer
+      ? new Uint8Array(data.image)
+      : new Uint8Array(data.image.buffer, data.image.byteOffset, data.image.byteLength);
+    const type = typeof data.imageType === 'string' && /^image\\/[a-z0-9.+-]+$/i.test(data.imageType) ? data.imageType : 'image/jpeg';
+    const objectUrl = URL.createObjectURL(new Blob([bytes], { type }));
+    image.src = objectUrl;
+    image.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
+  }
+
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.appendChild(image);
@@ -232,9 +245,36 @@ function addVideo(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
   const video = document.createElement('video');
-  video.src = data.video;
   video.controls = true;
   video.preload = 'metadata';
+  video.playsInline = true;
+  video.muted = false;
+  video.defaultMuted = false;
+  video.volume = 1;
+
+  let objectUrl = '';
+  if (typeof data?.video === 'string' && data.video.startsWith('data:video/')) {
+    video.src = data.video;
+  } else if (data?.video instanceof ArrayBuffer || ArrayBuffer.isView(data?.video)) {
+    const bytes = data.video instanceof ArrayBuffer
+      ? new Uint8Array(data.video)
+      : new Uint8Array(data.video.buffer, data.video.byteOffset, data.video.byteLength);
+    const type = typeof data.videoType === 'string' && /^video\\/[a-z0-9.+-]+$/i.test(data.videoType) ? data.videoType : 'video/mp4';
+    objectUrl = URL.createObjectURL(new Blob([bytes], { type }));
+    video.src = objectUrl;
+    video.addEventListener('loadedmetadata', () => {
+      video.volume = 1;
+      video.muted = false;
+      video.defaultMuted = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }, { once: true });
+  }
+
+  video.addEventListener('error', () => {
+    setStatus('動画を再生できませんでした。MP4（H.264/AAC）などブラウザ対応形式を試してください。');
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  }, { once: true });
+
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.appendChild(video);
@@ -259,7 +299,7 @@ function joinChat() {
 joinBtn.addEventListener('click', joinChat);
 usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
 
-function handleChatAccepted({ username } = {}) {
+function handleChatAccepted({ username, users: onlineUsers } = {}) {
   const acceptedUsername = String(username || '').trim();
   if (!acceptedUsername) return;
   isJoiningChat = false;
@@ -268,6 +308,7 @@ function handleChatAccepted({ username } = {}) {
   setupPanel.hidden = true;
   chatMain.hidden = false;
   joinBtn.disabled = false;
+  updateUsersList(Array.isArray(onlineUsers) ? onlineUsers : []);
   messageInput.focus();
 
   // 再参加時に前回の履歴を残したまま追加しないよう、チャット表示を一度リセットします。
@@ -386,23 +427,55 @@ socket.on('user-joined', data => addSystemMessage(data.message));
 socket.on('user-left', data => addSystemMessage(data.message));
 socket.on('update-users', updateUsersList);
 
+socket.on('connect', () => {
+  if (!currentUsername) return;
+  socket.emit('get-online-users', {}, result => {
+    if (result?.ok) updateUsersList(result.users);
+  });
+});
+
 function updateUsersList(users) {
-  usersList.innerHTML = '';
-  onlineCount.textContent = `${users.length}人`;
-  for (const user of users) {
+  const onlineUsers = Array.isArray(users)
+    ? users.filter(user => user && typeof user === 'object' && user.id && String(user.username || '').trim())
+    : [];
+
+  if (!usersList) return;
+  usersList.replaceChildren();
+  onlineCount.textContent = String(onlineUsers.length) + '人';
+
+  if (!onlineUsers.length) {
+    const empty = document.createElement('li');
+    empty.className = 'users-empty';
+    empty.textContent = 'オンラインユーザーはいません';
+    usersList.appendChild(empty);
+    return;
+  }
+
+  for (const user of onlineUsers) {
     const li = document.createElement('li');
+    li.dataset.userId = String(user.id);
+
+    const nameWrap = document.createElement('span');
+    nameWrap.className = 'online-user-name';
+    const dot = document.createElement('i');
+    dot.className = 'online-user-dot';
+    dot.setAttribute('aria-hidden', 'true');
     const name = document.createElement('span');
-    name.textContent = user.username;
-    li.appendChild(name);
-    if (user.username === currentUsername) {
+    name.textContent = String(user.username).slice(0, 50);
+    nameWrap.append(dot, name);
+    li.appendChild(nameWrap);
+
+    if (String(user.username) === currentUsername || String(user.id) === String(socket.id)) {
       const me = document.createElement('small');
-      me.textContent = ' あなた';
+      me.className = 'online-user-me';
+      me.textContent = 'あなた';
       li.appendChild(me);
     } else {
       const call = document.createElement('button');
       call.textContent = '📹 通話';
       call.type = 'button';
-      call.addEventListener('click', () => startCall(user.id, user.username));
+      call.title = String(user.username) + 'さんにビデオ通話を発信';
+      call.addEventListener('click', () => startCall(String(user.id), String(user.username)));
       li.appendChild(call);
     }
     usersList.appendChild(li);
@@ -529,10 +602,28 @@ imageInput.addEventListener('change', async () => {
   if (!file) return;
   if (file.size > 12 * 1024 * 1024) return alert('画像は12MB以下にしてください');
   try {
+    if (!socket.connected) {
+      setStatus('サーバーに接続されていないため画像を送信できません。');
+      return;
+    }
     setStatus('画像を送信しています…');
     const dataUrl = await resizeImage(file);
-    socket.emit('send-image', { image: dataUrl, filename: file.name });
-    setStatus('画像を送信しました。');
+    socket.timeout(30000).emit('send-image', {
+      image: dataUrl,
+      imageType: file.type || 'image/jpeg',
+      filename: file.name
+    }, (err, result) => {
+      if (err) {
+        console.error('画像送信タイムアウト:', err);
+        setStatus('画像の送信がタイムアウトしました。');
+        return;
+      }
+      if (!result?.ok) {
+        setStatus(result.reason === 'too-large' ? '画像は12MB程度までにしてください。' : '画像の送信に失敗しました。');
+        return;
+      }
+      setStatus('画像を送信しました。');
+    });
   } catch (error) {
     console.error(error);
     setStatus('画像の処理に失敗しました。');
@@ -545,14 +636,29 @@ videoInput.addEventListener('change', async () => {
   if (!file) return;
   if (file.size > 15 * 1024 * 1024) return alert('動画は15MB以下にしてください');
   try {
+    if (!socket.connected) {
+      setStatus('サーバーに接続されていないため動画を送信できません。');
+      return;
+    }
+    setStatus('動画を読み込んでいます…');
+    const buffer = await file.arrayBuffer();
     setStatus('動画を送信しています…');
-    const reader = new FileReader();
-    reader.onload = () => {
-      socket.emit('send-video', { video: reader.result, filename: file.name });
+    socket.timeout(120000).emit('send-video', {
+      video: buffer,
+      videoType: file.type || 'video/mp4',
+      filename: file.name
+    }, (err, result) => {
+      if (err) {
+        console.error('動画送信タイムアウト:', err);
+        setStatus('動画の送信がタイムアウトしました。');
+        return;
+      }
+      if (!result?.ok) {
+        setStatus(result.reason === 'too-large' ? '動画は15MB以下にしてください。' : '動画の送信に失敗しました。');
+        return;
+      }
       setStatus('動画を送信しました。');
-    };
-    reader.onerror = () => setStatus('動画の読み込みに失敗しました。');
-    reader.readAsDataURL(file);
+    });
   } catch (error) {
     console.error(error);
     setStatus('動画の処理に失敗しました。');
@@ -582,6 +688,7 @@ function stopLocalStream() {
 
 function cleanupCall(sendEnd = false) {
   if (sendEnd && currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
+  pendingIceCandidates = [];
   if (peerConnection) {
     try { peerConnection.close(); } catch {}
   }
@@ -608,7 +715,8 @@ function createPeerConnection(targetId) {
     ]
   });
   pc.onicecandidate = event => {
-    if (event.candidate) socket.emit('ice-candidate', { targetId, candidate: event.candidate });
+    if (!event.candidate) return;
+    socket.timeout(10000).emit('ice-candidate', { targetId, candidate: event.candidate });
   };
   pc.ontrack = event => {
     const stream = event.streams[0];
@@ -639,7 +747,12 @@ async function startCall(targetId, targetName) {
     showCallUI(`${targetName}さんへ発信中…`);
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    socket.emit('call-offer', { targetId, offer });
+    socket.timeout(10000).emit('call-offer', { targetId, offer }, (err, result) => {
+      if (err || !result?.ok) {
+        setStatus(result?.reason === 'offline' ? '相手がオンラインではありません。' : '通話の発信に失敗しました。');
+        cleanupCall(false);
+      }
+    });
   } catch (error) {
     console.error(error);
     cleanupCall(false);
@@ -664,6 +777,7 @@ acceptBtn.addEventListener('click', async () => {
     miniLocal.srcObject = localStream;
     showCallUI(`${pendingIncoming.username}さんと接続中…`);
     await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingIncoming.offer));
+    await flushPendingIceCandidates();
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     socket.emit('call-answer', { targetId: pendingIncoming.from, answer });
@@ -684,6 +798,7 @@ socket.on('call-answered', async data => {
   if (!peerConnection || data.from !== currentCallTarget) return;
   try {
     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    await flushPendingIceCandidates();
     callStatus.textContent = '接続中…';
   } catch (error) {
     console.error(error);
@@ -693,12 +808,28 @@ socket.on('call-answered', async data => {
 
 socket.on('ice-candidate', async data => {
   if (!peerConnection || data.from !== currentCallTarget || !data.candidate) return;
+  if (!peerConnection.remoteDescription) {
+    pendingIceCandidates.push(data.candidate);
+    return;
+  }
   try {
     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
   } catch (error) {
-    console.error(error);
+    console.error('ICE候補の追加に失敗しました:', error);
   }
 });
+
+async function flushPendingIceCandidates() {
+  if (!peerConnection || !peerConnection.remoteDescription || !pendingIceCandidates.length) return;
+  const candidates = pendingIceCandidates.splice(0);
+  for (const candidate of candidates) {
+    try {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (error) {
+      console.error('保留中ICE候補の追加に失敗しました:', error);
+    }
+  }
+}
 
 socket.on('call-ended', data => {
   if (data.from === currentCallTarget) cleanupCall(false);
