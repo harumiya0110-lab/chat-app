@@ -372,3 +372,91 @@ body[data-rural-chat-color="violet"] .message-reply-label,
 body[data-rural-chat-color="ink"] .message-reply-label{color:#fff!important}
 body[data-rural-chat-color="sakura"] .message-reply-label,
 body[data-rural-chat-color="sunset"] .message-reply-label{color:#402211!important}
+
+
+/* 通話中のカメラOFF表示 */
+.camera-off-overlay{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:20px;
+  background:rgba(24,30,36,.94);
+  color:#fff;
+  text-align:center;
+  font-size:36px;
+  pointer-events:none;
+}
+.camera-off-overlay[hidden]{display:none!important}
+.camera-off-overlay span{
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.call-videos #remote-camera-off{
+  z-index:1;
+}
+.call-videos #local-video{
+  z-index:2;
+}
+.call-videos #local-camera-off{
+  inset:auto 12px 12px auto;
+  width:180px;
+  max-width:28%;
+  height:130px;
+  min-height:70px;
+  border:2px solid #fff;
+  border-radius:8px;
+  z-index:4;
+  padding:8px;
+  font-size:22px;
+}
+.call-videos #local-camera-off span{
+  font-size:11px;
+}
+.mini-call-bar{
+  position:fixed;
+  right:16px;
+  bottom:16px;
+}
+.mini-video-box{
+  position:relative;
+  width:78px;
+  height:58px;
+  flex:0 0 78px;
+}
+.mini-video-box video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:#111;
+  border-radius:6px;
+}
+.mini-video-box .camera-off-overlay{
+  inset:0;
+  border-radius:6px;
+  padding:3px;
+  gap:2px;
+  font-size:16px;
+}
+.mini-video-box .camera-off-overlay span{
+  font-size:8px;
+  line-height:1.15;
+}
+@media(max-width:650px){
+  .call-videos #local-camera-off{
+    width:120px;
+    height:86px;
+    right:8px;
+    bottom:8px;
+  }
+  .mini-video-box{
+    width:64px;
+    height:48px;
+    flex-basis:64px;
+  }
+}
