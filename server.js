@@ -392,10 +392,21 @@ io.on('connection', socket => {
       timestamp: new Date(),
       authType: 'guest'
     };
-    socket.emit('username-accepted', { username: cleanUsername });
+    const onlineUsers = Object.values(users);
+    socket.emit('username-accepted', { username: cleanUsername, users: onlineUsers });
+    socket.emit('update-users', onlineUsers);
     void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
+  });
+
+  socket.on('get-online-users', (_payload, ack) => {
+    const onlineUsers = Object.values(users).map(user => ({
+      id: user.id,
+      username: user.username
+    }));
+    if (typeof ack === 'function') ack({ ok: true, users: onlineUsers });
+    else socket.emit('update-users', onlineUsers);
   });
 
   socket.on('send-location-message', (data, ack) => {
@@ -445,9 +456,33 @@ io.on('connection', socket => {
     if (typeof ack === 'function') ack({ ok: true });
   });
 
-  socket.on('send-image', data => {
+  socket.on('send-image', (data, ack) => {
     const user = users[socket.id];
-    if (user && data?.image) io.emit('receive-image', { username: user.username, image: data.image, filename: data.filename || null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
+    if (!user) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized' });
+      return;
+    }
+
+    const image = typeof data?.image === 'string' ? data.image : '';
+    if (!image || !/^data:image\\/[a-z0-9.+-]+;base64,/i.test(image)) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
+      return;
+    }
+
+    if (image.length > 17 * 1024 * 1024) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
+      return;
+    }
+
+    io.emit('receive-image', {
+      username: user.username,
+      image,
+      imageType: typeof data?.imageType === 'string' ? data.imageType.slice(0, 80) : 'image/jpeg',
+      filename: typeof data?.filename === 'string' ? data.filename.slice(0, 200) : null,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: socket.id
+    });
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on('send-video', (data, ack) => {
@@ -491,21 +526,55 @@ io.on('connection', socket => {
     });
   });
 
-  socket.on('call-offer', payload => {
-    const { targetId, offer } = payload || {};
+  socket.on('call-offer', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    const offer = payload?.offer;
     const caller = users[socket.id];
-    if (targetId && offer && caller) io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
+    if (!caller || !targetId || !offer) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid' });
+      return;
+    }
+    if (!users[targetId]) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'offline' });
+      return;
+    }
+    io.to(targetId).emit('incoming-call', { from: socket.id, username: caller.username, offer });
+    if (typeof ack === 'function') ack({ ok: true });
   });
-  socket.on('call-answer', payload => {
-    const { targetId, answer } = payload || {};
-    if (targetId && answer && users[socket.id]) io.to(targetId).emit('call-answered', { from: socket.id, answer });
+
+  socket.on('call-answer', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    const answer = payload?.answer;
+    if (!users[socket.id] || !targetId || !answer || !users[targetId]) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'offline' });
+      return;
+    }
+    io.to(targetId).emit('call-answered', { from: socket.id, answer });
+    if (typeof ack === 'function') ack({ ok: true });
   });
-  socket.on('ice-candidate', payload => {
-    const { targetId, candidate } = payload || {};
-    if (targetId && candidate && users[socket.id]) io.to(targetId).emit('ice-candidate', { from: socket.id, candidate });
+
+  socket.on('ice-candidate', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    const candidate = payload?.candidate;
+    if (!users[socket.id] || !targetId || !candidate || !users[targetId]) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'offline' });
+      return;
+    }
+    io.to(targetId).emit('ice-candidate', { from: socket.id, candidate });
+    if (typeof ack === 'function') ack({ ok: true });
   });
-  socket.on('call-reject', payload => { const targetId = payload?.targetId; if (targetId) io.to(targetId).emit('call-rejected', { from: socket.id }); });
-  socket.on('end-call', payload => { const targetId = payload?.targetId; if (targetId) io.to(targetId).emit('call-ended', { from: socket.id }); });
+
+  socket.on('call-reject', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    if (targetId && users[targetId]) io.to(targetId).emit('call-rejected', { from: socket.id });
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('end-call', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    if (targetId && users[targetId]) io.to(targetId).emit('call-ended', { from: socket.id });
+    if (typeof ack === 'function') ack({ ok: true });
+  });
 
   socket.on('disconnect', () => {
     const user = users[socket.id];
