@@ -269,51 +269,6 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 };
 
 
-export async function purgeAllSavedMessages() {
-  if (!enabled) return { ok: false, reason: 'persistence-disabled', deleted: 0 };
 
-  const names = [];
-  let pageToken = '';
-  do {
-    const query = pageToken
-      ? `/messages?pageSize=300&pageToken=${encodeURIComponent(pageToken)}`
-      : '/messages?pageSize=300';
-    const result = await firestoreRequest(query, { method: 'GET' });
-    for (const doc of Array.isArray(result?.documents) ? result.documents : []) {
-      if (doc?.name) names.push(doc.name);
-    }
-    pageToken = String(result?.nextPageToken || '');
-  } while (pageToken);
-
-  let deleted = 0;
-  for (let i = 0; i < names.length; i += 20) {
-    const chunk = names.slice(i, i + 20);
-    await Promise.all(chunk.map(async name => {
-      const id = String(name).split('/').pop();
-      if (!id) return;
-      try {
-        await firestoreRequest(`/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        deleted += 1;
-      } catch (error) {
-        if (error.status !== 404) throw error;
-      }
-    }));
-  }
-
-  return { ok: true, deleted };
-}
-
-
-if (process.env.PURGE_MESSAGES_ON_START === '1') {
-  console.log('One-time message history purge: START');
-  setTimeout(async () => {
-    try {
-      const result = await purgeAllSavedMessages();
-      console.log(`One-time message history purge: DONE deleted=${result.deleted}`);
-    } catch (error) {
-      console.error('One-time message history purge: FAILED', error);
-    }
-  }, 0);
-}
 
 export const firebasePersistenceEnabled = enabled;
