@@ -15,9 +15,15 @@
     return normalizeText(clone.textContent);
   }
 
-  function findMarkerForMessageText(messageText) {
+  function findMarkerForMessageText(messageText, article) {
     const map = window.ruralMap;
     if (!map || !messageText) return null;
+
+    const messageId = String(article?.dataset?.messageId || '').trim();
+    if (messageId) {
+      const indexedMarker = window.ruralMarkerByMessageId?.get(messageId);
+      if (indexedMarker) return indexedMarker;
+    }
 
     const candidates = [];
     map.eachLayer(layer => {
@@ -37,7 +43,7 @@
     const messageText = getMessageText(article);
     if (!messageText) return;
 
-    const marker = findMarkerForMessageText(messageText);
+    const marker = findMarkerForMessageText(messageText, article);
     if (!marker) return;
 
     article.dataset.mapLinkReady = 'true';
@@ -101,12 +107,25 @@
   `;
   document.head.appendChild(style);
 
+  let scanScheduled = false;
+  const scheduleScan = () => {
+    if (scanScheduled || window.__ruralHistoryLoading) return;
+    scanScheduled = true;
+    requestAnimationFrame(() => {
+      scanScheduled = false;
+      if (!window.__ruralHistoryLoading) scanMessages();
+    });
+  };
+
   const observer = new MutationObserver(() => {
-    scanMessages();
+    scheduleScan();
   });
   observer.observe(messages, { childList: true, subtree: true });
 
-  setTimeout(scanMessages, 0);
+  if (typeof socket !== 'undefined') {
+    socket.on('chat-history-end', scheduleScan);
+  }
+  scheduleScan();
 })();
 
 /* 地図ピンは最新100個まで表示します。101個目が追加されたら最古のピンを1個だけ削除します。 */
