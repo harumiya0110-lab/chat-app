@@ -9,8 +9,11 @@ let isMuted = false;
 let isVideoOn = true;
 let isMinimized = false;
 let isJoiningChat = false;
+let isHistoryLoading = false;
 
 const MAX_CHAT_MESSAGES = 50;
+const ruralMarkerByMessageId = new Map();
+window.ruralMarkerByMessageId = ruralMarkerByMessageId;
 
 const $ = (id) => document.getElementById(id);
 const setupPanel = $('setup-panel');
@@ -134,8 +137,10 @@ function addMessage(data) {
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
   addNormalMessageDeleteControl(item, data);
   messages.appendChild(item);
-  trimChatMessages();
-  scrollToBottom();
+  if (!isHistoryLoading) {
+    trimChatMessages();
+    scrollToBottom();
+  }
 }
 
 function addSystemMessage(text) {
@@ -205,7 +210,9 @@ function handleChatAccepted({ username } = {}) {
   chatMain.hidden = false;
   joinBtn.disabled = false;
   messageInput.focus();
-  setStatus('場所を含む投稿はAIが解析して地図に表示します。');
+  isHistoryLoading = true;
+  window.__ruralHistoryLoading = true;
+  setStatus('チャット履歴を読み込んでいます…');
 }
 
 socket.on('username-accepted', handleChatAccepted);
@@ -258,6 +265,14 @@ messageInput.addEventListener('keydown', e => {
 socket.on('receive-message', data => {
   addMessage(data);
   addMarker(data);
+});
+
+socket.on('chat-history-end', () => {
+  isHistoryLoading = false;
+  window.__ruralHistoryLoading = false;
+  trimChatMessages();
+  scrollToBottom();
+  setStatus('場所を含む投稿はAIが解析して地図に表示します。');
 });
 
 socket.on('chat-message-deleted', data => {
@@ -317,7 +332,10 @@ function addMarker(message) {
   const type = loc.eventType || 'その他';
   const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
   const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
-  L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
+  const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
+  const messageId = typeof message.id === 'string' ? message.id.trim() : '';
+  if (messageId) ruralMarkerByMessageId.set(messageId, marker);
+  return marker;
 }
 
 imageBtn.addEventListener('click', () => imageInput.click());
