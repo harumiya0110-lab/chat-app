@@ -370,8 +370,16 @@ function safeAudioMime(value) {
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
   // 名前だけで参加するゲスト方式です。メールアドレス認証は使用しません。
-  socket.on('set-username', async username => {
-    if (typeof username !== 'string' || !username.trim()) return;
+  socket.on('set-username', async (username, ack) => {
+    const fail = (reason, message) => {
+      if (typeof ack === 'function') ack({ ok: false, reason, message });
+    };
+
+    if (typeof username !== 'string' || !username.trim()) {
+      fail('invalid', 'ニックネームを入力してください。');
+      return;
+    }
+
     const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
 
     // 「ハル」だけはアップデート移行時の名前競合による参加制限を解除します。
@@ -382,7 +390,9 @@ io.on('connection', socket => {
       u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase()
     );
     if (isTaken && !isHaru) {
-      socket.emit('username-error', { message: 'この名前は既にゲストとして使用されています。別の名前を選んでください。' });
+      const message = 'この名前は既にゲストとして使用されています。別の名前を選んでください。';
+      socket.emit('username-error', { message });
+      fail('taken', message);
       return;
     }
 
@@ -392,9 +402,18 @@ io.on('connection', socket => {
       timestamp: new Date(),
       authType: 'guest'
     };
-    const onlineUsers = Object.values(users);
+
+    const onlineUsers = Object.values(users).map(user => ({
+      id: user.id,
+      username: user.username
+    }));
+
     socket.emit('username-accepted', { username: cleanUsername, users: onlineUsers });
     socket.emit('update-users', onlineUsers);
+    if (typeof ack === 'function') {
+      ack({ ok: true, username: cleanUsername, users: onlineUsers });
+    }
+
     void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
