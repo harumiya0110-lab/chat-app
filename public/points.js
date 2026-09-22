@@ -55,11 +55,4 @@
   socket.on('map-pin-help-updated', data => refreshRestrictedHelpControl(data?.id));
   socket.on('map-pin-help-confirmed', data => refreshRestrictedHelpControl(data?.id));
 
-  // Firebase Authentication のログイン画面を後から読み込みます。
-  // client.js / points.js の既存動作を変えず、今までの「名前だけで参加」も残します。
-  const authScript = document.createElement('script');
-  authScript.src = '/auth.js';
-  authScript.defer = true;
-  authScript.onerror = () => console.error('Firebase Authentication script could not be loaded.');
-  document.head.appendChild(authScript);
 })();
