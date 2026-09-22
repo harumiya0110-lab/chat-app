@@ -8,21 +8,15 @@ let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
 export const THEME_CATALOG = {
-  forest: { name: '🟢 グリーン', description: '自然をイメージした緑色のテーマ', cost: 0 },
-  sakura: { name: '🌸 ピンク', description: '春らしいやさしいピンク色のテーマ', cost: 50 },
-  ocean: { name: '🔵 ブルー', description: '海と空をイメージした青色のテーマ', cost: 80 },
-  night: { name: '🔷 ネイビー', description: '夜空をイメージした落ち着いた紺色のテーマ', cost: 100 },
-  matsuri: { name: '🟠 オレンジ', description: 'お祭りをイメージした元気なオレンジ色のテーマ', cost: 150 }
+  forest: { name: '🌿 里山グリーン', description: '自然になじむ、見やすく落ち着いた緑', color: '#2f7d4a', cost: 0 },
+  ocean: { name: '🌊 オーシャンブルー', description: '爽やかで信頼感のある青', color: '#2f78b7', cost: 40 },
+  sakura: { name: '🌸 さくらピンク', description: 'やわらかく親しみやすいピンク', color: '#d85c86', cost: 50 },
+  violet: { name: '🔮 ラベンダーバイオレット', description: '上品で落ち着いた紫', color: '#7357b8', cost: 60 },
+  matsuri: { name: '🍊 あたたかオレンジ', description: '明るく元気な暖色系オレンジ', color: '#d97832', cost: 70 },
+  night: { name: '🌙 ナイトネイビー', description: '暗い場所でも見やすい深いネイビー', color: '#315b86', cost: 80 }
 };
 
-export const CHAT_COLOR_CATALOG = {
-  forest: { name: '🌿 里山グリーン', description: '自然をイメージした標準カラー', color: '#2f7d4a', cost: 0 },
-  blue: { name: '🌊 青空ブルー', description: '明るく爽やかな青', color: '#2d78b8', cost: 30 },
-  sakura: { name: '🌸 さくらピンク', description: 'やわらかく親しみやすいピンク', color: '#d85c86', cost: 40 },
-  violet: { name: '🔮 バイオレット', description: '少し落ち着いた紫', color: '#7657b8', cost: 50 },
-  sunset: { name: '🌇 夕焼けオレンジ', description: 'あたたかい夕焼け色', color: '#d97932', cost: 60 },
-  ink: { name: '🌑 墨ブラック', description: '引き締まったシックな黒', color: '#333333', cost: 80 }
-};
+export const CHAT_COLOR_CATALOG = THEME_CATALOG;
 
 const DEFAULT_STATE = {
   points: 0,
@@ -38,12 +32,19 @@ const writeQueues = new Map();
 const operationLocks = new Map();
 
 function cloneState(state = DEFAULT_STATE) {
+  const legacyThemes = Array.isArray(state.themes) ? state.themes : [];
+  const legacyChatColors = Array.isArray(state.chatColors) ? state.chatColors : [];
+  const owned = [...new Set(['forest', ...legacyThemes, ...legacyChatColors])].filter(id => THEME_CATALOG[id]);
+  const requestedTheme = THEME_CATALOG[state.currentTheme] ? state.currentTheme : '';
+  const requestedChat = THEME_CATALOG[state.currentChatColor] ? state.currentChatColor : '';
+  const current = requestedChat && (!requestedTheme || requestedTheme === 'forest') ? requestedChat : (requestedTheme || requestedChat || 'forest');
+  if (!owned.includes(current)) owned.push(current);
   return {
     points: Math.max(0, Math.floor(Number(state.points || 0))),
-    themes: [...new Set(['forest', ...(Array.isArray(state.themes) ? state.themes : [])])].filter(id => THEME_CATALOG[id]),
-    currentTheme: THEME_CATALOG[state.currentTheme] ? state.currentTheme : 'forest',
-    chatColors: [...new Set(['forest', ...(Array.isArray(state.chatColors) ? state.chatColors : [])])].filter(id => CHAT_COLOR_CATALOG[id]),
-    currentChatColor: CHAT_COLOR_CATALOG[state.currentChatColor] ? state.currentChatColor : 'forest'
+    themes: owned,
+    currentTheme: current,
+    chatColors: [...owned],
+    currentChatColor: current
   };
 }
 
