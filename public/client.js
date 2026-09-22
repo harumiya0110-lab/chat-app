@@ -195,16 +195,21 @@ function joinChat() {
 joinBtn.addEventListener('click', joinChat);
 usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
 
-socket.on('username-accepted', ({ username }) => {
+function handleChatAccepted({ username } = {}) {
+  const acceptedUsername = String(username || '').trim();
+  if (!acceptedUsername) return;
   isJoiningChat = false;
-  currentUsername = username;
-  usernameDisplay.textContent = username;
+  currentUsername = acceptedUsername;
+  usernameDisplay.textContent = acceptedUsername;
   setupPanel.hidden = true;
   chatMain.hidden = false;
   joinBtn.disabled = false;
   messageInput.focus();
   setStatus('場所を含む投稿はAIが解析して地図に表示します。');
-});
+}
+
+socket.on('username-accepted', handleChatAccepted);
+socket.on('email-account-accepted', handleChatAccepted);
 
 socket.on('username-error', data => {
   isJoiningChat = false;
