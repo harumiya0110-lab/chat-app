@@ -583,6 +583,17 @@ io.on('connection', socket => {
     if (typeof ack === 'function') ack({ ok: true });
   });
 
+  socket.on('camera-state', (payload, ack) => {
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
+    const enabled = payload?.enabled !== false;
+    if (!users[socket.id] || !targetId || !users[targetId]) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'offline' });
+      return;
+    }
+    io.to(targetId).emit('camera-state', { from: socket.id, enabled });
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
   socket.on('call-reject', (payload, ack) => {
     const targetId = typeof payload?.targetId === 'string' ? payload.targetId.trim() : '';
     if (targetId && users[targetId]) io.to(targetId).emit('call-rejected', { from: socket.id });
