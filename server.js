@@ -291,7 +291,7 @@ async function analyzeMessage(text) {
 }
 
 app.post('/api/messages', async (req, res) => {
-  const { text, userId, replyToId, replyToUsername } = req.body || {};
+  const { text, userId, replyToId, replyToUsername, replyToText } = req.body || {};
   if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
   const cleanText = text.trim();
   const cleanUserId = userId.trim().slice(0, 200);
@@ -321,7 +321,8 @@ app.post('/api/messages', async (req, res) => {
       createdAt: new Date().toISOString(),
       locationData,
       replyToId: typeof replyToId === 'string' ? replyToId.trim().slice(0, 120) : '',
-      replyToUsername: typeof replyToUsername === 'string' ? replyToUsername.trim().slice(0, 50) : ''
+      replyToUsername: typeof replyToUsername === 'string' ? replyToUsername.trim().slice(0, 50) : '',
+      replyToText: typeof replyToText === 'string' ? replyToText.trim().slice(0, 200) : ''
     };
     io.emit('receive-message', {
       id: message.id,
@@ -331,7 +332,8 @@ app.post('/api/messages', async (req, res) => {
       userId: cleanUserId,
       locationData,
       replyToId: message.replyToId,
-      replyToUsername: message.replyToUsername
+      replyToUsername: message.replyToUsername,
+      replyToText: message.replyToText
     });
     return res.json({ ...message, analysis, geocodeError, aiFallback: Boolean(aiError) });
   } catch (error) {
@@ -475,6 +477,7 @@ io.on('connection', socket => {
     if (!user || !message) return;
     const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
     const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
+    const replyToText = typeof data?.replyToText === 'string' ? data.replyToText.trim().slice(0, 200) : '';
     io.emit('receive-message', {
       id: randomUUID(),
       username: user.username,
@@ -483,7 +486,8 @@ io.on('connection', socket => {
       userId: socket.id,
       locationData: null,
       replyToId,
-      replyToUsername
+      replyToUsername,
+      replyToText
     });
   });
 
