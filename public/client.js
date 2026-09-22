@@ -79,8 +79,9 @@ function scrollToBottom() {
 function trimChatMessages() {
   if (!messages) return;
   const chatItems = messages.querySelectorAll('.message');
-  while (chatItems.length > MAX_CHAT_MESSAGES) {
-    chatItems[0].remove();
+  const removeCount = Math.max(0, chatItems.length - MAX_CHAT_MESSAGES);
+  for (let i = 0; i < removeCount; i += 1) {
+    chatItems[i]?.remove();
   }
 }
 
@@ -126,7 +127,7 @@ function addNormalMessageDeleteControl(item, data) {
   item.appendChild(actions);
 }
 
-function addMessage(data) {
+function buildMessageElement(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
   const timestamp = data.timestamp || (data.createdAt ? new Date(data.createdAt).toLocaleString('ja-JP') : '');
@@ -136,6 +137,11 @@ function addMessage(data) {
   item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-bubble">${badge}${escapeHtml(data.message || data.text || '')}</div>`;
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
   addNormalMessageDeleteControl(item, data);
+  return item;
+}
+
+function addMessage(data) {
+  const item = buildMessageElement(data);
   messages.appendChild(item);
   if (!isHistoryLoading) {
     trimChatMessages();
@@ -216,7 +222,6 @@ function handleChatAccepted({ username } = {}) {
 }
 
 socket.on('username-accepted', handleChatAccepted);
-socket.on('email-account-accepted', handleChatAccepted);
 
 socket.on('username-error', data => {
   isJoiningChat = false;
@@ -265,6 +270,23 @@ messageInput.addEventListener('keydown', e => {
 socket.on('receive-message', data => {
   addMessage(data);
   addMarker(data);
+});
+
+socket.on('chat-history', history => {
+  const items = Array.isArray(history) ? history : [];
+  if (!items.length) return;
+
+  const fragment = document.createDocumentFragment();
+  for (const data of items) {
+    fragment.appendChild(buildMessageElement(data));
+  }
+  messages.appendChild(fragment);
+
+  // DOM挿入を1回にまとめた後、地図ピンを生成します。
+  for (const data of items) addMarker(data);
+
+  trimChatMessages();
+  scrollToBottom();
 });
 
 socket.on('chat-history-end', () => {
