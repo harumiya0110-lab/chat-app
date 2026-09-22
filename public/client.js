@@ -667,30 +667,26 @@ function updateUsersList(users) {
   }
 }
 
-function createEventIcon(eventType) {
+function createEventIcon(eventType, areaLabel = '') {
   const style = EVENT_STYLES[eventType] || EVENT_STYLES['その他'];
   if (typeof L === 'undefined' || typeof L.divIcon !== 'function') return null;
+  const safeArea = escapeHtml(String(areaLabel || '').trim());
+  const labelHtml = safeArea ? `<span class="event-marker-area">${safeArea}</span>` : '<span class="event-marker-area is-loading">場所を確認中…</span>';
   return L.divIcon({
     className: '',
-    html: `<div class="event-marker" style="background:${style.color}"><span>${style.symbol}</span></div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -28]
+    html: `<div class="event-marker" style="background:${style.color}"><span class="event-marker-symbol">${style.symbol}</span>${labelHtml}</div>`,
+    iconSize: safeArea ? [122, 42] : [112, 42],
+    iconAnchor: safeArea ? [61, 42] : [56, 42],
+    popupAnchor: [0, -40]
   });
 }
 
-async function showMarkerAreaInChat(marker) {
-  const point = marker?.getLatLng?.();
-  if (!point) return;
-
-  const cacheKey = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+async function fetchMarkerArea(point) {
+  if (!point) return null;
+  const cacheKey = `${Number(point.lat).toFixed(5)},${Number(point.lng).toFixed(5)}`;
   const cached = markerLocationCache.get(cacheKey);
-  if (cached) {
-    updateMarkerAreaMessage(cached);
-    return;
-  }
+  if (cached) return cached;
 
-  updateMarkerAreaMessage({ loading: true });
   try {
     const response = await fetch(`/api/reverse-geocode?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`);
     const result = await response.json().catch(() => ({}));
@@ -701,11 +697,25 @@ async function showMarkerAreaInChat(marker) {
       city: String(result.city || '').trim()
     };
     markerLocationCache.set(cacheKey, location);
-    updateMarkerAreaMessage(location);
+    return location;
   } catch (error) {
     console.error('ピンの場所取得に失敗しました:', error);
-    updateMarkerAreaMessage({ error: error.message || '都道府県・市区町村を特定できませんでした。' });
+    return { error: error.message || '都道府県・市区町村を特定できませんでした。' };
   }
+}
+
+async function showMarkerAreaInChat(marker) {
+  const point = marker?.getLatLng?.();
+  if (!point) return;
+  const cached = markerLocationCache.get(`${point.lat.toFixed(5)},${point.lng.toFixed(5)}`);
+  if (cached) {
+    updateMarkerAreaMessage(cached);
+    return;
+  }
+  updateMarkerAreaMessage({ loading: true });
+  const location = await fetchMarkerArea(point);
+  if (location?.error) updateMarkerAreaMessage(location);
+  else updateMarkerAreaMessage(location || { error: '都道府県・市区町村を特定できませんでした。' });
 }
 
 function updateMarkerAreaMessage(location) {
@@ -733,6 +743,23 @@ function updateMarkerAreaMessage(location) {
   scrollToBottom();
 }
 
+async function addMarkerLocationLabel(marker, lat, lng, type, message) {
+  const location = await fetchMarkerArea({ lat, lng });
+  if (!marker || !marker.setIcon) return;
+  if (location?.prefecture || location?.city) {
+    const areaLabel = [location.prefecture, location.city].filter(Boolean).join('');
+    const icon = createEventIcon(type, areaLabel);
+    if (icon) marker.setIcon(icon);
+
+    const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
+    const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>📍 ${escapeHtml(areaLabel)}</strong><br><strong>${escapeHtml(message.locationData?.summary || '')}</strong><br><small>${escapeHtml(message.locationData?.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
+    marker.setPopupContent(popup);
+  } else if (location?.error) {
+    const icon = createEventIcon(type, '場所を特定できません');
+    if (icon) marker.setIcon(icon);
+  }
+}
+
 function addMarker(message) {
   const loc = message.locationData;
   if (!loc) return;
@@ -758,6 +785,7 @@ function addMarker(message) {
     void showMarkerAreaInChat(marker);
     window.dispatchEvent(new CustomEvent('rural-map-marker-clicked', { detail: { marker, messageId } }));
   });
+  void addMarkerLocationLabel(marker, lat, lng, type, message);
   if (messageId) ruralMarkerByMessageId.set(messageId, marker);
   return marker;
 }
