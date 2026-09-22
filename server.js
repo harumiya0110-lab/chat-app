@@ -37,6 +37,58 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/reverse-geocode', async (req, res) => {
+  const lat = Number(req.query?.lat);
+  const lng = Number(req.query?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: '緯度・経度が正しくありません。' });
+  }
+
+  const url = new URL('https://nominatim.openstreetmap.org/reverse');
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('accept-language', 'ja');
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': NOMINATIM_USER_AGENT,
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: '場所の検索に失敗しました。' });
+    }
+
+    const result = await response.json();
+    const address = result?.address || {};
+    const prefecture = String(address.state || address.province || '').trim();
+    const city = String(
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      ''
+    ).trim();
+
+    if (!prefecture && !city) {
+      return res.status(404).json({ error: '都道府県・市区町村を特定できませんでした。' });
+    }
+
+    return res.json({
+      prefecture,
+      city,
+      displayName: String(result?.display_name || '').trim()
+    });
+  } catch (error) {
+    console.error('逆ジオコーディング失敗:', error);
+    return res.status(502).json({ error: '場所の検索サービスに接続できませんでした。' });
+  }
+});
+
 function normalizeAnalysis(value) {
   if (!value || typeof value !== 'object') throw new Error('Geminiの解析結果が不正です');
   const hasLocation = value.hasLocation === true;
