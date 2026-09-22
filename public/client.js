@@ -6,6 +6,8 @@ let peerConnection = null;
 let currentCallTarget = null;
 let pendingIncoming = null;
 let pendingIceCandidates = [];
+let pendingOutgoingIceCandidates = [];
+let outgoingIceEnabled = false;
 let isMuted = false;
 let isVideoOn = true;
 let isMinimized = false;
@@ -689,6 +691,8 @@ function stopLocalStream() {
 function cleanupCall(sendEnd = false) {
   if (sendEnd && currentCallTarget) socket.emit('end-call', { targetId: currentCallTarget });
   pendingIceCandidates = [];
+  pendingOutgoingIceCandidates = [];
+  outgoingIceEnabled = false;
   if (peerConnection) {
     try { peerConnection.close(); } catch {}
   }
@@ -716,6 +720,10 @@ function createPeerConnection(targetId) {
   });
   pc.onicecandidate = event => {
     if (!event.candidate) return;
+    if (!outgoingIceEnabled) {
+      pendingOutgoingIceCandidates.push({ targetId, candidate: event.candidate });
+      return;
+    }
     socket.timeout(10000).emit('ice-candidate', { targetId, candidate: event.candidate });
   };
   pc.ontrack = event => {
@@ -751,7 +759,10 @@ async function startCall(targetId, targetName) {
       if (err || !result?.ok) {
         setStatus(result?.reason === 'offline' ? '相手がオンラインではありません。' : '通話の発信に失敗しました。');
         cleanupCall(false);
+        return;
       }
+      outgoingIceEnabled = true;
+      flushPendingOutgoingIceCandidates();
     });
   } catch (error) {
     console.error(error);
@@ -780,7 +791,15 @@ acceptBtn.addEventListener('click', async () => {
     await flushPendingIceCandidates();
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    socket.emit('call-answer', { targetId: pendingIncoming.from, answer });
+    socket.timeout(10000).emit('call-answer', { targetId: pendingIncoming.from, answer }, (err, result) => {
+      if (err || !result?.ok) {
+        cleanupCall(true);
+        setStatus('通話への応答に失敗しました。');
+        return;
+      }
+      outgoingIceEnabled = true;
+      flushPendingOutgoingIceCandidates();
+    });
     pendingIncoming = null;
   } catch (error) {
     console.error(error);
@@ -828,6 +847,14 @@ async function flushPendingIceCandidates() {
     } catch (error) {
       console.error('保留中ICE候補の追加に失敗しました:', error);
     }
+  }
+}
+
+function flushPendingOutgoingIceCandidates() {
+  if (!outgoingIceEnabled || !pendingOutgoingIceCandidates.length) return;
+  const candidates = pendingOutgoingIceCandidates.splice(0);
+  for (const payload of candidates) {
+    socket.timeout(10000).emit('ice-candidate', payload);
   }
 }
 
