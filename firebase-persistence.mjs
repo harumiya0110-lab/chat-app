@@ -154,12 +154,12 @@ async function getSavedMessage(id) {
   }
 }
 
-async function deleteMessage(id, username, userId) {
-  if (!enabled || !id || !username || !userId) return { ok: false, reason: 'invalid' };
+async function deleteMessage(id, userId) {
+  if (!enabled || !id || !userId) return { ok: false, reason: 'invalid' };
   const saved = await getSavedMessage(id);
   if (!saved) return { ok: false, reason: 'not-found' };
-  // 表示名ではなくSocket IDで所有者を判定します。
-  // ゲストとメールアカウントで同じ表示名を使えるため、名前だけでの判定は禁止します。
+  // 削除権限は表示名ではなくSocket IDで判定します。
+  // 同じニックネームが存在しても、投稿者本人以外は削除できません。
   if (String(saved.userId || '') !== String(userId)) return { ok: false, reason: 'not-owner' };
   await firestoreRequest(`/messages/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
   return { ok: true };
@@ -219,7 +219,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const result = await deleteMessage(id, username, socket.id); if (result.ok) socket.server.emit('map-pin-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
+      try { const result = await deleteMessage(id, socket.id); if (result.ok) socket.server.emit('map-pin-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
       catch (error) { console.error('Firestore message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
     });
 
