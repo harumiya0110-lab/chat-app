@@ -187,17 +187,12 @@
     if (statusEl && text) statusEl.textContent = text;
   }
 
-  function setChatName(user) {
-    const name = String(user?.displayName || '').trim().slice(0, 20);
-    if (name) {
-      usernameInput.value = name;
-      return name;
-    }
-    return '';
+  function getAccountName(user) {
+    return String(user?.displayName || '').trim().slice(0, 20);
   }
 
   function announceAuthenticated(user, message = 'ログインしました。チャットへ移動しています…') {
-    const name = setChatName(user);
+    const name = getAccountName(user);
     if (!name) {
       setAccountStatus('アカウント名が設定されていません。いったんログアウトして再登録してください。', true);
       return;
@@ -291,7 +286,7 @@
         showChoice();
         return;
       }
-      setChatName(user);
+      getAccountName(user);
       accountStatus.textContent = `✅ ログイン中：${user.email || 'アカウント'} / ${user.displayName || '名前未設定'}`;
       accountStatus.classList.remove('account-error');
       accountActions.hidden = false;
@@ -381,7 +376,6 @@
       }
       claimed = true;
 
-      usernameInput.value = accountName;
       setAccountStatus('✅ アカウントを作成しました。チャットへ移動しています…');
       window.dispatchEvent(new CustomEvent('rural-account-authenticated', {
         detail: { uid: createdUser.uid, username: accountName, email: createdUser.email || email }
@@ -439,11 +433,15 @@
   headerSignoutBtn?.addEventListener('click', signOutAccount);
 
   window.addEventListener('rural-account-authenticated', event => {
-    const name = String(event.detail?.username || '').trim();
-    if (!name || typeof socket === 'undefined') return;
+    const name = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
+    const uid = String(event.detail?.uid || '').trim();
+    const email = String(event.detail?.email || '').trim();
+    if (!name || !uid || typeof socket === 'undefined' || !socket?.connected) return;
     window.__ruralSignupInProgress = false;
-    usernameInput.value = name;
-    socket.emit('email-account-session', { username: name, uid: String(event.detail?.uid || '') });
-    joinBtn.click();
+
+    // メールログインはゲスト用のusername-input/joinBtnを一切使わず、
+    // 専用のSocket.IOイベントで参加します。
+    socket.emit('email-account-session', { username: name, uid, email });
+    socket.emit('join-email-account', { username: name, uid, email });
   });
 })();
