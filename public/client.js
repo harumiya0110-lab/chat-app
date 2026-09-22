@@ -15,6 +15,9 @@ const MAX_CHAT_MESSAGES = 50;
 const ruralMarkerByMessageId = new Map();
 window.ruralMarkerByMessageId = ruralMarkerByMessageId;
 
+const markerLocationCache = new Map();
+let mapLocationSystemMessage = null;
+
 const $ = (id) => document.getElementById(id);
 const setupPanel = $('setup-panel');
 const chatMain = $('chat-main');
@@ -349,6 +352,60 @@ function createEventIcon(eventType) {
   });
 }
 
+async function showMarkerAreaInChat(marker) {
+  const point = marker?.getLatLng?.();
+  if (!point) return;
+
+  const cacheKey = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+  const cached = markerLocationCache.get(cacheKey);
+  if (cached) {
+    updateMarkerAreaMessage(cached);
+    return;
+  }
+
+  updateMarkerAreaMessage({ loading: true });
+  try {
+    const response = await fetch(`/api/reverse-geocode?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error || '場所を特定できませんでした。');
+
+    const location = {
+      prefecture: String(result.prefecture || '').trim(),
+      city: String(result.city || '').trim()
+    };
+    markerLocationCache.set(cacheKey, location);
+    updateMarkerAreaMessage(location);
+  } catch (error) {
+    console.error('ピンの場所取得に失敗しました:', error);
+    updateMarkerAreaMessage({ error: error.message || '都道府県・市区町村を特定できませんでした。' });
+  }
+}
+
+function updateMarkerAreaMessage(location) {
+  if (!messages) return;
+
+  if (!mapLocationSystemMessage) {
+    mapLocationSystemMessage = document.createElement('div');
+    mapLocationSystemMessage.className = 'system-message map-location-system-message';
+    messages.appendChild(mapLocationSystemMessage);
+  }
+
+  if (location.loading) {
+    mapLocationSystemMessage.textContent = '📍 ピンの場所を調べています…';
+  } else if (location.error) {
+    mapLocationSystemMessage.textContent = `📍 ${location.error}`;
+  } else {
+    const prefecture = location.prefecture || '';
+    const city = location.city || '';
+    const area = [prefecture, city].filter(Boolean).join('');
+    mapLocationSystemMessage.textContent = area
+      ? `📍 このピンの場所：${area}`
+      : '📍 このピンの都道府県・市区町村を特定できませんでした。';
+  }
+
+  scrollToBottom();
+}
+
 function addMarker(message) {
   const loc = message.locationData;
   if (!loc) return;
@@ -359,6 +416,9 @@ function addMarker(message) {
   const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
   const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
   const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
+  marker.on('click', () => {
+    void showMarkerAreaInChat(marker);
+  });
   const messageId = typeof message.id === 'string' ? message.id.trim() : '';
   if (messageId) ruralMarkerByMessageId.set(messageId, marker);
   return marker;
