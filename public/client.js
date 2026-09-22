@@ -336,16 +336,19 @@ function joinChat() {
   joinBtn.disabled = true;
   setStatus('チャットに接続しています…');
 
-  socket.timeout(10000).emit('set-username', username, result => {
-    if (result?.ok) {
+  socket.timeout(10000).emit('set-username', username, (error, result) => {
+    if (!error && result?.ok) {
       handleChatAccepted(result);
       return;
     }
 
+    // username-error / username-accepted のイベント処理と競合しても、成功済みなら何もしません。
+    if (!error && currentUsername === username && chatMain && !chatMain.hidden) return;
+
     isJoiningChat = false;
     joinBtn.disabled = false;
     const message = result?.message || (
-      result?.reason === 'timeout'
+      error
         ? 'サーバーへの接続がタイムアウトしました。'
         : 'チャットへの参加に失敗しました。'
     );
