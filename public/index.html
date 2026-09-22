@@ -21,7 +21,25 @@
   <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
   <main class="app-main">
     <section class="chat-panel">
-      <div id="setup-panel" class="setup-panel"><h2>チャットに参加</h2><p>ニックネームを入力してください</p><div id="initial-input-holder"><input id="username-input" maxlength="20" placeholder="ニックネーム"></div><button id="join-btn">参加する</button></div>
+      <div id="setup-panel" class="setup-panel">
+        <div class="setup-hero">
+          <div class="setup-icon" aria-hidden="true">📍</div>
+          <span class="setup-eyebrow">地域コミュニティ</span>
+          <h2>みんなで地域を共有しよう</h2>
+          <p class="setup-lead">近くで起きていることを、チャットと地図で気軽に知らせることができます。</p>
+        </div>
+        <div class="setup-form">
+          <label for="username-input">まずはニックネームを入力</label>
+          <div id="initial-input-holder"><input id="username-input" maxlength="20" placeholder="例：はる、みや、○○さん" autocomplete="nickname"></div>
+          <button id="join-btn">チャットに参加する <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="setup-features" aria-label="このチャットマップでできること">
+          <span>💬 地域で会話</span>
+          <span>🗺️ 場所を共有</span>
+          <span>🤝 助け合い</span>
+        </div>
+        <p class="setup-note">ニックネームだけで参加できます。あとから変更もできます。</p>
+      </div>
       <div id="chat-main" class="chat-main" hidden>
         <aside class="users-panel"><h2>オンラインユーザー</h2><ul id="users-list"></ul></aside>
         <div class="chat-right"><div id="messages" class="messages" aria-live="polite"></div><div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div></div>
@@ -72,14 +90,40 @@
     const locationCheckbox=document.getElementById('location-checkbox');const statusEl=document.getElementById('status');locationCheckbox?.addEventListener('change',()=>{statusEl.textContent=locationCheckbox.checked?'場所を付けて投稿します。送信時にAIが場所を解析して地図に表示します。':'場所を付けずに投稿します。チャットのみ表示されます。'});(()=>{const muteBtn=document.getElementById('mute-btn'),camBtn=document.getElementById('cam-toggle-btn'),minimizeBtn=document.getElementById('minimize-btn'),endBtn=document.getElementById('call-end-btn'),acceptBtn=document.getElementById('call-accept-btn'),declineBtn=document.getElementById('call-decline-btn'),miniUnminimize=document.getElementById('mini-unminimize'),miniEnd=document.getElementById('mini-end');const decorateCallButton=(button,type)=>{if(!button)return;const set=(value,title)=>{if(button.textContent!==value)button.textContent=value;button.title=title;button.setAttribute('aria-label',title)};if(type==='mute'){const muted=button.textContent.includes('解除');set(muted?'🔇 ミュート解除':'🎤 ミュート',muted?'マイクをオンにします':'マイクをオフにします');button.classList.toggle('is-off',muted)}else if(type==='camera'){const cameraOff=button.textContent.includes('カメラON');set(cameraOff?'📷 カメラON':'📹 カメラOFF',cameraOff?'カメラをオンにします':'カメラをオフにします');button.classList.toggle('is-off',cameraOff)}else if(type==='minimize')set('↙️ 小さくする','通話画面を小さくします');else if(type==='end')set('📞 通話終了','通話を終了します');else if(type==='accept')set('✅ 応答','通話に応答します');else if(type==='decline')set('✖️ 拒否','通話を拒否します');else if(type==='open-mini')set('↗️ 通話を開く','通話画面を開きます');else if(type==='mini-end')set('📞 終了','通話を終了します')};decorateCallButton(muteBtn,'mute');decorateCallButton(camBtn,'camera');decorateCallButton(minimizeBtn,'minimize');decorateCallButton(endBtn,'end');decorateCallButton(acceptBtn,'accept');decorateCallButton(declineBtn,'decline');decorateCallButton(miniUnminimize,'open-mini');decorateCallButton(miniEnd,'mini-end')})();
   </script>
   <style id="pre-auth-layout-guard">
-    body.pre-auth{background:#eef2e9!important;color:#21342c!important;overflow-x:hidden!important;}
-    body.pre-auth .app-header{display:flex!important;padding:12px 18px!important;background:#234d3c!important;color:#fff!important;}
-    body.pre-auth .app-main{display:block!important;max-width:760px!important;margin:0 auto!important;padding:0 8px!important;}
-    body.pre-auth .chat-panel{display:block!important;width:min(560px,100%)!important;min-height:0!important;margin:0 auto!important;background:#fff!important;border:1px solid #d9e2d6!important;border-radius:10px!important;overflow:hidden!important;}
-    body.pre-auth #setup-panel.setup-panel{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:10px!important;min-height:0!important;height:auto!important;padding:22px 16px 24px!important;text-align:center!important;background:linear-gradient(145deg,#f5f8f2,#e6eee3)!important;}
-    body.pre-auth #setup-panel input{width:min(340px,100%)!important;padding:11px 13px!important;border:1px solid #b9c9b8!important;border-radius:8px!important;background:#fff!important;color:#21342c!important;}
-    body.pre-auth #setup-panel button{border:0!important;border-radius:8px!important;padding:10px 14px!important;background:#d96b3b!important;color:#fff!important;}
+    body.pre-auth{background:radial-gradient(circle at 18% 8%,rgba(255,255,255,.92),transparent 32%),linear-gradient(135deg,#edf4eb 0%,#e4eee2 48%,#dce9de 100%)!important;color:#21342c!important;overflow-x:hidden!important;}
+    body.pre-auth .app-header{display:flex!important;padding:16px 20px!important;background:linear-gradient(135deg,#1f513e,#2b694f)!important;color:#fff!important;box-shadow:0 4px 18px rgba(35,77,60,.14)!important;}
+    body.pre-auth .app-header>div:first-child{max-width:760px!important;}
+    body.pre-auth .app-main{display:block!important;max-width:760px!important;margin:0 auto!important;padding:22px 14px 28px!important;}
+    body.pre-auth .chat-panel{display:block!important;width:min(600px,100%)!important;min-height:0!important;margin:0 auto!important;background:rgba(255,255,255,.78)!important;border:1px solid rgba(156,181,157,.55)!important;border-radius:20px!important;overflow:hidden!important;box-shadow:0 18px 48px rgba(36,74,53,.13)!important;backdrop-filter:blur(8px)!important;}
+    body.pre-auth #setup-panel.setup-panel{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:0!important;min-height:0!important;height:auto!important;padding:34px 26px 24px!important;text-align:center!important;background:linear-gradient(180deg,rgba(250,253,249,.98),rgba(235,244,234,.96))!important;}
+    body.pre-auth .setup-hero{width:100%!important;display:flex!important;flex-direction:column!important;align-items:center!important;}
+    body.pre-auth .setup-icon{display:grid!important;place-items:center!important;width:72px!important;height:72px!important;border-radius:22px!important;background:linear-gradient(145deg,#2f7354,#234d3c)!important;color:#fff!important;font-size:33px!important;box-shadow:0 10px 24px rgba(35,77,60,.2)!important;margin-bottom:12px!important;}
+    body.pre-auth .setup-eyebrow{font-size:11px!important;font-weight:800!important;letter-spacing:.12em!important;color:#528069!important;margin-bottom:7px!important;}
+    body.pre-auth #setup-panel h2{margin:0!important;font-size:clamp(22px,4vw,29px)!important;line-height:1.25!important;color:#1f3f31!important;letter-spacing:.01em!important;}
+    body.pre-auth #setup-panel .setup-lead{max-width:480px!important;margin:10px auto 0!important;font-size:13px!important;line-height:1.75!important;color:#66786d!important;}
+    body.pre-auth .setup-form{width:min(390px,100%)!important;margin-top:24px!important;padding:18px!important;background:rgba(255,255,255,.86)!important;border:1px solid #d9e5d7!important;border-radius:14px!important;box-shadow:0 7px 18px rgba(53,84,63,.06)!important;}
+    body.pre-auth .setup-form label{display:block!important;text-align:left!important;font-size:12px!important;font-weight:800!important;color:#355944!important;margin:0 0 7px!important;}
+    body.pre-auth #initial-input-holder{display:block!important;}
+    body.pre-auth #setup-panel input{display:block!important;width:100%!important;padding:12px 14px!important;border:1px solid #b8cbb8!important;border-radius:10px!important;background:#fff!important;color:#21342c!important;font:inherit!important;outline:none!important;transition:border-color .15s ease,box-shadow .15s ease!important;}
+    body.pre-auth #setup-panel input:focus{border-color:#4b7d61!important;box-shadow:0 0 0 4px rgba(75,125,97,.12)!important;}
+    body.pre-auth #setup-panel input::placeholder{color:#9aa99f!important;opacity:1!important;}
+    body.pre-auth #setup-panel button{width:100%!important;margin-top:10px!important;border:0!important;border-radius:10px!important;padding:12px 14px!important;background:linear-gradient(135deg,#d96b3b,#c9562c)!important;color:#fff!important;font:inherit!important;font-weight:800!important;cursor:pointer!important;box-shadow:0 7px 16px rgba(201,86,44,.2)!important;transition:transform .14s ease,filter .14s ease,box-shadow .14s ease!important;}
+    body.pre-auth #setup-panel button:hover:not(:disabled){filter:brightness(1.03)!important;transform:translateY(-1px)!important;box-shadow:0 10px 20px rgba(201,86,44,.24)!important;}
+    body.pre-auth #setup-panel button span{font-size:16px!important;margin-left:4px!important;}
+    body.pre-auth .setup-features{display:flex!important;justify-content:center!important;flex-wrap:wrap!important;gap:8px!important;margin-top:18px!important;}
+    body.pre-auth .setup-features span{padding:7px 10px!important;border-radius:999px!important;background:#eef5ec!important;border:1px solid #d6e3d4!important;color:#476250!important;font-size:11px!important;font-weight:700!important;}
+    body.pre-auth .setup-note{margin:14px 0 0!important;color:#89978e!important;font-size:10px!important;line-height:1.5!important;}
     body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main{display:none!important;}
+    @media(max-width:650px){
+      body.pre-auth .app-header{padding:14px 15px!important;}
+      body.pre-auth .app-header p{font-size:11px!important;}
+      body.pre-auth .app-main{padding:12px 8px 18px!important;}
+      body.pre-auth .chat-panel{border-radius:16px!important;}
+      body.pre-auth #setup-panel.setup-panel{padding:27px 15px 20px!important;}
+      body.pre-auth .setup-form{padding:15px!important;margin-top:20px!important;}
+      body.pre-auth .setup-icon{width:62px!important;height:62px!important;font-size:29px!important;border-radius:19px!important;}
+      body.pre-auth #setup-panel h2{font-size:22px!important;}
+    }
 
   </style>
 </body>
