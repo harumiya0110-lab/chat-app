@@ -64,25 +64,25 @@
   const style = document.createElement('style');
   style.id = 'map-location-post-style';
   style.textContent = `
-    .map-location-post-toolbar{margin:10px 0 12px;padding:12px 14px;border:1px solid #d8e3d5;border-radius:12px;background:#f7faf5}
+    .map-location-post-toolbar{margin:10px 0 12px;padding:12px 14px;border:1px solid var(--theme-border-soft,#d8e3d5);border-radius:12px;background:var(--theme-main-pale,#f7faf5);color:var(--theme-text,#294237)}
     .map-location-post-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .map-location-post-heading>div{min-width:0;display:flex;flex-direction:column;gap:4px}
-    .map-location-post-heading strong{font-size:14px;color:#234d3c}
-    .map-location-post-heading span{font-size:11px;color:#6d7a73;line-height:1.5}
-    .map-location-post-mode,.map-location-post-submit,.map-location-post-secondary{border:1px solid #b8cbb5;border-radius:9px;padding:9px 13px;font:inherit;cursor:pointer}
-    .map-location-post-mode{background:#234d3c;color:#fff;border-color:#234d3c;white-space:nowrap}
-    .map-location-post-mode.active{background:#d96b3b;border-color:#d96b3b}
-    .map-location-post-form{margin-top:11px;padding-top:11px;border-top:1px solid #dde7da;display:grid;gap:9px}
-    .map-location-post-selected{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:#eef4ec;font-size:12px}
-    .map-location-post-selected span{color:#68776e}
-    .map-location-post-selected strong{color:#31513f;font-variant-numeric:tabular-nums}
-    .map-location-post-field{display:grid;gap:5px;font-size:12px;color:#31513f;font-weight:700}
-    .map-location-post-field select,.map-location-post-field textarea{width:100%;box-sizing:border-box;border:1px solid #bfccbb;border-radius:8px;background:#fff;color:#21342c;padding:9px 10px;font:inherit;outline:none}
+    .map-location-post-heading strong{font-size:14px;color:var(--theme-main,#234d3c)}
+    .map-location-post-heading span{font-size:11px;color:var(--theme-text-soft,#6d7a73);line-height:1.5}
+    .map-location-post-mode,.map-location-post-submit,.map-location-post-secondary{border:1px solid var(--theme-border,#b8cbb5);border-radius:9px;padding:9px 13px;font:inherit;cursor:pointer}
+    .map-location-post-mode{background:var(--theme-main,#234d3c);color:#fff;border-color:var(--theme-main,#234d3c);white-space:nowrap}
+    .map-location-post-mode.active{background:var(--theme-main-strong,#d96b3b);border-color:var(--theme-main-strong,#d96b3b)}
+    .map-location-post-form{margin-top:11px;padding-top:11px;border-top:1px solid var(--theme-border-soft,#dde7da);display:grid;gap:9px}
+    .map-location-post-selected{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:var(--theme-main-soft,#eef4ec);font-size:12px}
+    .map-location-post-selected span{color:var(--theme-text-soft,#68776e)}
+    .map-location-post-selected strong{color:var(--theme-text,#31513f);font-variant-numeric:tabular-nums}
+    .map-location-post-field{display:grid;gap:5px;font-size:12px;color:var(--theme-text,#31513f);font-weight:700}
+    .map-location-post-field select,.map-location-post-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--theme-input,#bfccbb);border-radius:8px;background:var(--theme-panel,#fff);color:var(--theme-text,#21342c);padding:9px 10px;font:inherit;outline:none}
     .map-location-post-field textarea{resize:vertical;min-height:72px;line-height:1.5}
-    .map-location-post-field select:focus,.map-location-post-field textarea:focus{border-color:#558266;box-shadow:0 0 0 3px rgba(85,130,102,.12)}
+    .map-location-post-field select:focus,.map-location-post-field textarea:focus{border-color:var(--theme-main,#558266);box-shadow:0 0 0 3px color-mix(in srgb,var(--theme-main,#558266) 15%,transparent)}
     .map-location-post-actions{display:flex;justify-content:flex-end;gap:8px}
-    .map-location-post-secondary{background:#fff;color:#31513f}
-    .map-location-post-submit{background:#2d8a57;color:#fff;border-color:#2d8a57}
+    .map-location-post-secondary{background:var(--theme-panel,#fff);color:var(--theme-text,#31513f)}
+    .map-location-post-submit{background:var(--theme-main,#2d8a57);color:#fff;border-color:var(--theme-main,#2d8a57)}
     .map-location-post-submit:disabled,.map-location-post-mode:disabled,.map-location-post-secondary:disabled{opacity:.55;cursor:wait}
     @media(max-width:650px){
       .map-location-post-heading{align-items:stretch;flex-direction:column}
@@ -129,9 +129,9 @@
 
     selectedMarker = L.circleMarker(selectedLatLng, {
       radius: 10,
-      color: '#2f80ed',
+      color: getComputedStyle(document.body).getPropertyValue('--theme-main').trim() || '#2f80ed',
       weight: 3,
-      fillColor: '#ffffff',
+      fillColor: getComputedStyle(document.body).getPropertyValue('--theme-panel').trim() || '#ffffff',
       fillOpacity: 0.92
     }).addTo(mapInstance);
 
