@@ -312,61 +312,85 @@ io.on('connection', socket => {
     socket.__emailAccountSession = { username, uid, email };
   });
 
+  // メールアドレスログインは「名前だけで参加」の処理と完全に分離します。
+  // Firebaseで本人確認済みのアカウント名だけを、専用イベントで参加させます。
+  socket.on('join-email-account', async payload => {
+    const username = typeof payload?.username === 'string'
+      ? payload.username.normalize('NFC').trim().slice(0, 20)
+      : '';
+    const uid = typeof payload?.uid === 'string' ? payload.uid.trim() : '';
+    const email = typeof payload?.email === 'string' ? payload.email.trim().slice(0, 320) : '';
+    const session = socket.__emailAccountSession;
+
+    if (!username || !uid || !session) {
+      socket.emit('username-error', { message: 'メールアカウントの認証情報がありません。もう一度ログインしてください。' });
+      return;
+    }
+
+    const sessionName = String(session.username || '').normalize('NFC').trim();
+    const sessionUid = String(session.uid || '').trim();
+    const sessionEmail = String(session.email || '').trim().toLowerCase();
+    if (
+      sessionName.toLowerCase() !== username.toLowerCase() ||
+      sessionUid !== uid ||
+      (email && sessionEmail && sessionEmail !== email.toLowerCase())
+    ) {
+      socket.emit('username-error', { message: 'メールアカウントの認証情報が一致しません。もう一度ログインしてください。' });
+      return;
+    }
+
+    try {
+      const linked = await isAccountNameLinkedToUser(username, uid, email);
+      if (!linked) {
+        socket.emit('username-error', { message: 'このアカウント名はメールアドレスと正しく連携されていません。' });
+        return;
+      }
+    } catch (error) {
+      console.error('Linked account-name verification failed:', error);
+      socket.emit('username-error', { message: 'アカウントの確認に失敗しました。しばらくしてから再試行してください。' });
+      return;
+    }
+
+    users[socket.id] = {
+      id: socket.id,
+      username,
+      timestamp: new Date(),
+      authType: 'email',
+      uid,
+      email: email || sessionEmail
+    };
+    socket.emit('email-account-accepted', { username });
+    void initializeThemeForSocket(socket, username);
+    io.emit('user-joined', { username, message: `${username}さんがチャットに参加しました` });
+    io.emit('update-users', Object.values(users));
+  });
+
+  // ゲスト参加はメールアカウントとは別の名前空間として扱います。
+  // Firestoreのアカウント名予約状況は参照しないため、同じ表示名でも共存できます。
   socket.on('set-username', async username => {
     if (typeof username !== 'string' || !username.trim()) return;
     const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
 
-    // メール連携済みのアカウント名は「名前だけで参加」には使わせず、
-    // 本人のFirebaseアカウントから来た参加要求だけを許可します。
-    const session = socket.__emailAccountSession;
-    if (session) {
-      const sessionName = String(session.username || '').normalize('NFC').trim();
-      if (sessionName !== cleanUsername || !session.uid) {
-        socket.emit('username-error', { message: 'メール連携アカウントの認証情報が一致しません。もう一度ログインしてください。' });
-        return;
-      }
-      try {
-        const linked = await isAccountNameLinkedToUser(cleanUsername, session.uid, session.email);
-        if (!linked) {
-          socket.emit('username-error', { message: 'このアカウント名はメールアドレスと正しく連携されていません。' });
-          return;
-        }
-      } catch (error) {
-        console.error('Linked account-name verification failed:', error);
-        socket.emit('username-error', { message: 'アカウントの確認に失敗しました。しばらくしてから再試行してください。' });
-        return;
-      }
-    } else {
-      try {
-        const available = await isAccountNameAvailable(cleanUsername);
-        if (available.ok && available.available === false) {
-          socket.emit('username-error', { message: 'このアカウント名はメールアドレスと連携されています。メールアドレスでログインして参加してください。' });
-          return;
-        }
-      } catch (error) {
-        console.error('Reserved account-name check failed:', error);
-        // Firestore確認に失敗した場合は、名前だけ参加を安全側に倒して拒否します。
-        socket.emit('username-error', { message: 'アカウント名を確認できませんでした。しばらくしてから再試行してください。' });
-        return;
-      }
-    }
-
-    const isTaken = Object.values(users).some(u => u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase());
+    const isTaken = Object.values(users).some(u =>
+      u.authType === 'guest' &&
+      u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase()
+    );
     if (isTaken) {
-      socket.emit('username-error', { message: 'この名前は既に使用されています。別の名前を選んでください。' });
+      socket.emit('username-error', { message: 'この名前は既にゲストとして使用されています。別の名前を選んでください。' });
       return;
     }
 
     users[socket.id] = {
       id: socket.id,
       username: cleanUsername,
-      timestamp: new Date()
+      timestamp: new Date(),
+      authType: 'guest'
     };
     socket.emit('username-accepted', { username: cleanUsername });
     void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
-  });
+  });  });
 
   socket.on('send-location-message', (data, ack) => {
     const user = users[socket.id];
