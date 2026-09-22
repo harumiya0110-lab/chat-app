@@ -57,7 +57,7 @@
   }
 
   function renderEventVisitStatus(actions, marker) {
-    const isOwner = marker.__deleteOwnerName === currentUsername;
+    const isOwner = String(marker.__deleteOwnerUserId || '') === String(socket?.id || '');
     const interested = isEventInterested(marker);
 
     actions.innerHTML = '';
@@ -293,7 +293,7 @@
 
       renderHelpStatus(actions, marker);
 
-      if (marker.__deleteOwnerName !== currentUsername) return;
+      if (String(marker.__deleteOwnerUserId || '') !== String(socket?.id || '')) return;
       if (!marker.__deleteMessageId) return;
 
       const button = document.createElement('button');
@@ -345,6 +345,7 @@
     const marker = originalMarker(latlng, options);
     marker.__deleteMarkerId = `map-pin-${++markerCounter}`;
     marker.__deleteOwnerName = null;
+    marker.__deleteOwnerUserId = null;
     marker.__deleteMessageId = null;
     marker.__eventType = null;
     marker.__helpUsers = [];
@@ -358,6 +359,7 @@
     if (!marker) return;
 
     marker.__deleteOwnerName = typeof data.username === 'string' ? data.username : null;
+    marker.__deleteOwnerUserId = typeof data.userId === 'string' ? data.userId : null;
     marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
     marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
     marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
