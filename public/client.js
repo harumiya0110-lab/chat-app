@@ -164,6 +164,8 @@ function buildMessageElement(data) {
   return item;
 }
 
+window.ruralBuildMessageElement = buildMessageElement;
+
 function addMessage(data) {
   const item = buildMessageElement(data);
   messages.appendChild(item);
@@ -456,6 +458,8 @@ function addMarker(message) {
   if (messageId) ruralMarkerByMessageId.set(messageId, marker);
   return marker;
 }
+
+window.ruralAddMarker = addMarker;
 
 imageBtn.addEventListener('click', () => imageInput.click());
 videoBtn.addEventListener('click', () => videoInput.click());
