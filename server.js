@@ -464,7 +464,7 @@ io.on('connection', socket => {
     }
 
     const image = typeof data?.image === 'string' ? data.image : '';
-    if (!image || !/^data:image\\/[a-z0-9.+-]+;base64,/i.test(image)) {
+    if (!image || !image.toLowerCase().startsWith('data:image/')) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
       return;
     }
