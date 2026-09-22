@@ -667,3 +667,154 @@ body[data-rural-chat-color] .messages .message-bubble::selection{
   background:rgba(255,255,255,.3);
   color:var(--message-bubble-text);
 }
+
+
+/* 色の役割を最終固定
+   ・チャット背景領域(.messages)だけは見た目変更のテーマ背景
+   ・チャット内部の部品は選択した「チャットの色」 */
+body[data-rural-chat-color]{
+  --chat-ui-bg:#eef6f0;
+  --chat-ui-text:#234d35;
+  --chat-ui-border:#bcd4c2;
+  --chat-ui-soft:#dfeee3;
+}
+body[data-rural-chat-color="forest"]{
+  --chat-ui-bg:#e8f2ea;
+  --chat-ui-text:#28573c;
+  --chat-ui-border:#bcd3bf;
+  --chat-ui-soft:#dcebdd;
+}
+body[data-rural-chat-color="blue"]{
+  --chat-ui-bg:#e5f1f8;
+  --chat-ui-text:#245674;
+  --chat-ui-border:#b9d5e5;
+  --chat-ui-soft:#d8eaf4;
+}
+body[data-rural-chat-color="sakura"]{
+  --chat-ui-bg:#f8e4ec;
+  --chat-ui-text:#71384f;
+  --chat-ui-border:#e2bdcb;
+  --chat-ui-soft:#f3d3df;
+}
+body[data-rural-chat-color="violet"]{
+  --chat-ui-bg:#eee9f8;
+  --chat-ui-text:#4b3971;
+  --chat-ui-border:#cfc3e4;
+  --chat-ui-soft:#e4dcf2;
+}
+body[data-rural-chat-color="sunset"]{
+  --chat-ui-bg:#fae9da;
+  --chat-ui-text:#75421f;
+  --chat-ui-border:#e2c1a6;
+  --chat-ui-soft:#f4dcc7;
+}
+body[data-rural-chat-color="ink"]{
+  --chat-ui-bg:#e2e2e2;
+  --chat-ui-text:#333;
+  --chat-ui-border:#b8b8b8;
+  --chat-ui-soft:#d3d3d3;
+}
+
+/* チャット背景色は「投稿が並ぶ背景領域」だけに使用 */
+body[data-rural-chat-color] .messages{
+  background:var(--theme-bg,#eef2e9)!important;
+}
+
+/* それ以外のチャット内部UIは選択したチャット色を基準にする */
+body[data-rural-chat-color] .users-panel{
+  background:var(--chat-ui-bg)!important;
+  border-right-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .users-panel li{
+  background:var(--theme-panel,#fff)!important;
+  border-color:var(--chat-ui-border)!important;
+  color:var(--chat-ui-text)!important;
+}
+body[data-rural-chat-color] .users-panel h2,
+body[data-rural-chat-color] .online-user-name{
+  color:var(--chat-ui-text)!important;
+}
+body[data-rural-chat-color] .online-user-me{
+  color:color-mix(in srgb,var(--chat-ui-text) 70%,#fff)!important;
+}
+
+body[data-rural-chat-color] .status,
+body[data-rural-chat-color] .input-area{
+  background:var(--chat-ui-bg)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .status{
+  color:var(--chat-ui-text)!important;
+}
+body[data-rural-chat-color] .input-area input[type=text],
+body[data-rural-chat-color] #message-input{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .input-area input[type=text]::placeholder,
+body[data-rural-chat-color] #message-input::placeholder{
+  color:color-mix(in srgb,var(--chat-ui-text) 58%,#fff)!important;
+  opacity:1!important;
+}
+body[data-rural-chat-color] .tool-btn{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] #send-btn{
+  background:var(--rural-chat)!important;
+  color:var(--message-bubble-text,#fff)!important;
+  border-color:var(--rural-chat)!important;
+}
+
+/* 投稿本文はチャット色、外側カードはテーマ */
+body[data-rural-chat-color] .messages .message,
+body[data-rural-chat-color] .messages .message.own,
+body[data-rural-chat-color] .messages .message.reply-message{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--chat-ui-text)!important;
+}
+body[data-rural-chat-color] .messages .message-bubble{
+  background:var(--rural-chat)!important;
+  color:var(--message-bubble-text,#fff)!important;
+}
+body[data-rural-chat-color] .messages .message-header,
+body[data-rural-chat-color] .messages .message-header span{
+  color:var(--chat-ui-text)!important;
+}
+
+/* 返信・操作ボタンもチャット色系 */
+body[data-rural-chat-color] .messages .message-reply{
+  background:var(--chat-ui-soft)!important;
+  color:var(--chat-ui-text)!important;
+  border-left-color:var(--rural-chat)!important;
+}
+body[data-rural-chat-color] .message-replies-toggle,
+body[data-rural-chat-color] .message-action-btn{
+  background:var(--chat-ui-bg)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .message-action-btn.active{
+  background:var(--chat-ui-soft)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--rural-chat)!important;
+}
+
+/* チャット内検索・ツールバーもチャット色に合わせる */
+body[data-rural-chat-color] .chat-toolbar{
+  background:var(--chat-ui-bg)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .chat-search,
+body[data-rural-chat-color] .chat-tool-action,
+body[data-rural-chat-color] .load-more-btn{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--chat-ui-text)!important;
+  border-color:var(--chat-ui-border)!important;
+}
+body[data-rural-chat-color] .chat-search input{
+  color:var(--chat-ui-text)!important;
+}
