@@ -282,7 +282,9 @@ async function purgeAllSavedMessages() {
     await Promise.all(documents.map(async document => {
       const name = String(document?.name || '');
       if (!name) return;
-      await firestoreRequest('/' + name.replace(/^projects\\/[^/]+\\/databases\\/\\(default\\)\\/documents/u, ''), { method: 'DELETE' });
+      const id = name.split('/').pop();
+      if (!id) return;
+      await firestoreRequest('/messages/' + encodeURIComponent(id), { method: 'DELETE' });
       deleted += 1;
     }));
 
