@@ -371,11 +371,14 @@ io.on('connection', socket => {
     if (typeof username !== 'string' || !username.trim()) return;
     const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
 
+    // 「ハル」だけはアップデート移行時の名前競合による参加制限を解除します。
+    // メールアカウントとゲスト参加は別管理のため、他の名前の制限や認証方式には影響しません。
+    const isHaru = cleanUsername === 'ハル';
     const isTaken = Object.values(users).some(u =>
       u.authType === 'guest' &&
       u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase()
     );
-    if (isTaken) {
+    if (isTaken && !isHaru) {
       socket.emit('username-error', { message: 'この名前は既にゲストとして使用されています。別の名前を選んでください。' });
       return;
     }
