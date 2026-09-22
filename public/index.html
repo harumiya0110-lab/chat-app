@@ -13,7 +13,10 @@
     body.pre-auth .regional-points,
     body.pre-auth .theme-shop-open,
     body.pre-auth #online-count,
-    body.pre-auth #chat-main { display:none!important; }
+    body.pre-auth #chat-main,
+    body.pre-auth .mobile-view-tabs,
+    body.pre-auth #call-modal,
+    body.pre-auth #mini-call-bar { display:none!important; }
     #initial-input-holder { display:contents; }
   </style>
 </head>
@@ -55,21 +58,6 @@
   <div id="mini-call-bar" class="mini-call-bar" hidden><video id="mini-local" autoplay muted playsinline></video><video id="mini-remote" autoplay playsinline></video><button id="mini-unminimize">↗️ 通話を開く</button><button id="mini-end" class="danger">📞 終了</button></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="/socket.io/socket.io.js"></script>
   <script>
-    (() => {
-      const revealApp = () => {
-        const chatMain = document.getElementById('chat-main');
-        if (chatMain?.hidden) return false;
-        document.body.classList.remove('pre-auth');
-        setTimeout(() => {
-          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(true);
-        }, 100);
-        return true;
-      };
-      window.addEventListener('username-accepted', revealApp, true);
-      window.addEventListener('rural-chat-joined', revealApp, true);
-    })();
-  </script>
-  <script>
     (()=>{const originalLeafletMap=L.map.bind(L);L.map=(...args)=>{const createdMap=originalLeafletMap(...args);window.ruralMap=createdMap;return createdMap;};})();
   </script>
   <script>
@@ -78,7 +66,7 @@
   <script>
     (()=>{const MARKER_TYPES={'#d64545':'交通障害','#2d8a57':'助け合い','#e39a28':'イベント','#8b5cf6':'鳥獣目撃','#6c7a89':'その他'};let activeFilter='all';const markerRegistry=[];const originalMarker=L.marker.bind(L);const originalAddTo=L.Marker.prototype.addTo;function detectMarkerType(marker){const html=String(marker?.options?.icon?.options?.html||'').toLowerCase();for(const [color,type] of Object.entries(MARKER_TYPES))if(html.includes(color))return type;return 'その他'}L.marker=function(latlng,options={}){const marker=originalMarker(latlng,options);marker.__eventType=detectMarkerType(marker);marker.__registeredForFilter=false;marker.__originalAddTo=originalAddTo.bind(marker);marker.addTo=function(targetMap){if(!marker.__registeredForFilter){markerRegistry.push({marker,targetMap});marker.__registeredForFilter=true}if(activeFilter==='all'||activeFilter===marker.__eventType)marker.__originalAddTo(targetMap);return marker};return marker};window.setMapEventFilter=filter=>{activeFilter=filter;markerRegistry.forEach(({marker,targetMap})=>{const visible=filter==='all'||filter===marker.__eventType;if(visible)targetMap.addLayer(marker);else if(targetMap.hasLayer(marker))targetMap.removeLayer(marker)});document.querySelectorAll('.map-filter').forEach(button=>button.classList.toggle('active',button.dataset.filter===filter))};document.addEventListener('click',event=>{const button=event.target.closest('.map-filter');if(!button)return;window.setMapEventFilter(button.dataset.filter||'all')})})();
   </script>
-  <script src="/client.js?v=20260922-login-fix-3"></script>
+  <script src="/client.js?v=20260922-login-fix-4"></script>
 
   <script src="/chat-delete.js"></script>
   <script src="/media-delete.js"></script>
@@ -118,7 +106,7 @@
     body.pre-auth .setup-features{display:flex!important;justify-content:center!important;flex-wrap:wrap!important;gap:7px!important;margin-top:17px!important;}
     body.pre-auth .setup-features span{padding:6px 9px!important;border-radius:8px!important;background:#f0f5ef!important;border:1px solid #dce6da!important;color:#53665a!important;font-size:10px!important;font-weight:600!important;}
     body.pre-auth .setup-note{margin:13px 0 0!important;color:#8a968e!important;font-size:10px!important;line-height:1.5!important;}
-    body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main{display:none!important;}
+    body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main,body.pre-auth .mobile-view-tabs,body.pre-auth #call-modal,body.pre-auth #mini-call-bar{display:none!important;}
     @media(max-width:650px){
       body.pre-auth .app-header{padding:14px 15px!important;}
       body.pre-auth .app-header p{font-size:11px!important;}
