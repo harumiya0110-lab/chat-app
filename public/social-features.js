@@ -58,7 +58,11 @@
       .message-type-badge,.message-resolved-badge{display:inline-flex;align-items:center;gap:3px;border-radius:999px;padding:2px 7px;color:#fff;font-size:10px;font-weight:800;margin-right:5px}
       .message-resolved-badge{background:#4d8762}
       .message-badges{min-height:0;margin-bottom:4px}
-      .message-reply{margin-bottom:5px;padding:5px 8px;border-left:3px solid var(--rural-chat,#2f7d4a);border-radius:5px;background:var(--chat-panel-soft,#f3f7f1);color:var(--chat-text-soft,#65726b);font-size:11px}
+      .message-reply{display:flex;flex-direction:column;gap:2px;margin-bottom:6px;padding:7px 9px;border-left:3px solid var(--rural-chat,#2f7d4a);border-radius:6px;background:var(--chat-panel-soft,#f3f7f1);color:var(--chat-text-soft,#65726b);font-size:11px;cursor:pointer;transition:background-color .15s ease,transform .15s ease}
+      .message-reply:hover{background:var(--chat-surface,#e9f3ea);transform:translateY(-1px)}
+      .message-reply:focus-visible{outline:2px solid var(--rural-chat,#2f7d4a);outline-offset:2px}
+      .message-reply-label{font-size:10px;font-weight:800;color:var(--rural-chat-strong,#265b3b)}
+      .message-reply-quote{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
       .message-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px}
       .message-action-btn{border:1px solid var(--chat-input,#c3cec1);border-radius:999px;padding:4px 7px;background:var(--chat-input-bg,#fff);color:var(--chat-text,#30483b);font:inherit;font-size:10px;cursor:pointer}
       .message-action-btn:hover{background:var(--chat-surface,#edf3eb)}
