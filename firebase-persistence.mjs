@@ -183,12 +183,12 @@ async function toggleHelper(id, username) {
 
 async function loadRecentMessages() {
   if (!enabled) return [];
-  const result = await firestoreRequest('/messages?pageSize=100&orderBy=createdAt%20desc', { method: 'GET' });
+  const result = await firestoreRequest('/messages?pageSize=50&orderBy=createdAt%20desc', { method: 'GET' });
   return (Array.isArray(result?.documents) ? result.documents : [])
     .map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null }))
     .filter(item => item.message)
     .map(normalizeMessage)
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    .reverse();
 }
 
 const usernameBySocketId = new Map();
@@ -241,15 +241,17 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 
     const originalSocketEmit = socket.emit.bind(socket);
     socket.emit = (socketEventName, ...args) => {
-      if ((socketEventName === 'username-accepted' || socketEventName === 'email-account-accepted') && args[0]?.username) {
+      if (socketEventName === 'username-accepted' && args[0]?.username) {
         usernameBySocketId.set(socket.id, String(args[0].username));
         const accepted = originalSocketEmit(socketEventName, ...args);
         originalSocketEmit('chat-history-start');
         void (async () => {
           try {
-            for (const message of await loadRecentMessages()) {
-              originalSocketEmit('receive-message', { ...message, timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP') });
-            }
+            const history = await loadRecentMessages();
+            originalSocketEmit('chat-history', history.map(message => ({
+              ...message,
+              timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP')
+            })));
           } catch (error) {
             console.error('Firestore history load failed:', error);
           } finally {
