@@ -305,12 +305,13 @@ export async function purgeAllSavedMessages() {
 
 
 if (process.env.PURGE_MESSAGES_ON_START === '1') {
+  console.log('One-time message history purge: START');
   setTimeout(async () => {
     try {
       const result = await purgeAllSavedMessages();
-      console.log(`One-time message history purge completed: deleted=${result.deleted}`);
+      console.log(`One-time message history purge: DONE deleted=${result.deleted}`);
     } catch (error) {
-      console.error('One-time message history purge failed:', error);
+      console.error('One-time message history purge: FAILED', error);
     }
   }, 0);
 }
