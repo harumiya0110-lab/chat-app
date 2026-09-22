@@ -390,7 +390,7 @@ io.on('connection', socket => {
     void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
     io.emit('update-users', Object.values(users));
-  });  });
+  });
 
   socket.on('send-location-message', (data, ack) => {
     const user = users[socket.id];
