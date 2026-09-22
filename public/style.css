@@ -460,3 +460,148 @@ body[data-rural-chat-color="sunset"] .message-reply-label{color:#402211!importan
     flex-basis:64px;
   }
 }
+
+
+/* 配色の役割を分離：外側UIは「見た目交換」のテーマ、投稿本文は「チャットの色」を使用 */
+body[data-rural-chat-color]{
+  --chat-contrast:#fff;
+  --chat-contrast-soft:#eaf6ee;
+}
+body[data-rural-chat-color="forest"]{
+  --chat-contrast:#fff;
+  --chat-contrast-soft:#eaf6ee;
+}
+body[data-rural-chat-color="blue"]{
+  --chat-contrast:#fff;
+  --chat-contrast-soft:#e9f5ff;
+}
+body[data-rural-chat-color="sakura"]{
+  --chat-contrast:#3f1f2b;
+  --chat-contrast-soft:#4e2736;
+}
+body[data-rural-chat-color="violet"]{
+  --chat-contrast:#fff;
+  --chat-contrast-soft:#f1edff;
+}
+body[data-rural-chat-color="sunset"]{
+  --chat-contrast:#402211;
+  --chat-contrast-soft:#4f2b16;
+}
+body[data-rural-chat-color="ink"]{
+  --chat-contrast:#fff;
+  --chat-contrast-soft:#f0f0f0;
+}
+
+/* チャット本文：背景は選択した「チャットの色」、文字はその色との高コントラスト */
+body[data-rural-chat-color] .messages{
+  background:var(--theme-bg,#eef2e9)!important;
+  color:var(--theme-text,#294237)!important;
+}
+body[data-rural-chat-color] .messages .message,
+body[data-rural-chat-color] .messages .message.own,
+body[data-rural-chat-color] .messages .message.reply-message{
+  background:var(--rural-chat)!important;
+  color:var(--chat-contrast)!important;
+}
+body[data-rural-chat-color] .messages .message-bubble,
+body[data-rural-chat-color] .messages .message-header,
+body[data-rural-chat-color] .messages .message-header span,
+body[data-rural-chat-color] .messages .message-reply,
+body[data-rural-chat-color] .messages .message-reply-quote,
+body[data-rural-chat-color] .messages .message-replies{
+  color:var(--chat-contrast)!important;
+}
+body[data-rural-chat-color] .messages .message-header{
+  opacity:1!important;
+  font-weight:700!important;
+}
+body[data-rural-chat-color] .messages .message-reply{
+  background:color-mix(in srgb,var(--rural-chat) 82%,#fff 18%)!important;
+  border-left-color:var(--chat-contrast)!important;
+}
+body[data-rural-chat-color] .messages .message-reply-label{
+  color:var(--chat-contrast)!important;
+}
+body[data-rural-chat-color] .messages .message-replies-toggle{
+  background:var(--theme-panel,#fff)!important;
+  color:var(--theme-text,#294237)!important;
+  border-color:var(--theme-border,#cbd7c8)!important;
+}
+
+/* チャット外側：オンラインユーザー・投稿設定・場所設定などは「見た目交換」のテーマで統一 */
+body[data-rural-theme] .users-panel,
+body[data-rural-theme] .input-area,
+body[data-rural-theme] .status{
+  background:var(--theme-bg)!important;
+  color:var(--theme-text)!important;
+}
+body[data-rural-theme] .users-panel{
+  border-right-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .users-panel h2,
+body[data-rural-theme] .users-panel .online-user-name,
+body[data-rural-theme] .users-panel li,
+body[data-rural-theme] .users-panel .online-user-me,
+body[data-rural-theme] .status,
+body[data-rural-theme] .location-toggle,
+body[data-rural-theme] .location-toggle span,
+body[data-rural-theme] .panel-heading,
+body[data-rural-theme] .panel-heading h2,
+body[data-rural-theme] .legend,
+body[data-rural-theme] .filter-title{
+  color:var(--theme-text)!important;
+}
+body[data-rural-theme] .users-panel li{
+  background:var(--theme-panel)!important;
+  border-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .online-user-me{
+  color:var(--theme-text-soft)!important;
+}
+body[data-rural-theme] .users-empty{
+  color:var(--theme-text-soft)!important;
+  background:transparent!important;
+}
+body[data-rural-theme] .input-area{
+  border-top-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .input-area input[type=text],
+body[data-rural-theme] #message-input{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-input)!important;
+}
+body[data-rural-theme] .input-area input[type=text]::placeholder,
+body[data-rural-theme] #message-input::placeholder{
+  color:var(--theme-text-soft)!important;
+  opacity:1!important;
+}
+body[data-rural-theme] .tool-btn{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-border)!important;
+}
+body[data-rural-theme] .location-toggle{
+  background:var(--theme-panel)!important;
+  border-color:var(--theme-border)!important;
+}
+body[data-rural-theme] .status{
+  border-top-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .panel-heading{
+  background:var(--theme-bg)!important;
+  border-bottom-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .panel-heading p{
+  color:var(--theme-text-soft)!important;
+}
+body[data-rural-theme] .map-filter{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-border)!important;
+}
+body[data-rural-theme] .map-filter.active{
+  background:var(--theme-main)!important;
+  color:#fff!important;
+  border-color:var(--theme-main)!important;
+}
