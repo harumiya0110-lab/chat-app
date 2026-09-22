@@ -1,6 +1,7 @@
 (() => {
   const ownerMarkers = new Set();
   let markerCounter = 0;
+  const EVENT_INTEREST_STORAGE_KEY = 'rural-event-interest:';
 
   function sameLocation(a, b) {
     if (!a || !b) return false;
@@ -26,7 +27,88 @@
     return candidates[candidates.length - 1] || null;
   }
 
+  function getEventInterestKey(marker) {
+    const id = String(marker?.__deleteMessageId || '').trim();
+    return id ? EVENT_INTEREST_STORAGE_KEY + id : '';
+  }
+
+  function isEventInterested(marker) {
+    const key = getEventInterestKey(marker);
+    if (!key) return false;
+    try { return localStorage.getItem(key) === '1'; } catch { return false; }
+  }
+
+  function setEventInterested(marker, interested) {
+    const key = getEventInterestKey(marker);
+    if (!key) return false;
+    try {
+      if (interested) localStorage.setItem(key, '1');
+      else localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function renderEventVisitStatus(actions, marker) {
+    const isOwner = marker.__deleteOwnerName === currentUsername;
+    const interested = isEventInterested(marker);
+
+    actions.innerHTML = '';
+
+    const block = document.createElement('div');
+    block.className = 'map-event-visit-block';
+
+    const description = document.createElement('div');
+    description.className = 'map-help-people';
+    description.textContent = isOwner
+      ? '📅 このイベントはあなたの投稿です。'
+      : '📅 気になるイベントを見つけたら「行ってみたい」に登録できます。';
+    block.appendChild(description);
+
+    if (!isOwner) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = interested ? 'map-event-interest-btn interested' : 'map-event-interest-btn';
+      button.textContent = interested ? '✅ 行ってみたい（登録済み）' : '📅 行ってみたい';
+
+      button.addEventListener('click', () => {
+        const next = !isEventInterested(marker);
+        button.disabled = true;
+        button.textContent = '更新中…';
+
+        const saved = setEventInterested(marker, next);
+        button.disabled = false;
+
+        if (!saved) {
+          button.textContent = next ? '✅ 行ってみたい（登録済み）' : '📅 行ってみたい';
+          if (typeof setStatus === 'function') {
+            setStatus('行ってみたいの保存に失敗しました。');
+          }
+          return;
+        }
+
+        renderEventVisitStatus(actions, marker);
+        if (typeof setStatus === 'function') {
+          setStatus(next
+            ? '「行ってみたい」に登録しました。'
+            : '「行ってみたい」を取り消しました。');
+        }
+      });
+
+      block.appendChild(button);
+    }
+
+    actions.appendChild(block);
+  }
+
   function renderHelpStatus(actions, marker) {
+    // イベント投稿は「手伝える」ではなく「行ってみたい」を表示します。
+    if (marker.__eventType === 'イベント') {
+      renderEventVisitStatus(actions, marker);
+      return;
+    }
+
     const helpUsers = Array.isArray(marker.__helpUsers) ? marker.__helpUsers : [];
     const confirmedUsers = Array.isArray(marker.__helpConfirmedUsers) ? marker.__helpConfirmedUsers : [];
     const isOwner = marker.__deleteOwnerName === currentUsername;
@@ -148,6 +230,7 @@
               'not-found': '投稿が見つかりません。',
               'unauthorized': 'ログインしてから参加してください。',
               'own-post': '自分の投稿には「手伝える」はできません。',
+              'not-helpable': 'この投稿は「手伝える」に対応していません。',
               'server-error': '手伝える人の登録に失敗しました。'
             };
             setStatus(messages[result.reason] || '更新に失敗しました。');
@@ -204,7 +287,6 @@
 
       renderHelpStatus(actions, marker);
 
-      // 再ログイン後も、同じニックネームなら自分の投稿として扱います。
       if (marker.__deleteOwnerName !== currentUsername) return;
       if (!marker.__deleteMessageId) return;
 
@@ -242,12 +324,23 @@
     });
   }
 
+  const style = document.createElement('style');
+  style.id = 'map-event-interest-style';
+  style.textContent = `
+    .map-event-interest-btn{width:100%;border:1px solid #d8c38b;background:#fff8dd;color:#6f5615;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer;margin-top:8px}
+    .map-event-interest-btn:hover:not(:disabled){background:#fff0b8}
+    .map-event-interest-btn.interested{border-color:#d6a83d;background:#fff2b8;color:#694d0b}
+    .map-event-interest-btn:disabled{opacity:.65;cursor:wait}
+  `;
+  document.head.appendChild(style);
+
   const originalMarker = L.marker.bind(L);
   L.marker = function(latlng, options = {}) {
     const marker = originalMarker(latlng, options);
     marker.__deleteMarkerId = `map-pin-${++markerCounter}`;
     marker.__deleteOwnerName = null;
     marker.__deleteMessageId = null;
+    marker.__eventType = null;
     marker.__helpUsers = [];
     marker.__helpConfirmedUsers = [];
     return marker;
@@ -261,6 +354,7 @@
 
       marker.__deleteOwnerName = typeof data.username === 'string' ? data.username : null;
       marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
+      marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
       marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
       marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
       ownerMarkers.add(marker);
