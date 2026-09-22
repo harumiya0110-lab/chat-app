@@ -96,6 +96,7 @@
     applyTheme(state.currentTheme);
     applyChatColor(state.currentChatColor);
     render();
+    status('✅ 見た目の切り替えが完了しました。');
   }
 
   function sendExchange(eventName, payload, triggerButton, fallback) {
