@@ -186,11 +186,87 @@ function buildMessageElement(data) {
   item.dataset.status = data.status === 'resolved' ? 'resolved' : 'open';
   item.dataset.reactions = JSON.stringify(data.reactions || { like: [], helpful: [], thanks: [] });
   item.dataset.messageText = String(data.message || data.text || '').slice(0, 2000);
+  item.dataset.replyToId = replyToId;
+  item.dataset.replyPending = replyToId ? 'true' : 'false';
+  if (replyToId) item.classList.add('reply-message');
   addNormalMessageDeleteControl(item, data);
   return item;
 }
 
 window.ruralBuildMessageElement = buildMessageElement;
+
+function ensureReplyThread(parent) {
+  if (!parent) return null;
+
+  let thread = parent.querySelector(':scope > .message-replies');
+  if (!thread) {
+    thread = document.createElement('div');
+    thread.className = 'message-replies';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'message-replies-toggle';
+    toggle.setAttribute('aria-expanded', 'true');
+
+    const list = document.createElement('div');
+    list.className = 'message-replies-list';
+
+    toggle.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      list.hidden = !list.hidden;
+      toggle.setAttribute('aria-expanded', String(!list.hidden));
+      toggle.classList.toggle('collapsed', list.hidden);
+    });
+
+    thread.appendChild(toggle);
+    thread.appendChild(list);
+    parent.appendChild(thread);
+  }
+
+  const list = thread.querySelector(':scope > .message-replies-list');
+  const toggle = thread.querySelector(':scope > .message-replies-toggle');
+  const count = list?.querySelectorAll(':scope > .message.reply-message').length || 0;
+
+  if (toggle) {
+    toggle.hidden = count === 0;
+    toggle.textContent = count ? `↳ 返信 ${count}件` : '↳ 返信';
+  }
+
+  return { thread, list, toggle };
+}
+
+function attachReplyToParent(item, data = {}) {
+  const replyToId = String(data.replyToId || item?.dataset?.replyToId || '').trim();
+  if (!replyToId || !item || !messages) return false;
+
+  const parent = [...messages.querySelectorAll('.message')].find(message =>
+    message !== item && message.dataset.messageId === replyToId
+  );
+
+  if (!parent) {
+    item.classList.add('reply-message');
+    item.dataset.replyPending = 'true';
+    return false;
+  }
+
+  const thread = ensureReplyThread(parent);
+  if (!thread?.list) return false;
+
+  item.classList.add('reply-message');
+  item.dataset.replyPending = 'false';
+  thread.list.appendChild(item);
+  ensureReplyThread(parent);
+  return true;
+}
+
+function attachPendingReplies() {
+  if (!messages) return;
+  const pending = [...messages.querySelectorAll('.message.reply-message[data-reply-pending="true"]')];
+  pending.forEach(item => attachReplyToParent(item, { replyToId: item.dataset.replyToId || '' }));
+}
+
+window.ruralOrganizeReplies = attachPendingReplies;
 
 function getMessageKey(data) {
   const id = typeof data?.id === 'string' ? data.id.trim() : '';
@@ -219,6 +295,8 @@ function addMessage(data) {
   const item = buildMessageElement(data);
   item.dataset.messageKey = getMessageKey(data);
   messages.appendChild(item);
+  if (data?.replyToId) attachReplyToParent(item, data);
+  attachPendingReplies();
   if (!isHistoryLoading) {
     trimChatMessages();
     scrollToBottom();
