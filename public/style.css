@@ -1025,3 +1025,34 @@ body[data-rural-theme] .messages{
 body[data-rural-theme] .messages::-webkit-scrollbar-track{
   background:var(--integrated-chat-bg);
 }
+
+
+/* 文字投稿の本文部分だけ、投稿色とは反対側の明度にして読みやすくする */
+body[data-rural-theme="forest"]{--message-text-bg:#f5fbf6;--message-text-color:#21452f}
+body[data-rural-theme="ocean"]{--message-text-bg:#f3f9fd;--message-text-color:#183f59}
+body[data-rural-theme="sakura"]{--message-text-bg:#fff8fb;--message-text-color:#5a2940}
+body[data-rural-theme="violet"]{--message-text-bg:#f8f5fd;--message-text-color:#39275b}
+body[data-rural-theme="matsuri"]{--message-text-bg:#fffaf5;--message-text-color:#603315}
+body[data-rural-theme="night"]{--message-text-bg:#eef4f9;--message-text-color:#203d58}
+
+/* 「事故が発生」など、文字投稿の部分だけコントラスト色を入れる */
+body[data-rural-theme] .messages .message-bubble{
+  background:var(--message-text-bg)!important;
+  color:var(--message-text-color)!important;
+  padding:10px 12px!important;
+  border:1px solid color-mix(in srgb,var(--message-text-color) 14%,transparent)!important;
+  border-radius:9px!important;
+  font-weight:650!important;
+}
+body[data-rural-theme] .messages .message-bubble *,
+body[data-rural-theme] .messages .message-bubble a{
+  color:var(--message-text-color)!important;
+}
+
+/* 画像・動画・音声そのものは白い囲いを付けず、投稿色になじませる */
+body[data-rural-theme] .messages .message-bubble img,
+body[data-rural-theme] .messages .message-bubble video,
+body[data-rural-theme] .messages .message-bubble audio{
+  background:var(--integrated-post)!important;
+  border:0!important;
+}
