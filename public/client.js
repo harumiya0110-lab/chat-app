@@ -216,6 +216,10 @@ function handleChatAccepted({ username } = {}) {
   chatMain.hidden = false;
   joinBtn.disabled = false;
   messageInput.focus();
+
+  // 再参加時に前回の履歴を残したまま追加しないよう、チャット表示を一度リセットします。
+  // これで同じ投稿がログイン回数に応じて2回・3回と表示されるのを防ぎます。
+  if (messages) messages.replaceChildren();
   isHistoryLoading = true;
   window.__ruralHistoryLoading = true;
   setStatus('チャット履歴を読み込んでいます…');
