@@ -925,3 +925,103 @@ body[data-rural-theme="night"] #message-input{
 body[data-rural-theme="night"] .messages{
   scrollbar-color:var(--theme-main) var(--theme-bg);
 }
+
+
+/* 統合テーマの最終配色
+   ・チャット背景も6色の統合テーマから決定
+   ・ユーザー投稿は本文/カードを含めてすべて同じ投稿色
+   ・見やすいコントラストの文字色を使用 */
+body[data-rural-theme="forest"]{
+  --integrated-chat-bg:#e8f2ea;--integrated-post:#2f7d4a;--integrated-post-text:#fff;
+}
+body[data-rural-theme="ocean"]{
+  --integrated-chat-bg:#e6f1f8;--integrated-post:#2f78b7;--integrated-post-text:#fff;
+}
+body[data-rural-theme="sakura"]{
+  --integrated-chat-bg:#f8e5ed;--integrated-post:#d85c86;--integrated-post-text:#3f1f2b;
+}
+body[data-rural-theme="violet"]{
+  --integrated-chat-bg:#eee9f7;--integrated-post:#7357b8;--integrated-post-text:#fff;
+}
+body[data-rural-theme="matsuri"]{
+  --integrated-chat-bg:#fae9dc;--integrated-post:#d97832;--integrated-post-text:#402211;
+}
+body[data-rural-theme="night"]{
+  --integrated-chat-bg:#18232e;--integrated-post:#315b86;--integrated-post-text:#fff;
+}
+
+/* チャット背景も選択した統合テーマ色に合わせる */
+body[data-rural-theme] .chat-right{
+  background:var(--integrated-chat-bg)!important;
+}
+body[data-rural-theme] .messages{
+  background:var(--integrated-chat-bg)!important;
+  color:var(--theme-text)!important;
+}
+
+/* ユーザーが投稿したカードはすべて同じ色 */
+body[data-rural-theme] .messages .message,
+body[data-rural-theme] .messages .message.own,
+body[data-rural-theme] .messages .message.reply-message{
+  background:var(--integrated-post)!important;
+  color:var(--integrated-post-text)!important;
+  border-color:color-mix(in srgb,var(--integrated-post) 78%,#fff)!important;
+}
+body[data-rural-theme] .messages .message-bubble{
+  background:var(--integrated-post)!important;
+  color:var(--integrated-post-text)!important;
+  border-radius:9px;
+}
+body[data-rural-theme] .messages .message-bubble *,
+body[data-rural-theme] .messages .message-bubble a{
+  color:var(--integrated-post-text)!important;
+}
+body[data-rural-theme] .messages .message-header,
+body[data-rural-theme] .messages .message-header span{
+  color:color-mix(in srgb,var(--integrated-post-text) 86%,transparent)!important;
+}
+
+/* 返信付き投稿も同じ投稿色で統一 */
+body[data-rural-theme] .messages .message-reply{
+  background:color-mix(in srgb,var(--integrated-post) 86%,#fff 14%)!important;
+  color:var(--integrated-post-text)!important;
+  border-left-color:var(--integrated-post-text)!important;
+}
+body[data-rural-theme] .messages .message-reply *,
+body[data-rural-theme] .messages .message-reply-label,
+body[data-rural-theme] .messages .message-reply-quote{
+  color:var(--integrated-post-text)!important;
+}
+
+/* 返信スレッド内の投稿も親投稿と同じ色 */
+body[data-rural-theme] .messages .message-replies .message,
+body[data-rural-theme] .messages .message-replies .message-bubble{
+  background:var(--integrated-post)!important;
+  color:var(--integrated-post-text)!important;
+}
+
+/* 投稿内のメディアの周囲にも同じ投稿色を使用 */
+body[data-rural-theme] .messages .message-bubble img,
+body[data-rural-theme] .messages .message-bubble video,
+body[data-rural-theme] .messages .message-bubble audio{
+  background:var(--integrated-post)!important;
+}
+
+/* 投稿操作ボタンは投稿色に対して見やすい配色 */
+body[data-rural-theme] .messages .message-actions .message-action-btn{
+  background:color-mix(in srgb,var(--integrated-post) 82%,#fff 18%)!important;
+  color:var(--integrated-post-text)!important;
+  border-color:color-mix(in srgb,var(--integrated-post-text) 42%,var(--integrated-post))!important;
+}
+body[data-rural-theme] .messages .message-actions .message-action-btn.active{
+  background:color-mix(in srgb,var(--integrated-post) 68%,#fff 32%)!important;
+  color:var(--integrated-post-text)!important;
+}
+
+/* チャット背景のスクロールバーも統合テーマに合わせる */
+body[data-rural-theme] .messages{
+  scrollbar-color:var(--rural-chat) var(--integrated-chat-bg);
+}
+body[data-rural-theme] .messages::-webkit-scrollbar-track{
+  background:var(--integrated-chat-bg);
+}
