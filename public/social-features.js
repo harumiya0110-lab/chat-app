@@ -198,15 +198,6 @@
     replyBtn.textContent = '↩︎ 返信';
     replyBtn.dataset.action = 'reply';
 
-    if (item.dataset.location === '1') {
-      const mapBtn = document.createElement('button');
-      mapBtn.type = 'button';
-      mapBtn.className = 'message-action-btn';
-      mapBtn.textContent = '📍 地図で見る';
-      mapBtn.dataset.action = 'map';
-      actions.appendChild(mapBtn);
-    }
-
     actions.appendChild(replyBtn);
 
     for (const info of REACTION_TYPES) {
@@ -519,6 +510,18 @@
 
   function handleMessageClick(event) {
     if (event.target.closest('.message-actions')) return;
+
+    const replyReference = event.target.closest('[data-reply-target]');
+    if (replyReference) {
+      const targetId = String(replyReference.dataset.replyTarget || '').trim();
+      if (targetId) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusMessage(targetId);
+      }
+      return;
+    }
+
     const item = event.target.closest('.message');
     if (!item || item.hidden || item.classList.contains('rural-blocked') || searchQuery) return;
     if (item.dataset.location === '1') {
@@ -649,6 +652,16 @@
   messagesEl.addEventListener('scroll',()=>{if(isNearBottom()) resetUnread();});
   messagesEl.addEventListener('click',handleMessageAction);
   messagesEl.addEventListener('click',handleMessageClick);
+  messagesEl.addEventListener('keydown',event=>{
+    const ref=event.target.closest?.('[data-reply-target]');
+    if(!ref) return;
+    if(event.key==='Enter'||event.key===' '){
+      event.preventDefault();
+      event.stopPropagation();
+      const targetId=String(ref.dataset.replyTarget||'').trim();
+      if(targetId) focusMessage(targetId);
+    }
+  });
   loadMoreBtn?.addEventListener('click',loadMoreHistory);
   notifyBtn?.addEventListener('click',toggleNotifications);
   leaderboardBtn?.addEventListener('click',openLeaderboard);
