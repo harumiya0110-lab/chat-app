@@ -818,3 +818,110 @@ body[data-rural-chat-color] .load-more-btn{
 body[data-rural-chat-color] .chat-search input{
   color:var(--chat-ui-text)!important;
 }
+
+
+/* 統合テーマ6色：見た目変更とチャット色を同じ1色として画面全体へ反映 */
+body[data-rural-theme="forest"]{
+  --theme-main:#2f7d4a;--theme-main-strong:#245f38;--theme-main-soft:#dfeee3;--theme-main-pale:#edf6ef;
+  --theme-border:#b9d2bf;--theme-border-soft:#d4e3d7;--theme-input:#a9c4b0;--theme-text:#244632;--theme-text-soft:#5d7465;
+  --theme-bg:#eaf3ec;--theme-panel:#fff;
+}
+body[data-rural-theme="ocean"]{
+  --theme-main:#2f78b7;--theme-main-strong:#225f94;--theme-main-soft:#dcecf8;--theme-main-pale:#edf6fb;
+  --theme-border:#b8d2e4;--theme-border-soft:#d2e3ee;--theme-input:#a4c3d9;--theme-text:#214861;--theme-text-soft:#587487;
+  --theme-bg:#eaf4fa;--theme-panel:#fff;
+}
+body[data-rural-theme="sakura"]{
+  --theme-main:#d85c86;--theme-main-strong:#b4476d;--theme-main-soft:#f7dce7;--theme-main-pale:#fff2f7;
+  --theme-border:#e2b8ca;--theme-border-soft:#eed2dd;--theme-input:#d9aec0;--theme-text:#603346;--theme-text-soft:#806070;
+  --theme-bg:#fff0f5;--theme-panel:#fff;
+}
+body[data-rural-theme="violet"]{
+  --theme-main:#7357b8;--theme-main-strong:#5b4298;--theme-main-soft:#e7e0f5;--theme-main-pale:#f4f1fa;
+  --theme-border:#c9bde2;--theme-border-soft:#ddd5ec;--theme-input:#bbaed8;--theme-text:#433261;--theme-text-soft:#6f6286;
+  --theme-bg:#f0edf8;--theme-panel:#fff;
+}
+body[data-rural-theme="matsuri"]{
+  --theme-main:#d97832;--theme-main-strong:#b85c20;--theme-main-soft:#f9dfc9;--theme-main-pale:#fff5ed;
+  --theme-border:#e2bd9f;--theme-border-soft:#edd5c0;--theme-input:#d5aa84;--theme-text:#684020;--theme-text-soft:#866a53;
+  --theme-bg:#fff4e9;--theme-panel:#fff;
+}
+body[data-rural-theme="night"]{
+  --theme-main:#315b86;--theme-main-strong:#26496c;--theme-main-soft:#31475d;--theme-main-pale:#222f3b;
+  --theme-border:#566f88;--theme-border-soft:#43566a;--theme-input:#6a8093;--theme-text:#e4edf4;--theme-text-soft:#b8c8d4;
+  --theme-bg:#151d26;--theme-panel:#202b35;
+}
+
+/* 統合テーマではチャット色も同じテーマ色を使用 */
+body[data-rural-theme="forest"],
+body[data-rural-chat-color="forest"]{--rural-chat:#2f7d4a;--message-bubble-text:#fff;--chat-contrast:#fff;--chat-ui-bg:#e8f2ea;--chat-ui-text:#28573c;--chat-ui-border:#bcd3bf;--chat-ui-soft:#dcebdd}
+body[data-rural-theme="ocean"],
+body[data-rural-chat-color="ocean"]{--rural-chat:#2f78b7;--message-bubble-text:#fff;--chat-contrast:#fff;--chat-ui-bg:#e5f1f8;--chat-ui-text:#245674;--chat-ui-border:#b9d5e5;--chat-ui-soft:#d8eaf4}
+body[data-rural-theme="sakura"],
+body[data-rural-chat-color="sakura"]{--rural-chat:#d85c86;--message-bubble-text:#3f1f2b;--chat-contrast:#3f1f2b;--chat-ui-bg:#f8e4ec;--chat-ui-text:#71384f;--chat-ui-border:#e2bdcb;--chat-ui-soft:#f3d3df}
+body[data-rural-theme="violet"],
+body[data-rural-chat-color="violet"]{--rural-chat:#7357b8;--message-bubble-text:#fff;--chat-contrast:#fff;--chat-ui-bg:#eee9f8;--chat-ui-text:#4b3971;--chat-ui-border:#cfc3e4;--chat-ui-soft:#e4dcf2}
+body[data-rural-theme="matsuri"],
+body[data-rural-chat-color="matsuri"]{--rural-chat:#d97832;--message-bubble-text:#402211;--chat-contrast:#402211;--chat-ui-bg:#fae9da;--chat-ui-text:#75421f;--chat-ui-border:#e2c1a6;--chat-ui-soft:#f4dcc7}
+body[data-rural-theme="night"],
+body[data-rural-chat-color="night"]{--rural-chat:#315b86;--message-bubble-text:#fff;--chat-contrast:#fff;--chat-ui-bg:#273746;--chat-ui-text:#e6eef4;--chat-ui-border:#536b82;--chat-ui-soft:#344b61}
+
+/* 選択テーマの背景をチャット領域にも一貫して適用 */
+body[data-rural-theme] .chat-panel,
+body[data-rural-theme] .messages{
+  background:var(--theme-bg)!important;
+  color:var(--theme-text)!important;
+}
+body[data-rural-theme] .message{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+}
+body[data-rural-theme] .message-bubble{
+  background:var(--rural-chat)!important;
+  color:var(--message-bubble-text)!important;
+}
+body[data-rural-theme] .message-bubble *{
+  color:var(--message-bubble-text)!important;
+}
+body[data-rural-theme] .message-header,
+body[data-rural-theme] .message-header span{
+  color:var(--theme-text-soft)!important;
+}
+body[data-rural-theme] .users-panel,
+body[data-rural-theme] .status,
+body[data-rural-theme] .input-area{
+  background:var(--theme-bg)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-border-soft)!important;
+}
+body[data-rural-theme] .users-panel li,
+body[data-rural-theme] .input-area input[type=text],
+body[data-rural-theme] #message-input{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-input)!important;
+}
+body[data-rural-theme] .tool-btn{
+  background:var(--theme-panel)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-border)!important;
+}
+body[data-rural-theme] .users-panel button,
+body[data-rural-theme] #send-btn{
+  background:var(--theme-main)!important;
+  color:#fff!important;
+}
+body[data-rural-theme] .location-toggle,
+body[data-rural-theme] .location-toggle span{
+  color:var(--theme-text)!important;
+}
+body[data-rural-theme="night"] .users-panel li,
+body[data-rural-theme="night"] .input-area input[type=text],
+body[data-rural-theme="night"] #message-input{
+  background:#263541!important;
+  color:#f2f6f9!important;
+  border-color:var(--theme-border)!important;
+}
+body[data-rural-theme="night"] .messages{
+  scrollbar-color:var(--theme-main) var(--theme-bg);
+}
