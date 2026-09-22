@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
-import { registerChatBackgroundPersistence } from './chat-background-persistence.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -17,7 +16,6 @@ const io = new SocketIOServer(server, {
   maxHttpBufferSize: 40 * 1024 * 1024
 });
 registerThemePersistence(io);
-registerChatBackgroundPersistence(io);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
