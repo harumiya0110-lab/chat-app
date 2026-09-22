@@ -63,47 +63,4 @@
     });
   });
 
-  // 大きな動画はbase64文字列よりArrayBufferで送ることで、Socket.IOの通信負荷を下げます。
-  // client.jsの既存changeリスナーより先にcapture段階で処理を奪います。
-  const videoInput = document.getElementById('video-input');
-  const videoButton = document.getElementById('video-btn');
-  if (videoInput) {
-    videoInput.addEventListener('change', async event => {
-      event.stopImmediatePropagation();
-      const file = videoInput.files?.[0];
-      videoInput.value = '';
-      if (!file) return;
-      if (file.size > 15 * 1024 * 1024) {
-        alert('動画は15MB以下にしてください');
-        return;
-      }
-      if (!socket.connected) {
-        const status = document.getElementById('status');
-        if (status) status.textContent = '通信が切断されています。再接続してから送信してください。';
-        return;
-      }
-      try {
-        const status = document.getElementById('status');
-        if (status) status.textContent = '動画を送信しています…';
-        const buffer = await file.arrayBuffer();
-        socket.emit('send-video', {
-          video: buffer,
-          videoType: file.type || 'video/mp4',
-          filename: file.name
-        });
-        if (status) status.textContent = '動画を送信しました。';
-      } catch (error) {
-        console.error('Video upload failed:', error);
-        const status = document.getElementById('status');
-        if (status) status.textContent = '動画の送信に失敗しました。';
-      }
-    }, true);
-  }
-
-  videoButton?.addEventListener('click', () => {
-    if (!socket.connected) {
-      const status = document.getElementById('status');
-      if (status) status.textContent = '通信が切断されています。再接続してから送信してください。';
-    }
-  });
 })();
