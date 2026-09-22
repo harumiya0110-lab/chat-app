@@ -242,6 +242,24 @@ async function geocodeLocation(locationName, locationCandidates = [], originalTe
   return null;
 }
 
+function fallbackAnalyzeMessage(text) {
+  const source = String(text || '');
+  const locationCandidates = extractLocationCandidatesFromText(source);
+  const hasLocation = locationCandidates.length > 0;
+  const eventType = /助け|手伝|困って|必要|募集/u.test(source) ? '助け合い'
+    : /イベント|祭|祭り|開催|集会/u.test(source) ? 'イベント'
+    : /イノシシ|鹿|シカ|猿|サル|熊|クマ|動物|鳥|目撃/u.test(source) ? '鳥獣目撃'
+    : /通行|道路|倒木|落石|事故|渋滞|通れ|通行止め/u.test(source) ? '交通障害'
+    : 'その他';
+  return {
+    hasLocation,
+    locationName: locationCandidates[0] || '',
+    locationCandidates: locationCandidates.slice(0, 5),
+    eventType,
+    summary: source.replace(/\\s+/gu, ' ').trim().slice(0, 100) || '地域のお知らせ'
+  };
+}
+
 async function analyzeMessage(text) {
   if (!GEMINI_API_KEY || !ai) throw new Error('GEMINI_API_KEYが設定されていません');
   const systemPrompt = `あなたは地域情報チャットの解析AIです。\nユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。\n必ず指定されたJSON形式で返してください。\n場所は推測せず、メッセージに書かれている地名・施設名をできるだけそのまま保持してください。`;
@@ -278,7 +296,15 @@ app.post('/api/messages', async (req, res) => {
   const cleanText = text.trim();
   const cleanUserId = userId.trim().slice(0, 200);
   try {
-    const analysis = await analyzeMessage(cleanText);
+    let analysis;
+    let aiError = null;
+    try {
+      analysis = await analyzeMessage(cleanText);
+    } catch (error) {
+      aiError = error;
+      console.error('AI解析に失敗したため簡易解析へ切り替えます:', error);
+      analysis = fallbackAnalyzeMessage(cleanText);
+    }
     let locationData = null;
     let geocodeError = null;
     if (analysis.hasLocation) {
@@ -307,10 +333,10 @@ app.post('/api/messages', async (req, res) => {
       replyToId: message.replyToId,
       replyToUsername: message.replyToUsername
     });
-    return res.json({ ...message, analysis, geocodeError });
+    return res.json({ ...message, analysis, geocodeError, aiFallback: Boolean(aiError) });
   } catch (error) {
-    console.error('メッセージ解析に失敗しました:', error);
-    return res.status(502).json({ error: 'メッセージのAI解析に失敗しました。しばらくしてから再試行してください。' });
+    console.error('メッセージ処理に失敗しました:', error);
+    return res.status(500).json({ error: '投稿処理に失敗しました。しばらくしてから再試行してください。' });
   }
 });
 
