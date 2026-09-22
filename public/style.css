@@ -155,4 +155,29 @@ body[data-rural-chat-color] .message.own{
 }
 
 
+
+/* チャットログ領域も「チャットの色」に合わせて統一します。 */
+body[data-rural-chat-color] .messages{
+  background:var(--chat-panel-soft)!important;
+  scrollbar-color:var(--rural-chat) var(--chat-panel-soft);
+}
+body[data-rural-chat-color] .messages::-webkit-scrollbar{
+  width:9px;
+}
+body[data-rural-chat-color] .messages::-webkit-scrollbar-track{
+  background:var(--chat-panel-soft);
+}
+body[data-rural-chat-color] .messages::-webkit-scrollbar-thumb{
+  background:var(--rural-chat);
+  border-radius:999px;
+  border:2px solid var(--chat-panel-soft);
+}
+body[data-rural-chat-color] .messages::-webkit-scrollbar-thumb:hover{
+  filter:brightness(.88);
+}
+body[data-rural-chat-color] .system-message{
+  color:var(--chat-text-soft)!important;
+}
+
+
 @media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
