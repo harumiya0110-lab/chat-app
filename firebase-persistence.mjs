@@ -65,6 +65,7 @@ function normalizeMessage(data) {
     : { like: [], helpful: [], thanks: [] };
   const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
   const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
+  const replyToText = typeof data?.replyToText === 'string' ? data.replyToText.trim().slice(0, 200) : '';
   const status = data?.status === 'resolved' ? 'resolved' : 'open';
   return {
     id: typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : crypto.randomUUID(),
@@ -78,6 +79,7 @@ function normalizeMessage(data) {
     reactions: cleanReactionUsers(data?.reactions),
     replyToId,
     replyToUsername,
+    replyToText,
     status,
     resolvedBy: typeof data?.resolvedBy === 'string' ? data.resolvedBy.trim().slice(0, 50) : '',
     resolvedAt: typeof data?.resolvedAt === 'string' ? data.resolvedAt : ''
