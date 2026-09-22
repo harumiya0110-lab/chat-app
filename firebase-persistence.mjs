@@ -60,15 +60,27 @@ function normalizeMessage(data) {
   const cleanList = (value) => Array.isArray(value)
     ? [...new Set(value.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim().slice(0, 50)))].slice(0, 100)
     : [];
+  const cleanReactionUsers = value => value && typeof value === 'object'
+    ? Object.fromEntries(['like', 'helpful', 'thanks'].map(key => [key, cleanList(value[key])]))
+    : { like: [], helpful: [], thanks: [] };
+  const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
+  const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
+  const status = data?.status === 'resolved' ? 'resolved' : 'open';
   return {
-    id: typeof data?.id === 'string' ? data.id : null,
+    id: typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : crypto.randomUUID(),
     username: typeof data?.username === 'string' && data.username ? data.username : '投稿者',
     message: typeof data?.message === 'string' ? data.message.slice(0, 2000) : '',
     userId: typeof data?.userId === 'string' ? data.userId.slice(0, 200) : '',
     createdAt,
     locationData: normalizeLocationData(data?.locationData),
     helpUsers: cleanList(data?.helpUsers),
-    helpConfirmedUsers: cleanList(data?.helpConfirmedUsers)
+    helpConfirmedUsers: cleanList(data?.helpConfirmedUsers),
+    reactions: cleanReactionUsers(data?.reactions),
+    replyToId,
+    replyToUsername,
+    status,
+    resolvedBy: typeof data?.resolvedBy === 'string' ? data.resolvedBy.trim().slice(0, 50) : '',
+    resolvedAt: typeof data?.resolvedAt === 'string' ? data.resolvedAt : ''
   };
 }
 
@@ -134,11 +146,13 @@ async function saveMessage(data) {
   if (!enabled) return null;
   const message = normalizeMessage(data);
   if (!message.message) return null;
-  const result = await firestoreRequest('/messages', {
-    method: 'POST',
-    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(message).filter(([key]) => key !== 'id').map(([key, value]) => [key, firestoreValue(value)])) })
+  const fields = Object.fromEntries(Object.entries(message).filter(([key]) => key !== 'id').map(([key, value]) => [key, firestoreValue(value)]));
+  const safeId = encodeURIComponent(message.id);
+  await firestoreRequest('/messages/' + safeId, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields })
   });
-  return String(result?.name || '').split('/').pop() || null;
+  return message.id;
 }
 
 async function getSavedMessage(id) {
@@ -181,17 +195,24 @@ async function toggleHelper(id, username) {
   return { ok: true, helping, helpUsers, count: helpUsers.length, helpConfirmedUsers: saved.helpConfirmedUsers };
 }
 
-async function loadRecentMessages() {
-  if (!enabled) return [];
-  const result = await firestoreRequest('/messages?pageSize=50&orderBy=createdAt%20desc', { method: 'GET' });
-  return (Array.isArray(result?.documents) ? result.documents : [])
+async function loadMessagePage(pageToken = '', pageSize = 50) {
+  if (!enabled) return { messages: [], nextPageToken: '' };
+  const params = new URLSearchParams({
+    pageSize: String(Math.min(50, Math.max(1, pageSize))),
+    orderBy: 'createdAt desc'
+  });
+  if (pageToken) params.set('pageToken', pageToken);
+  const result = await firestoreRequest('/messages?' + params.toString(), { method: 'GET' });
+  const messages = (Array.isArray(result?.documents) ? result.documents : [])
     .map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null }))
     .filter(item => item.message)
     .map(normalizeMessage)
     .reverse();
+  return { messages, nextPageToken: String(result?.nextPageToken || '') };
 }
 
 const usernameBySocketId = new Map();
+const historyCursorBySocketId = new Map();
 const originalServerEmit = SocketIOServer.prototype.emit;
 SocketIOServer.prototype.emit = function(eventName, ...args) {
   if (eventName !== 'receive-message' || !enabled) return originalServerEmit.call(this, eventName, ...args);
@@ -231,6 +252,74 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       catch (error) { console.error('Firestore chat message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
     });
 
+    socket.on('load-more-chat-history', async (_payload, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const token = historyCursorBySocketId.get(socket.id) || '';
+      if (!username) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
+      if (!token) return typeof ack === 'function' && ack({ ok: true, messages: [], hasMore: false });
+      try {
+        const page = await loadMessagePage(token, 50);
+        historyCursorBySocketId.set(socket.id, page.nextPageToken);
+        const messages = page.messages.map(message => ({ ...message, timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP') }));
+        if (typeof ack === 'function') ack({ ok: true, messages, hasMore: Boolean(page.nextPageToken) });
+      } catch (error) {
+        console.error('Firestore older history load failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
+    socket.on('toggle-reaction', async (payload = {}, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      const reaction = ['like', 'helpful', 'thanks'].includes(payload.reaction) ? payload.reaction : '';
+      if (!username || !id || !reaction) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
+      try {
+        const saved = await getSavedMessage(id);
+        if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' });
+        const reactions = saved.reactions && typeof saved.reactions === 'object' ? saved.reactions : { like: [], helpful: [], thanks: [] };
+        const users = Array.isArray(reactions[reaction]) ? [...reactions[reaction]] : [];
+        const index = users.indexOf(username);
+        if (index >= 0) users.splice(index, 1);
+        else { users.push(username); if (users.length > 100) users.splice(0, users.length - 100); }
+        reactions[reaction] = users;
+        await firestoreRequest('/messages/' + encodeURIComponent(id) + '?updateMask.fieldPaths=reactions', {
+          method: 'PATCH',
+          body: JSON.stringify({ fields: { reactions: firestoreValue(reactions) } })
+        });
+        socket.server.emit('message-reactions-updated', { id, reactions });
+        if (typeof ack === 'function') ack({ ok: true, reactions });
+      } catch (error) {
+        console.error('Firestore reaction update failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
+    socket.on('toggle-resolved', async (payload = {}, ack) => {
+      const username = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
+      try {
+        const saved = await getSavedMessage(id);
+        if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' });
+        if (saved.username !== username) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owner' });
+        const nextStatus = saved.status === 'resolved' ? 'open' : 'resolved';
+        const fields = nextStatus === 'resolved'
+          ? { status: firestoreValue('resolved'), resolvedBy: firestoreValue(username), resolvedAt: firestoreValue(new Date().toISOString()) }
+          : { status: firestoreValue('open'), resolvedBy: firestoreValue(''), resolvedAt: firestoreValue('') };
+        await firestoreRequest('/messages/' + encodeURIComponent(id) + '?updateMask.fieldPaths=status&updateMask.fieldPaths=resolvedBy&updateMask.fieldPaths=resolvedAt', {
+          method: 'PATCH',
+          body: JSON.stringify({ fields })
+        });
+        socket.server.emit('message-resolved-updated', {
+          id, status: nextStatus, resolvedBy: nextStatus === 'resolved' ? username : '', resolvedAt: nextStatus === 'resolved' ? fields.resolvedAt.stringValue : ''
+        });
+        if (typeof ack === 'function') ack({ ok: true, status: nextStatus });
+      } catch (error) {
+        console.error('Firestore resolve update failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     socket.on('toggle-help', async (payload = {}, ack) => {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
@@ -244,23 +333,30 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       if (socketEventName === 'username-accepted' && args[0]?.username) {
         usernameBySocketId.set(socket.id, String(args[0].username));
         const accepted = originalSocketEmit(socketEventName, ...args);
+        historyCursorBySocketId.set(socket.id, '');
         originalSocketEmit('chat-history-start');
         void (async () => {
           try {
-            const history = await loadRecentMessages();
-            originalSocketEmit('chat-history', history.map(message => ({
+            const page = await loadMessagePage('', 50);
+            historyCursorBySocketId.set(socket.id, page.nextPageToken);
+            originalSocketEmit('chat-history', page.messages.map(message => ({
               ...message,
               timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP')
             })));
+            originalSocketEmit('chat-history-meta', { hasMore: Boolean(page.nextPageToken) });
           } catch (error) {
             console.error('Firestore history load failed:', error);
+            originalSocketEmit('chat-history-meta', { hasMore: false });
           } finally {
             originalSocketEmit('chat-history-end');
           }
         })();
         return accepted;
       }
-      if (socketEventName === 'disconnect') usernameBySocketId.delete(socket.id);
+      if (socketEventName === 'disconnect') {
+        usernameBySocketId.delete(socket.id);
+        historyCursorBySocketId.delete(socket.id);
+      }
       return originalSocketEmit(socketEventName, ...args);
     };
     return listener(socket, ...rest);
