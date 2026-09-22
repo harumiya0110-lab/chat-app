@@ -317,6 +317,48 @@ io.on('connection', socket => {
     io.emit('update-users', Object.values(users));
   });
 
+  socket.on('send-location-message', (data, ack) => {
+    const user = users[socket.id];
+    if (!user) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized', message: 'チャットに参加してから投稿してください。' });
+      return;
+    }
+
+    const lat = Number(data?.lat);
+    const lng = Number(data?.lng);
+    const eventType = eventTypes.includes(data?.eventType) ? data.eventType : 'その他';
+    const message = typeof data?.message === 'string' ? data.message.trim().slice(0, 2000) : '';
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-location', message: '選択した場所が正しくありません。' });
+      return;
+    }
+    if (!message) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'empty-message', message: 'その場所で起きたことを入力してください。' });
+      return;
+    }
+
+    const locationData = {
+      lat,
+      lng,
+      eventType,
+      summary: message.slice(0, 100),
+      locationName: '地図で選択した地点',
+      matchedLocation: 'ユーザーが地図上で選択',
+      matchedQuery: 'manual-map-selection'
+    };
+
+    socket.server.emit('receive-message', {
+      username: user.username,
+      message,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: socket.id,
+      locationData
+    });
+
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
   socket.on('send-image', data => {
     const user = users[socket.id];
     if (user && data?.image) io.emit('receive-image', { username: user.username, image: data.image, filename: data.filename || null, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id });
