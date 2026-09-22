@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
-import { claimAccountName, releaseAccountName, isAccountNameAvailable } from './firebase-persistence.mjs';
+import { claimAccountName, releaseAccountName, isAccountNameAvailable, isAccountNameLinkedToUser } from './firebase-persistence.mjs';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
 import { registerChatBackgroundPersistence } from './chat-background-persistence.mjs';
 
@@ -302,15 +302,66 @@ function safeAudioMime(value) {
 
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
-  socket.on('set-username', username => {
+  socket.on('email-account-session', payload => {
+    const username = typeof payload?.username === 'string'
+      ? payload.username.normalize('NFC').trim().slice(0, 20)
+      : '';
+    const uid = typeof payload?.uid === 'string' ? payload.uid.trim() : '';
+    const email = typeof payload?.email === 'string' ? payload.email.trim().slice(0, 320) : '';
+    if (!username || !uid) return;
+    socket.__emailAccountSession = { username, uid, email };
+  });
+
+  socket.on('set-username', async username => {
     if (typeof username !== 'string' || !username.trim()) return;
-    const cleanUsername = username.trim().slice(0, 50);
-    const isTaken = Object.values(users).some(u => u.username?.toLowerCase() === cleanUsername.toLowerCase());
+    const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
+
+    // メール連携済みのアカウント名は「名前だけで参加」には使わせず、
+    // 本人のFirebaseアカウントから来た参加要求だけを許可します。
+    const session = socket.__emailAccountSession;
+    if (session) {
+      const sessionName = String(session.username || '').normalize('NFC').trim();
+      if (sessionName !== cleanUsername || !session.uid) {
+        socket.emit('username-error', { message: 'メール連携アカウントの認証情報が一致しません。もう一度ログインしてください。' });
+        return;
+      }
+      try {
+        const linked = await isAccountNameLinkedToUser(cleanUsername, session.uid, session.email);
+        if (!linked) {
+          socket.emit('username-error', { message: 'このアカウント名はメールアドレスと正しく連携されていません。' });
+          return;
+        }
+      } catch (error) {
+        console.error('Linked account-name verification failed:', error);
+        socket.emit('username-error', { message: 'アカウントの確認に失敗しました。しばらくしてから再試行してください。' });
+        return;
+      }
+    } else {
+      try {
+        const available = await isAccountNameAvailable(cleanUsername);
+        if (available.ok && available.available === false) {
+          socket.emit('username-error', { message: 'このアカウント名はメールアドレスと連携されています。メールアドレスでログインして参加してください。' });
+          return;
+        }
+      } catch (error) {
+        console.error('Reserved account-name check failed:', error);
+        // Firestore確認に失敗した場合は、名前だけ参加を安全側に倒して拒否します。
+        socket.emit('username-error', { message: 'アカウント名を確認できませんでした。しばらくしてから再試行してください。' });
+        return;
+      }
+    }
+
+    const isTaken = Object.values(users).some(u => u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase());
     if (isTaken) {
       socket.emit('username-error', { message: 'この名前は既に使用されています。別の名前を選んでください。' });
       return;
     }
-    users[socket.id] = { id: socket.id, username: cleanUsername, timestamp: new Date() };
+
+    users[socket.id] = {
+      id: socket.id,
+      username: cleanUsername,
+      timestamp: new Date()
+    };
     socket.emit('username-accepted', { username: cleanUsername });
     void initializeThemeForSocket(socket, cleanUsername);
     io.emit('user-joined', { username: cleanUsername, message: `${cleanUsername}さんがチャットに参加しました` });
