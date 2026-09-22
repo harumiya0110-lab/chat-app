@@ -4,6 +4,7 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
@@ -290,12 +291,14 @@ app.post('/api/messages', async (req, res) => {
     const message = {
       text: cleanText,
       userId: cleanUserId,
+      id: randomUUID(),
       createdAt: new Date().toISOString(),
       locationData,
       replyToId: typeof replyToId === 'string' ? replyToId.trim().slice(0, 120) : '',
       replyToUsername: typeof replyToUsername === 'string' ? replyToUsername.trim().slice(0, 50) : ''
     };
     io.emit('receive-message', {
+      id: message.id,
       username: cleanUserId,
       message: cleanText,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
@@ -401,6 +404,7 @@ io.on('connection', socket => {
     };
 
     socket.server.emit('receive-message', {
+      id: randomUUID(),
       username: user.username,
       message,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
@@ -446,6 +450,7 @@ io.on('connection', socket => {
     const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
     const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
     io.emit('receive-message', {
+      id: randomUUID(),
       username: user.username,
       message,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
