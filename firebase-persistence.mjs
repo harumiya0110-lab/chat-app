@@ -327,9 +327,17 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       if ((socketEventName === 'username-accepted' || socketEventName === 'email-account-accepted') && args[0]?.username) {
         usernameBySocketId.set(socket.id, String(args[0].username));
         const accepted = originalSocketEmit(socketEventName, ...args);
+        originalSocketEmit('chat-history-start');
         void (async () => {
-          try { for (const message of await loadRecentMessages()) originalSocketEmit('receive-message', { ...message, timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP') }); }
-          catch (error) { console.error('Firestore history load failed:', error); }
+          try {
+            for (const message of await loadRecentMessages()) {
+              originalSocketEmit('receive-message', { ...message, timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP') });
+            }
+          } catch (error) {
+            console.error('Firestore history load failed:', error);
+          } finally {
+            originalSocketEmit('chat-history-end');
+          }
         })();
         return accepted;
       }
