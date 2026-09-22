@@ -264,3 +264,111 @@ body[data-rural-theme="night"] .message-reply-label{color:#9ec5e8!important}
 /* チャット色が別途設定されている場合でも、テーマの本文可読性を優先します。 */
 body[data-rural-theme] .message-bubble{font-weight:500}
 body[data-rural-theme] .message-header span:first-child{font-weight:700}
+
+
+/* 「チャットの色」を投稿背景そのものに反映し、色に応じて文字色を切り替えます。 */
+body[data-rural-chat-color="forest"] .messages .message,
+body[data-rural-chat-color="forest"] .messages .message.reply-message{
+  background:#2f7d4a!important;
+  color:#fff!important;
+}
+body[data-rural-chat-color="forest"] .messages .message-bubble,
+body[data-rural-chat-color="forest"] .messages .message-header,
+body[data-rural-chat-color="forest"] .messages .message-reply,
+body[data-rural-chat-color="forest"] .messages .message-reply-quote{
+  color:#fff!important;
+}
+body[data-rural-chat-color="forest"] .messages .message-header{color:#eaf6ee!important}
+
+body[data-rural-chat-color="blue"] .messages .message,
+body[data-rural-chat-color="blue"] .messages .message.reply-message{
+  background:#2d78b8!important;
+  color:#fff!important;
+}
+body[data-rural-chat-color="blue"] .messages .message-bubble,
+body[data-rural-chat-color="blue"] .messages .message-reply,
+body[data-rural-chat-color="blue"] .messages .message-reply-quote{
+  color:#fff!important;
+}
+body[data-rural-chat-color="blue"] .messages .message-header{color:#e9f5ff!important}
+
+body[data-rural-chat-color="sakura"] .messages .message,
+body[data-rural-chat-color="sakura"] .messages .message.reply-message{
+  background:#d85c86!important;
+  color:#3f1f2b!important;
+}
+body[data-rural-chat-color="sakura"] .messages .message-bubble,
+body[data-rural-chat-color="sakura"] .messages .message-reply,
+body[data-rural-chat-color="sakura"] .messages .message-reply-quote{
+  color:#3f1f2b!important;
+}
+body[data-rural-chat-color="sakura"] .messages .message-header{color:#4e2736!important}
+
+body[data-rural-chat-color="violet"] .messages .message,
+body[data-rural-chat-color="violet"] .messages .message.reply-message{
+  background:#7657b8!important;
+  color:#fff!important;
+}
+body[data-rural-chat-color="violet"] .messages .message-bubble,
+body[data-rural-chat-color="violet"] .messages .message-reply,
+body[data-rural-chat-color="violet"] .messages .message-reply-quote{
+  color:#fff!important;
+}
+body[data-rural-chat-color="violet"] .messages .message-header{color:#f1edff!important}
+
+body[data-rural-chat-color="sunset"] .messages .message,
+body[data-rural-chat-color="sunset"] .messages .message.reply-message{
+  background:#d97932!important;
+  color:#402211!important;
+}
+body[data-rural-chat-color="sunset"] .messages .message-bubble,
+body[data-rural-chat-color="sunset"] .messages .message-reply,
+body[data-rural-chat-color="sunset"] .messages .message-reply-quote{
+  color:#402211!important;
+}
+body[data-rural-chat-color="sunset"] .messages .message-header{color:#4f2b16!important}
+
+body[data-rural-chat-color="ink"] .messages .message,
+body[data-rural-chat-color="ink"] .messages .message.reply-message{
+  background:#333!important;
+  color:#fff!important;
+}
+body[data-rural-chat-color="ink"] .messages .message-bubble,
+body[data-rural-chat-color="ink"] .messages .message-reply,
+body[data-rural-chat-color="ink"] .messages .message-reply-quote{
+  color:#fff!important;
+}
+body[data-rural-chat-color="ink"] .messages .message-header{color:#f0f0f0!important}
+
+/* 自分の投稿・他の人の投稿のどちらも、選択したチャット色を背景として使います。 */
+body[data-rural-chat-color] .messages .message.own{
+  background:var(--rural-chat)!important;
+  border-left-color:rgba(255,255,255,.9)!important;
+}
+
+/* 返信スレッドも親投稿と同じチャット色で統一し、返信であることは左ラインで示します。 */
+body[data-rural-chat-color] .messages .message-replies{
+  border-left-color:var(--rural-chat)!important;
+}
+body[data-rural-chat-color] .messages .message-replies-toggle{
+  background:var(--chat-input-bg,#fff)!important;
+  color:var(--chat-text,#294237)!important;
+}
+body[data-rural-chat-color="forest"] .messages .message-replies-toggle,
+body[data-rural-chat-color="blue"] .messages .message-replies-toggle,
+body[data-rural-chat-color="violet"] .messages .message-replies-toggle,
+body[data-rural-chat-color="ink"] .messages .message-replies-toggle{
+  color:#21342c!important;
+}
+body[data-rural-chat-color="sakura"] .messages .message-replies-toggle,
+body[data-rural-chat-color="sunset"] .messages .message-replies-toggle{
+  color:#402211!important;
+}
+
+/* 返信先を示す引用部分も選択色の上で読みやすくします。 */
+body[data-rural-chat-color="forest"] .message-reply-label,
+body[data-rural-chat-color="blue"] .message-reply-label,
+body[data-rural-chat-color="violet"] .message-reply-label,
+body[data-rural-chat-color="ink"] .message-reply-label{color:#fff!important}
+body[data-rural-chat-color="sakura"] .message-reply-label,
+body[data-rural-chat-color="sunset"] .message-reply-label{color:#402211!important}
