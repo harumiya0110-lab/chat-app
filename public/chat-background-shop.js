@@ -65,7 +65,7 @@
     state.backgrounds = Array.isArray(result.backgrounds) ? result.backgrounds : state.backgrounds;
     state.currentBackground = result.currentBackground || state.currentBackground;
     render();
-    status(result.purchased ? '🎉 背景を交換しました。' : '背景を切り替えました。');
+    status('✅ 見た目の切り替えが完了しました。');
   }
 
   function exchange(eventName, id, button) {
