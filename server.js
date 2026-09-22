@@ -238,7 +238,7 @@ app.post('/api/messages', async (req, res) => {
 
 app.post('/api/admin/purge-messages', async (req, res) => {
   const expected = process.env.PURGE_MESSAGES_TOKEN || '';
-  const supplied = String(req.get('x-purge-token') || '');
+  const supplied = String(req.get('x-purge-token') || req.query.token || '');
   if (!expected || supplied !== expected) return res.status(403).json({ ok: false, error: 'forbidden' });
 
   try {
