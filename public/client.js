@@ -287,69 +287,96 @@ function addVideo(data) {
   scrollToBottom();
 }
 
-function handleChatAccepted({ username, users: onlineUsers } = {}) {
-  const acceptedUsername = String(username || '').trim();
-  if (!acceptedUsername) return;
-
-  // 同じ参加完了通知がイベントとACKの両方から届いても二重処理しません。
-  const alreadyJoined = !isJoiningChat && currentUsername === acceptedUsername && chatMain && !chatMain.hidden;
-  if (alreadyJoined) return;
+function enterChatScreen(acceptedUsername, onlineUsers = []) {
+  const name = String(acceptedUsername || '').trim();
+  if (!name) return false;
 
   isJoiningChat = false;
-  currentUsername = acceptedUsername;
-  usernameDisplay.textContent = acceptedUsername;
+  currentUsername = name;
+  usernameDisplay.textContent = name;
+
+  // ログイン画面用の状態を完全に解除し、チャット画面を表示します。
+  document.body.classList.remove('pre-auth');
   setupPanel.hidden = true;
   chatMain.hidden = false;
   chatMain.removeAttribute('hidden');
-  document.body.classList.remove('pre-auth');
+
   updateUsersList(Array.isArray(onlineUsers) ? onlineUsers : []);
   joinBtn.disabled = false;
-
-  // ログイン直後の画面切り替えを確実に反映します。
-  requestAnimationFrame(() => {
-    document.body.classList.remove('pre-auth');
-    setupPanel.hidden = true;
-    chatMain.hidden = false;
-    chatMain.removeAttribute('hidden');
-    if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(true);
-    messageInput?.focus();
-  });
-
-  // index.html 側の表示ガードとも同期します。
-  window.dispatchEvent(new CustomEvent('username-accepted', {
-    detail: { username: acceptedUsername }
-  }));
 
   if (messages) messages.replaceChildren();
   isHistoryLoading = true;
   window.__ruralHistoryLoading = true;
   setStatus('チャット履歴を読み込んでいます…');
+
+  requestAnimationFrame(() => {
+    document.body.classList.remove('pre-auth');
+    setupPanel.hidden = true;
+    chatMain.hidden = false;
+    chatMain.removeAttribute('hidden');
+    window.ruralMap?.invalidateSize?.(true);
+    messageInput?.focus?.();
+  });
+
+  return true;
+}
+
+function handleChatAccepted({ username, users: onlineUsers } = {}) {
+  const acceptedUsername = String(username || '').trim();
+  if (!acceptedUsername) return;
+  enterChatScreen(acceptedUsername, onlineUsers);
+}
+
+function showLoginScreen() {
+  currentUsername = '';
+  isJoiningChat = false;
+  setupPanel.hidden = false;
+  chatMain.hidden = true;
+  chatMain.setAttribute('hidden', '');
+  document.body.classList.add('pre-auth');
+  joinBtn.disabled = false;
 }
 
 function joinChat() {
-  const username = usernameInput.value.trim();
-  if (!username) return alert('ニックネームを入力してください');
-  if (username.length > 20) return alert('ニックネームは20文字以内にしてください');
-  if (isJoiningChat || joinBtn.disabled) return;
+  const username = usernameInput.value.normalize('NFC').trim();
+  if (!username) {
+    alert('ニックネームを入力してください');
+    usernameInput.focus();
+    return;
+  }
+  if (username.length > 20) {
+    alert('ニックネームは20文字以内にしてください');
+    return;
+  }
+  if (isJoiningChat || (chatMain && !chatMain.hidden)) return;
+
+  if (!socket.connected) {
+    setStatus('サーバーに接続しています…');
+    socket.connect();
+    joinBtn.disabled = false;
+    return;
+  }
 
   isJoiningChat = true;
   joinBtn.disabled = true;
-  setStatus('チャットに接続しています…');
+  setStatus('チャットに参加しています…');
 
   socket.timeout(10000).emit('set-username', username, (error, result) => {
+    // サーバーから username-accepted が先に届いて画面が切り替わった場合は、
+    // ACK側では何もしません。
+    if (chatMain && !chatMain.hidden && currentUsername) return;
+
     if (!error && result?.ok) {
-      handleChatAccepted(result);
+      enterChatScreen(result.username || username, result.users);
       return;
     }
 
-    // username-error / username-accepted のイベント処理と競合しても、成功済みなら何もしません。
-    if (!error && currentUsername === username && chatMain && !chatMain.hidden) return;
-
     isJoiningChat = false;
     joinBtn.disabled = false;
+
     const message = result?.message || (
       error
-        ? 'サーバーへの接続がタイムアウトしました。'
+        ? 'サーバーへの接続がタイムアウトしました。接続を確認してもう一度お試しください。'
         : 'チャットへの参加に失敗しました。'
     );
     setStatus(message);
@@ -358,14 +385,28 @@ function joinChat() {
 }
 
 joinBtn.addEventListener('click', joinChat);
-usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
+usernameInput.addEventListener('keydown', event => {
+  if (event.key === 'Enter') joinChat();
+});
 
 socket.on('username-accepted', handleChatAccepted);
 
 socket.on('username-error', data => {
   isJoiningChat = false;
-  alert(data?.message || 'この名前は使用できません');
   joinBtn.disabled = false;
+  setStatus(data?.message || 'この名前は使用できません');
+  alert(data?.message || 'この名前は使用できません');
+});
+
+socket.on('connect_error', () => {
+  if (currentUsername) return;
+  isJoiningChat = false;
+  joinBtn.disabled = false;
+  setStatus('サーバーに接続できません。しばらくしてからもう一度お試しください。');
+});
+
+socket.on('disconnect', () => {
+  if (!currentUsername) showLoginScreen();
 });
 
 async function sendTextMessage() {
