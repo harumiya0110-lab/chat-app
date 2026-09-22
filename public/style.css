@@ -180,4 +180,27 @@ body[data-rural-chat-color] .system-message{
 }
 
 
+
+/* 「チャットに参加しました」「退出しました」などの通知も選択色に合わせます。 */
+body[data-rural-chat-color] .system-message{
+  display:block;
+  width:fit-content;
+  max-width:90%;
+  margin:8px auto;
+  padding:6px 11px;
+  border:1px solid color-mix(in srgb,var(--rural-chat) 24%,transparent);
+  border-radius:999px;
+  background:color-mix(in srgb,var(--rural-chat) 9%,var(--chat-panel-soft));
+  color:var(--chat-text-soft)!important;
+  font-size:12px;
+  line-height:1.45;
+}
+body[data-rural-chat-color="blue"] .system-message{color:#345e75!important}
+body[data-rural-chat-color="sakura"] .system-message{color:#805267!important}
+body[data-rural-chat-color="violet"] .system-message{color:#65557c!important}
+body[data-rural-chat-color="sunset"] .system-message{color:#755643!important}
+body[data-rural-chat-color="ink"] .system-message{color:#555!important}
+body[data-rural-chat-color="forest"] .system-message{color:#4f6b5b!important}
+
+
 @media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
