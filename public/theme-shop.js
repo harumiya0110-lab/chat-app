@@ -90,7 +90,7 @@
     balanceEl.textContent = `⭐ 地域ポイント：${Math.max(0, Math.floor(Number(state.points || 0)))}pt`;
     gridEl.innerHTML = Object.entries(catalog).map(([id, info]) => {
       const owned = state.themes.includes(id) || state.chatColors.includes(id);
-      const current = state.currentTheme === id || state.currentChatColor === id;
+      const current = state.currentTheme === id;
       const cost = id === 'forest' ? '無料' : `${Number(info.cost || 0)}pt`;
       const buttonText = current ? '✅ 使用中' : owned ? 'この色を使う' : `⭐ ${cost}で交換`;
       const swatch = info.color || '#2f7d4a';
@@ -162,7 +162,7 @@
     const id = b.dataset.themeId;
     if (!currentUsername || !socket.connected) return status('先にチャットへ参加してください。');
     const owned = state.themes.includes(id) || state.chatColors.includes(id);
-    const current = state.currentTheme === id || state.currentChatColor === id;
+    const current = state.currentTheme === id;
     if (current) return;
     status(owned ? '🎨 色を切り替えています…' : '⭐ 地域ポイントで色を交換しています…');
     sendExchange(owned ? 'select-theme' : 'exchange-theme', { themeId: id }, b, '⚠️ 見た目の変更に失敗しました。もう一度試してください。');
