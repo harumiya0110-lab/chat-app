@@ -35,7 +35,19 @@
   <div id="mini-call-bar" class="mini-call-bar" hidden><video id="mini-local" autoplay muted playsinline></video><video id="mini-remote" autoplay playsinline></video><button id="mini-unminimize">↗️ 通話を開く</button><button id="mini-end" class="danger">📞 終了</button></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="/socket.io/socket.io.js"></script>
   <script>
-    (() => { const revealApp=()=>{const chatMain=document.getElementById('chat-main');if(chatMain?.hidden)return false;document.body.classList.remove('pre-auth');setTimeout(()=>{if(window.ruralMap?.invalidateSize)window.ruralMap.invalidateSize(true)},100);return true;}; window.addEventListener('rural-account-authenticated',()=>{revealApp();setTimeout(revealApp,300)},true); window.addEventListener('username-accepted',revealApp,true); window.addEventListener('rural-chat-joined',revealApp,true); })();
+    (() => {
+      const revealApp = () => {
+        const chatMain = document.getElementById('chat-main');
+        if (chatMain?.hidden) return false;
+        document.body.classList.remove('pre-auth');
+        setTimeout(() => {
+          if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(true);
+        }, 100);
+        return true;
+      };
+      window.addEventListener('username-accepted', revealApp, true);
+      window.addEventListener('rural-chat-joined', revealApp, true);
+    })();
   </script>
   <script>
     (()=>{const originalLeafletMap=L.map.bind(L);L.map=(...args)=>{const createdMap=originalLeafletMap(...args);window.ruralMap=createdMap;return createdMap;};})();
@@ -48,8 +60,6 @@
   </script>
   <script src="/client.js"></script>
   <script src="/video-upload-fix.js"></script>
-  <script src="/auth.js"></script>
-  <script src="/account-auto-login.js"></script>
   <script src="/chat-delete.js"></script>
   <script src="/media-delete.js"></script>
   <script src="/points.js"></script>
@@ -72,10 +82,7 @@
     body.pre-auth #setup-panel input{width:min(340px,100%)!important;padding:12px 14px!important;border:1px solid #b9c9b8!important;border-radius:8px!important;background:#fff!important;color:#21342c!important;}
     body.pre-auth #setup-panel button{border:0!important;border-radius:8px!important;padding:10px 14px!important;background:#d96b3b!important;color:#fff!important;}
     body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main{display:none!important;}
-    body.pre-auth .setup-welcome,body.pre-auth .auth-choice,body.pre-auth .auth-view{width:min(100%,520px)!important;}
-    body.pre-auth .account-login #account-actions,
-    body.pre-auth .account-login #account-signout-btn,
-    body.pre-auth .account-login .account-signout{display:none!important;}
+
   </style>
 </body>
 </html>
