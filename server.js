@@ -103,14 +103,42 @@ function extractJson(text) {
 }
 
 function normalizeLocationQuery(value) {
-  return String(value || '').replace(/[「」『』]/g, '').replace(/\s+/g, ' ').replace(/(付近|周辺|あたり|辺り|近く|近辺|付近で|周辺で|あたりで|近くで)$/u, '').trim().slice(0, 200);
+  return String(value || '')
+    .replace(/[「」『』]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^(?:〒|郵便番号)\s*/u, '')
+    .replace(/(付近|周辺|あたり|辺り|近く|近辺|付近で|周辺で|あたりで|近くで)$/u, '')
+    .trim()
+    .slice(0, 200);
+}
+
+function extractPostalCodeCandidates(text) {
+  const candidates = [];
+  const source = String(text || '').replace(/郵便\s*番号/gu, '').replace(/〒/gu, '');
+  const patterns = [
+    /(\d{3})[\s　]*[-ー－—―]?[\s　]*(\d{4})/gu,
+    /(\d{3})[\s　]+(?:の|ー|－|-)?[\s　]*(\d{4})/gu
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const code = match[1] + '-' + match[2];
+      if (!candidates.includes(code)) candidates.push(code);
+    }
+  }
+  const compact = source.match(/(?:^|[^0-9])(\d{7})(?!\d)/u);
+  if (compact) {
+    const code = compact[1].slice(0, 3) + '-' + compact[1].slice(3);
+    if (!candidates.includes(code)) candidates.push(code);
+  }
+  return candidates.slice(0, 5);
 }
 
 function extractLocationCandidatesFromText(text) {
-  const candidates = [];
+  const candidates = [...extractPostalCodeCandidates(text)];
   const patterns = [
     /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:都|道|府|県|市|区|町|村|郡))/gu,
-    /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:駅|公園|橋|学校|公民館|役所|市役所|区役所|町役場|村役場|病院|神社|寺|港|川|山|峠|交差点))/gu
+    /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:駅|公園|橋|学校|公民館|役所|市役所|区役所|町役場|村役場|病院|神社|寺|港|川|山|峠|交差点|耕地))/gu,
+    /([一-龯ぁ-んァ-ヶA-Za-z0-9０-９]+(?:耕地))/gu
   ];
   for (const pattern of patterns) {
     for (const match of String(text || '').matchAll(pattern)) {
@@ -118,7 +146,7 @@ function extractLocationCandidatesFromText(text) {
       if (value.length >= 2 && !candidates.includes(value)) candidates.push(value);
     }
   }
-  return candidates.slice(0, 10);
+  return candidates.slice(0, 12);
 }
 
 function buildGeocodingCandidates(locationName, locationCandidates, originalText) {
@@ -127,12 +155,33 @@ function buildGeocodingCandidates(locationName, locationCandidates, originalText
     const normalized = normalizeLocationQuery(value);
     if (normalized.length >= 2 && !candidates.includes(normalized)) candidates.push(normalized);
   };
+  const addPostalVariants = postalCode => {
+    const normalized = String(postalCode || '').replace(/[^0-9]/g, '');
+    if (normalized.length !== 7) return;
+    add(normalized.slice(0, 3) + '-' + normalized.slice(3));
+    add(normalized);
+    add('〒' + normalized.slice(0, 3) + '-' + normalized.slice(3));
+  };
+  for (const candidate of extractPostalCodeCandidates(originalText)) addPostalVariants(candidate);
   add(locationName);
-  for (const candidate of locationCandidates || []) add(candidate);
-  for (const candidate of extractLocationCandidatesFromText(originalText)) add(candidate);
-  const adminAreas = extractLocationCandidatesFromText(originalText).filter(value => /(都|道|府|県|市|区|町|村)$/u.test(value));
-  if (locationName && adminAreas.length) for (const area of adminAreas.slice(0, 3)) add(`${area} ${locationName}`);
-  return candidates.slice(0, 12);
+  for (const candidate of locationCandidates || []) {
+    if (/^\d{3}-\d{4}$/u.test(String(candidate).trim())) addPostalVariants(candidate);
+    else add(candidate);
+  }
+  for (const candidate of extractLocationCandidatesFromText(originalText)) {
+    if (/^\d{3}-\d{4}$/u.test(candidate)) addPostalVariants(candidate);
+    else add(candidate);
+  }
+  const allTextCandidates = extractLocationCandidatesFromText(originalText);
+  const adminAreas = allTextCandidates.filter(value => /(都|道|府|県|市|区|町|村)$/u.test(value));
+  const postalCodes = extractPostalCodeCandidates(originalText);
+  if (locationName && adminAreas.length) {
+    for (const area of adminAreas.slice(0, 3)) add(area + ' ' + locationName);
+  }
+  if (postalCodes.length && locationName && !/^\d{3}-\d{4}$/u.test(locationName)) {
+    for (const code of postalCodes) add(code + ' ' + locationName);
+  }
+  return candidates.slice(0, 15);
 }
 
 async function geocodeLocation(locationName, locationCandidates = [], originalText = '') {
@@ -175,7 +224,7 @@ async function geocodeLocation(locationName, locationCandidates = [], originalTe
 async function analyzeMessage(text) {
   if (!GEMINI_API_KEY || !ai) throw new Error('GEMINI_API_KEYが設定されていません');
   const systemPrompt = `あなたは地域情報チャットの解析AIです。\nユーザーのメッセージから、地図表示に必要な場所情報とイベント種別を抽出します。\n必ず指定されたJSON形式で返してください。\n場所は推測せず、メッセージに書かれている地名・施設名をできるだけそのまま保持してください。`;
-  const userPrompt = `次のメッセージを解析してください。\n\nルール:\n- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。\n- 場所を推測・創作しない。\n- locationName は、メッセージに明記された地名・施設名を優先する。\n- 「○○付近」「○○の近く」「○○周辺」は、位置を表す部分の名前だけをlocationNameにする。\n- locationCandidatesには、同じ場所を表す別表記や、検索に使えそうな短い候補を最大5個入れる。\n- 都道府県・市区町村・町名・施設名など、メッセージ中に書かれている情報を省略しすぎない。\n- 元メッセージだけでは行政区が分からない場合は、勝手に自治体を補わない。\n- eventType は「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれかにする。\n- 場所がない場合は hasLocation=false、locationName=""、locationCandidates=[] にする。\n- summary は短い日本語にする。\n\nメッセージ:\n${text}`;
+  const userPrompt = `次のメッセージを解析してください。\n\nルール:\n- 場所を文章から明確に特定できる場合だけ hasLocation を true にする。\n- 郵便番号が含まれている場合は、その郵便番号を場所情報として扱い、hasLocation=trueにする。\n- 「○○耕地」「○○一番耕地」などの表記が含まれている場合は、住所の一部として locationName または locationCandidates に保持する。\n- 場所を推測・創作しない。\n- locationName は、メッセージに明記された地名・施設名を優先する。\n- 「○○付近」「○○の近く」「○○周辺」は、位置を表す部分の名前だけをlocationNameにする。\n- locationCandidatesには、同じ場所を表す別表記や、検索に使えそうな短い候補を最大5個入れる。\n- 郵便番号が書かれている場合は、locationCandidatesに郵便番号をそのまま含める。郵便番号は「〒123-4567」「123-4567」「1234567」のどの表記でもよい。\n- 「○○耕地」のような日本の住所・町域に使われる「耕地」という地名表現も、場所として正しく扱う。\n- 都道府県・市区町村・町名・施設名など、メッセージ中に書かれている情報を省略しすぎない。\n- 元メッセージだけでは行政区が分からない場合は、勝手に自治体を補わない。\n- eventType は「鳥獣目撃」「道路障害」「助け合い」「イベント」「その他」のいずれかにする。\n- 場所がない場合は hasLocation=false、locationName=""、locationCandidates=[] にする。\n- summary は短い日本語にする。\n\nメッセージ:\n${text}`;
   const response = await ai.models.generateContent({
     model: GEMINI_MODEL,
     contents: userPrompt,
