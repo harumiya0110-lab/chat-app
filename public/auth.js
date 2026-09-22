@@ -222,6 +222,40 @@
     return messages[code] || `ログインに失敗しました${code ? `（${code}）` : ''}`;
   }
 
+  async function checkAccountName(name) {
+    const clean = String(name || '').normalize('NFC').trim().slice(0, 20);
+    if (!clean) return { ok: false, available: false, reason: 'invalid' };
+    const response = await fetch(`/api/account-name/check?name=${encodeURIComponent(clean)}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    const result = await response.json().catch(() => ({ ok: false, available: false, reason: 'server-error' }));
+    if (!response.ok) return { ok: false, available: false, reason: result.reason || 'server-error' };
+    return result;
+  }
+
+  async function claimAccountName(name, uid, email) {
+    const response = await fetch('/api/account-name/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ accountName: name, uid, email })
+    });
+    return response.json().catch(() => ({ ok: false, reason: 'server-error' }));
+  }
+
+  async function rollbackCreatedUser(auth, user) {
+    try {
+      if (auth?.currentUser?.uid === user?.uid) await user.delete();
+    } catch (error) {
+      console.error('Created Firebase user rollback failed:', error);
+    }
+    try {
+      await auth?.signOut();
+    } catch (error) {
+      console.error('Rollback sign-out failed:', error);
+    }
+  }
+
   function setButtonsDisabled(disabled) {
     [emailLoginBtn, emailSignupBtn, passwordResetBtn, loginChoiceBtn, signupChoiceBtn, loginBackBtn, signupBackBtn].forEach(button => { button.disabled = disabled; });
   }
@@ -245,6 +279,7 @@
     window.ruralFirebaseAuth.useDeviceLanguage();
 
     window.ruralFirebaseAuth.onAuthStateChanged(user => {
+      if (window.__ruralSignupInProgress) return;
       if (!user) {
         accountStatus.textContent = '';
         accountStatus.classList.remove('account-error');
@@ -283,25 +318,65 @@
   }
 
   async function signUpEmail() {
-    const accountName = accountNameInput.value.trim();
-    const email = emailSignupInput.value.trim();
-    const password = passwordSignupInput.value;
+    const accountName = String(accountNameInput.value || '').normalize('NFC').trim().slice(0, 20);
+    const email = String(emailSignupInput.value || '').trim();
+    const password = String(passwordSignupInput.value || '');
+
     if (!accountName) return setAccountStatus('アカウント名を入力してください。', true);
     if (accountName.length > 20) return setAccountStatus('アカウント名は20文字以内にしてください。', true);
     if (!email || !password) return setAccountStatus('メールアドレスとパスワードを入力してください。', true);
+
     setButtonsDisabled(true);
-    setAccountStatus('アカウントを作成しています…');
+    window.__ruralSignupInProgress = true;
+    setAccountStatus('アカウント名を確認しています…');
+
+    let auth = null;
+    let createdUser = null;
+    let claimed = false;
+
     try {
-      await ensureFirebase();
-      const result = await window.ruralFirebaseAuth.createUserWithEmailAndPassword(email, password);
-      await result.user.updateProfile({ displayName: accountName });
-      await result.user.reload();
-      setChatName(window.ruralFirebaseAuth.currentUser);
-      announceAuthenticated(window.ruralFirebaseAuth.currentUser, '✅ アカウントを作成しました。チャットへ移動しています…');
+      const availability = await checkAccountName(accountName);
+      if (!availability.ok) {
+        setAccountStatus('アカウント名を確認できませんでした。もう一度試してください。', true);
+        return;
+      }
+      if (availability.available === false) {
+        setAccountStatus('このアカウント名はすでにメールアドレスと連携されています。別のアカウント名を使用してください。', true);
+        return;
+      }
+
+      auth = await ensureFirebase();
+      setAccountStatus('アカウントを作成しています…');
+      const result = await auth.createUserWithEmailAndPassword(email, password);
+      createdUser = result.user;
+
+      await createdUser.updateProfile({ displayName: accountName });
+      await createdUser.reload();
+
+      setAccountStatus('アカウント名を登録しています…');
+      const claim = await claimAccountName(accountName, createdUser.uid, createdUser.email || email);
+      if (!claim?.ok) {
+        if (claim?.reason === 'name-taken') {
+          setAccountStatus('このアカウント名は別のメールアドレスと連携されたため、使用できません。別のアカウント名を選んでください。', true);
+        } else {
+          setAccountStatus('アカウント名の登録に失敗したため、アカウント作成を取り消しました。', true);
+        }
+        await rollbackCreatedUser(auth, createdUser);
+        return;
+      }
+      claimed = true;
+
+      usernameInput.value = accountName;
+      setAccountStatus('✅ アカウントを作成しました。チャットへ移動しています…');
+      window.dispatchEvent(new CustomEvent('rural-account-authenticated', {
+        detail: { uid: createdUser.uid, username: accountName, email: createdUser.email || email }
+      }));
     } catch (error) {
       console.error(error);
+      if (createdUser && !claimed) await rollbackCreatedUser(auth, createdUser);
       setAccountStatus(friendlyError(error), true);
     } finally {
+      window.__ruralSignupInProgress = false;
       setButtonsDisabled(false);
     }
   }
