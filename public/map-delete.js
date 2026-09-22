@@ -13,6 +13,12 @@
     const loc = data?.locationData;
     if (!loc || typeof map === 'undefined') return null;
 
+    const messageId = String(data?.id || '').trim();
+    if (messageId) {
+      const indexedMarker = window.ruralMarkerByMessageId?.get(messageId);
+      if (indexedMarker) return indexedMarker;
+    }
+
     const candidates = [];
     map.eachLayer(layer => {
       if (!(layer instanceof L.Marker)) return;
@@ -366,45 +372,42 @@
     const id = typeof data?.id === 'string' ? data.id : '';
     if (!id || typeof map === 'undefined') return;
 
-    map.eachLayer(layer => {
-      if (layer?.__deleteMessageId !== id) return;
-      layer.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
-      layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : layer.__helpConfirmedUsers;
+    const layer = window.ruralMarkerByMessageId?.get(id);
+    if (!layer) return;
+    layer.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
+    layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : layer.__helpConfirmedUsers;
 
-      const popup = layer.getPopup?.();
-      const popupElement = popup?.getElement?.();
-      const actions = popupElement?.querySelector?.('.map-pin-actions');
-      if (actions) renderHelpStatus(actions, layer);
-    });
+    const popup = layer.getPopup?.();
+    const popupElement = popup?.getElement?.();
+    const actions = popupElement?.querySelector?.('.map-pin-actions');
+    if (actions) renderHelpStatus(actions, layer);
   });
 
   socket.on('map-pin-help-confirmed', data => {
     const id = typeof data?.id === 'string' ? data.id : '';
     if (!id || typeof map === 'undefined') return;
 
-    map.eachLayer(layer => {
-      if (layer?.__deleteMessageId !== id) return;
-      layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers)
-        ? data.helpConfirmedUsers
-        : [...(layer.__helpConfirmedUsers || []), data.helperUsername];
+    const layer = window.ruralMarkerByMessageId?.get(id);
+    if (!layer) return;
+    layer.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers)
+      ? data.helpConfirmedUsers
+      : [...(layer.__helpConfirmedUsers || []), data.helperUsername];
 
-      const popup = layer.getPopup?.();
-      const popupElement = popup?.getElement?.();
-      const actions = popupElement?.querySelector?.('.map-pin-actions');
-      if (actions) renderHelpStatus(actions, layer);
-    });
+    const popup = layer.getPopup?.();
+    const popupElement = popup?.getElement?.();
+    const actions = popupElement?.querySelector?.('.map-pin-actions');
+    if (actions) renderHelpStatus(actions, layer);
   });
 
   socket.on('map-pin-deleted', data => {
     const id = typeof data?.id === 'string' ? data.id : '';
     if (!id || typeof map === 'undefined') return;
 
-    map.eachLayer(layer => {
-      if (layer?.__deleteMessageId === id) {
-        layer.__deletedByOwner = true;
-        if (map.hasLayer(layer)) map.removeLayer(layer);
-      }
-    });
+    const layer = window.ruralMarkerByMessageId?.get(id);
+    if (!layer) return;
+    layer.__deletedByOwner = true;
+    if (map.hasLayer(layer)) map.removeLayer(layer);
+    window.ruralMarkerByMessageId?.delete(id);
   });
 
   document.addEventListener('click', event => {
