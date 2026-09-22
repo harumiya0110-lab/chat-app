@@ -436,12 +436,25 @@
     const name = String(event.detail?.username || '').normalize('NFC').trim().slice(0, 20);
     const uid = String(event.detail?.uid || '').trim();
     const email = String(event.detail?.email || '').trim();
-    if (!name || !uid || typeof socket === 'undefined' || !socket?.connected) return;
+    if (!name || !uid) return;
     window.__ruralSignupInProgress = false;
 
-    // メールログインはゲスト用のusername-input/joinBtnを一切使わず、
-    // 専用のSocket.IOイベントで参加します。
-    socket.emit('email-account-session', { username: name, uid, email });
-    socket.emit('join-email-account', { username: name, uid, email });
+    // メールログインはゲスト用のusername-input/joinBtnを使いません。
+    // Socket.IOがまだ接続前でも、接続完了後に専用イベントで参加します。
+    window.__ruralPendingEmailAccountJoin = { username: name, uid, email };
+
+    const tryJoinEmailAccount = () => {
+      const pending = window.__ruralPendingEmailAccountJoin;
+      if (!pending || typeof socket === 'undefined' || !socket?.connected) return false;
+      socket.emit('email-account-session', pending);
+      socket.emit('join-email-account', pending);
+      window.__ruralPendingEmailAccountJoin = null;
+      return true;
+    };
+
+    if (!tryJoinEmailAccount() && typeof socket !== 'undefined' && !window.__ruralEmailJoinConnectHookInstalled) {
+      window.__ruralEmailJoinConnectHookInstalled = true;
+      socket.on('connect', tryJoinEmailAccount);
+    }
   });
 })();
