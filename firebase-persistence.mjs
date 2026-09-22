@@ -177,6 +177,27 @@ export async function claimAccountName(name, uid, email = '') {
   }
 }
 
+export async function isAccountNameLinkedToUser(name, uid, email = '') {
+  const cleanName = normalizeAccountName(name);
+  const cleanUid = String(uid || '').trim();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!enabled || !cleanName || !cleanUid) return false;
+
+  const safeId = accountNameDocumentId(cleanName);
+  try {
+    const existing = await firestoreRequest(`/accountNames/${safeId}`, { method: 'GET' });
+    const ownerUid = String(fromFirestoreValue(existing?.fields?.uid) || '').trim();
+    if (!ownerUid || ownerUid !== cleanUid) return false;
+
+    const storedEmail = String(fromFirestoreValue(existing?.fields?.email) || '').trim().toLowerCase();
+    if (cleanEmail && storedEmail && storedEmail !== cleanEmail) return false;
+    return true;
+  } catch (error) {
+    if (error.status === 404) return false;
+    throw error;
+  }
+}
+
 export async function releaseAccountName(name, uid = '') {
   const cleanName = normalizeAccountName(name);
   if (!enabled || !cleanName) return { ok: false, reason: 'invalid' };
