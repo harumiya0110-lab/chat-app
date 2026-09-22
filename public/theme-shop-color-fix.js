@@ -70,6 +70,44 @@
     body[data-rural-chat-background="sunset"] .messages .message-bubble { color:#472f27!important; }
     body[data-rural-chat-background="sunset"] .messages .message-header { color:#76564b!important; }
 
+
+    /* システム通知もチャット色に合わせ、固定色が残らないようにします。 */
+    body[data-rural-chat-color] .messages .system-message{
+      color:var(--chat-text-soft)!important;
+      background:color-mix(in srgb,var(--rural-chat) 9%,var(--chat-panel-soft))!important;
+      border-color:color-mix(in srgb,var(--rural-chat) 24%,transparent)!important;
+    }
+    body[data-rural-chat-color="forest"] .messages .system-message{
+      color:#4f6b5b!important;
+      background:#edf5ef!important;
+      border-color:#cfe0d1!important;
+    }
+    body[data-rural-chat-color="blue"] .messages .system-message{
+      color:#345e75!important;
+      background:#edf5fa!important;
+      border-color:#c9dfe9!important;
+    }
+    body[data-rural-chat-color="sakura"] .messages .system-message{
+      color:#805267!important;
+      background:#fff0f5!important;
+      border-color:#ebcad6!important;
+    }
+    body[data-rural-chat-color="violet"] .messages .system-message{
+      color:#65557c!important;
+      background:#f4f1fa!important;
+      border-color:#d8cfe9!important;
+    }
+    body[data-rural-chat-color="sunset"] .messages .system-message{
+      color:#755643!important;
+      background:#fff4e9!important;
+      border-color:#ead5c3!important;
+    }
+    body[data-rural-chat-color="ink"] .messages .system-message{
+      color:#555!important;
+      background:#ededed!important;
+      border-color:#d4d4d4!important;
+    }
+
     /* 入力欄・状態表示も背景に合わせて読みやすくする */
     body[data-rural-chat-background="default"] .status,
     body[data-rural-chat-background="default"] .input-area { color:#31513f!important; }
