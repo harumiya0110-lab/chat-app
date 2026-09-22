@@ -166,8 +166,32 @@ function buildMessageElement(data) {
 
 window.ruralBuildMessageElement = buildMessageElement;
 
+function getMessageKey(data) {
+  const id = typeof data?.id === 'string' ? data.id.trim() : '';
+  if (id) return 'id:' + id;
+  const username = String(data?.username || '').trim();
+  const message = String(data?.message || data?.text || '').trim();
+  const createdAt = String(data?.createdAt || data?.timestamp || '').trim();
+  const location = data?.locationData
+    ? [data.locationData.lat, data.locationData.lng, data.locationData.eventType].map(String).join(':')
+    : '';
+  return 'legacy:' + [username, message, createdAt, location].join('|');
+}
+
+function hasRenderedMessage(data) {
+  const key = getMessageKey(data);
+  if (!key || key === 'legacy:|||') return false;
+  return [...messages.querySelectorAll('.message')].some(item => {
+    if (item.dataset.messageKey === key) return true;
+    if (data?.id && item.dataset.messageId === String(data.id)) return true;
+    return false;
+  });
+}
+
 function addMessage(data) {
+  if (hasRenderedMessage(data)) return;
   const item = buildMessageElement(data);
+  item.dataset.messageKey = getMessageKey(data);
   messages.appendChild(item);
   if (!isHistoryLoading) {
     trimChatMessages();
@@ -314,8 +338,15 @@ socket.on('chat-history', history => {
   if (!items.length) return;
 
   const fragment = document.createDocumentFragment();
+  const seen = new Set();
   for (const data of items) {
-    fragment.appendChild(buildMessageElement(data));
+    const key = getMessageKey(data);
+    if (key && seen.has(key)) continue;
+    if (hasRenderedMessage(data)) continue;
+    if (key) seen.add(key);
+    const item = buildMessageElement(data);
+    item.dataset.messageKey = key;
+    fragment.appendChild(item);
   }
   messages.appendChild(fragment);
 
@@ -448,8 +479,11 @@ function addMarker(message) {
   const type = loc.eventType || 'その他';
   const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
   const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
-  const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
   const messageId = typeof message.id === 'string' ? message.id.trim() : '';
+  if (messageId && ruralMarkerByMessageId.has(messageId)) {
+    return ruralMarkerByMessageId.get(messageId);
+  }
+  const marker = L.marker([lat, lng], { icon: createEventIcon(type) }).addTo(map).bindPopup(popup);
   marker.__messageId = messageId;
   marker.on('click', () => {
     void showMarkerAreaInChat(marker);
