@@ -10,6 +10,7 @@ let pendingOutgoingIceCandidates = [];
 let outgoingIceEnabled = false;
 let isMuted = false;
 let isVideoOn = true;
+let isRemoteVideoOn = true;
 let isMinimized = false;
 let isJoiningChat = false;
 let isHistoryLoading = false;
@@ -56,6 +57,10 @@ const acceptBtn = $('call-accept-btn');
 const declineBtn = $('call-decline-btn');
 const muteBtn = $('mute-btn');
 const camToggleBtn = $('cam-toggle-btn');
+const localCameraOff = $('local-camera-off');
+const remoteCameraOff = $('remote-camera-off');
+const miniLocalCameraOff = $('mini-local-camera-off');
+const miniRemoteCameraOff = $('mini-remote-camera-off');
 const minimizeBtn = $('minimize-btn');
 const endBtn = $('call-end-btn');
 const miniBar = $('mini-call-bar');
@@ -852,9 +857,20 @@ videoInput.addEventListener('change', async () => {
   }
 });
 
+function setCameraOffUi(isLocal, isOn) {
+  const targets = isLocal
+    ? [localCameraOff, miniLocalCameraOff]
+    : [remoteCameraOff, miniRemoteCameraOff];
+  targets.forEach(element => {
+    if (element) element.hidden = isOn;
+  });
+}
+
 function showCallUI(text, incoming = false) {
   callModal.hidden = false;
   callStatus.textContent = text;
+  setCameraOffUi(true, isVideoOn);
+  setCameraOffUi(false, isRemoteVideoOn);
   acceptBtn.hidden = !incoming;
   declineBtn.hidden = !incoming;
   muteBtn.hidden = incoming;
@@ -889,6 +905,9 @@ function cleanupCall(sendEnd = false) {
   pendingIncoming = null;
   isMuted = false;
   isVideoOn = true;
+  isRemoteVideoOn = true;
+  setCameraOffUi(true, true);
+  setCameraOffUi(false, true);
   isMinimized = false;
   callModal.hidden = true;
   miniBar.hidden = true;
@@ -915,6 +934,8 @@ function createPeerConnection(targetId) {
     const stream = event.streams[0];
     remoteVideo.srcObject = stream;
     miniRemote.srcObject = stream;
+    isRemoteVideoOn = stream.getVideoTracks().some(track => track.enabled !== false && track.readyState !== 'ended');
+    setCameraOffUi(false, isRemoteVideoOn);
   };
   pc.onconnectionstatechange = () => {
     if (['failed', 'closed'].includes(pc.connectionState)) cleanupCall(false);
@@ -1043,6 +1064,12 @@ function flushPendingOutgoingIceCandidates() {
   }
 }
 
+socket.on('camera-state', data => {
+  if (!currentCallTarget || data?.from !== currentCallTarget) return;
+  isRemoteVideoOn = data.enabled !== false;
+  setCameraOffUi(false, isRemoteVideoOn);
+});
+
 socket.on('call-ended', data => {
   if (data.from === currentCallTarget) cleanupCall(false);
 });
@@ -1058,7 +1085,19 @@ camToggleBtn.addEventListener('click', () => {
   if (!localStream) return;
   isVideoOn = !isVideoOn;
   localStream.getVideoTracks().forEach(track => { track.enabled = isVideoOn; });
+  setCameraOffUi(true, isVideoOn);
   camToggleBtn.textContent = isVideoOn ? 'カメラOFF' : 'カメラON';
+
+  if (currentCallTarget) {
+    socket.timeout(5000).emit('camera-state', {
+      targetId: currentCallTarget,
+      enabled: isVideoOn
+    }, (err, result) => {
+      if (err || !result?.ok) {
+        console.warn('カメラ状態の通知に失敗しました');
+      }
+    });
+  }
 });
 
 function minimizeCall() {
