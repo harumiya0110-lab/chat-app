@@ -219,7 +219,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const result = await deleteMessage(id, socket.id); if (result.ok) socket.server.emit('map-pin-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
+      try { const result = await deleteMessage(id, socket.id); if (result.ok) { socket.server.emit('map-pin-deleted', { id, username }); socket.server.emit('chat-message-deleted', { id, username }); } if (typeof ack === 'function') ack(result); }
       catch (error) { console.error('Firestore message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
     });
 
