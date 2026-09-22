@@ -76,4 +76,36 @@ body[data-rural-theme="night"] .chat-panel,body[data-rural-theme="night"] .map-p
 body[data-rural-theme="night"] .users-panel li{background:#24313c!important;border-color:var(--theme-border-soft)!important;color:#e9f0f4!important}
 body[data-rural-theme="night"] .input-area input[type=text]{background:#26343f!important;color:#fff!important;border-color:var(--theme-input)!important}
 
+
+/* ネイビーテーマではチャット内の文字を白系にして、背景とのコントラストを確保します。 */
+body[data-rural-theme="night"] .chat-panel,
+body[data-rural-theme="night"] .chat-panel h2,
+body[data-rural-theme="night"] .chat-panel label,
+body[data-rural-theme="night"] .chat-panel .message-bubble,
+body[data-rural-theme="night"] .chat-panel .message,
+body[data-rural-theme="night"] .chat-panel .users-panel li,
+body[data-rural-theme="night"] .chat-panel .system-message{
+  color:#eef5f9!important;
+}
+body[data-rural-theme="night"] .chat-panel .message-header{
+  color:#c2d0da!important;
+}
+body[data-rural-theme="night"] .chat-panel .status{
+  color:#d5e0e7!important;
+}
+body[data-rural-theme="night"] .chat-panel .tool-btn{
+  background:#26343f!important;
+  color:#f3f7fa!important;
+  border-color:#4a5c69!important;
+}
+body[data-rural-theme="night"] .chat-panel .input-area input[type="text"]{
+  color:#f5f8fa!important;
+  caret-color:#fff!important;
+}
+body[data-rural-theme="night"] .chat-panel .input-area input[type="text"]::placeholder{
+  color:#aebdca!important;
+  opacity:1;
+}
+
+
 @media(max-width:950px){.app-header{padding:13px 14px}.app-main{grid-template-columns:1fr}.chat-panel,.map-panel{min-height:0}.chat-main{height:60vh;min-height:520px}#map{height:55vh;min-height:420px}}@media(max-width:650px){.header-user{display:none}.chat-main{grid-template-columns:1fr}.users-panel{display:none}.app-main{padding:0 7px}.chat-panel,.map-panel{border-radius:9px}.input-area{gap:4px}.tool-btn{padding:8px!important}.map-filters{gap:5px}.map-filter{padding:6px 8px;font-size:11px}.call-videos #remote-video{height:45vh}.call-videos #local-video{width:120px}.call-controls{gap:7px}.call-controls .call-action-mute,.call-controls .call-action-camera{min-width:132px;padding-inline:13px}.call-controls button{min-height:42px;padding:9px 12px}.mini-call-bar{right:8px;bottom:8px}.mini-call-bar video{width:64px;height:48px}}
