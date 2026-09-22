@@ -9,7 +9,7 @@ let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
 const POINTS_PER_HELP = 10;
-const HELPABLE_EVENT_TYPES = new Set(['イベント', '助け合い']);
+const HELPABLE_EVENT_TYPES = new Set(['助け合い']);
 
 function base64Url(value) {
   return Buffer.from(value)
@@ -152,7 +152,6 @@ async function getPoints(username) {
     const fields = fromFirestoreFields(result.fields);
     return Number(fields.points || 0);
   } catch (error) {
-    // 初回利用者には地域ポイントのドキュメントがまだ存在しないため、0ptとして扱います。
     if (String(error?.message || '').startsWith('Firestore request failed: 404')) return 0;
     throw error;
   }
@@ -293,19 +292,16 @@ SocketIOServer.prototype.on = function(eventName, listener) {
               return;
             }
 
-            // 「手伝える」は「イベント」と「助け合い」の投稿だけで利用できます。
             if (!HELPABLE_EVENT_TYPES.has(saved.eventType)) {
               if (typeof ack === 'function') ack({ ok: false, reason: 'not-helpable' });
               return;
             }
 
-            // 自分の投稿には「手伝える」を登録できません。
             if (saved.username === username) {
               if (typeof ack === 'function') ack({ ok: false, reason: 'own-post' });
               return;
             }
 
-            // 「手伝える」を押しただけでは地域ポイントは付与しません。
             return handler(payload, ack);
           } catch (error) {
             console.error('Regional points toggle-help guard failed:', error);
@@ -319,7 +315,6 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       return originalSocketOn(socketEventName, handler);
     };
 
-    // 「来た！」の確認は、このモジュール自身でイベントを登録します。
     originalSocketOn('confirm-help', (payload = {}, ack) => {
       void confirmHelp(socket, payload, ack);
     });
