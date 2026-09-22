@@ -271,4 +271,32 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 
 
 
+async function purgeAllSavedMessages() {
+  if (!enabled) return 0;
+  let deleted = 0;
+  while (true) {
+    const result = await firestoreRequest('/messages?pageSize=300', { method: 'GET' });
+    const documents = Array.isArray(result?.documents) ? result.documents : [];
+    if (!documents.length) break;
+
+    await Promise.all(documents.map(async document => {
+      const name = String(document?.name || '');
+      if (!name) return;
+      await firestoreRequest('/' + name.replace(/^projects\\/[^/]+\\/databases\\/\\(default\\)\\/documents/u, ''), { method: 'DELETE' });
+      deleted += 1;
+    }));
+
+    if (documents.length < 300) break;
+  }
+  console.log(`One-time message history purge completed: deleted=${deleted}`);
+  return deleted;
+}
+
+if (process.env.PURGE_MESSAGES_ON_START === '1') {
+  void purgeAllSavedMessages().catch(error => {
+    console.error('One-time message history purge failed:', error);
+  });
+}
+
+
 export const firebasePersistenceEnabled = enabled;
