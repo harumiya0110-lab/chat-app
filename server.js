@@ -21,11 +21,13 @@ registerChatBackgroundPersistence(io);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const eventTypes = ['鳥獣目撃', '道路障害', '助け合い', 'イベント', 'その他'];
+const eventTypes = ['鳥獣目撃', '道路障害', '交通障害', '助け合い', 'イベント', 'その他'];
 const PORT = Number(process.env.PORT) || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const NOMINATIM_USER_AGENT = process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0';
+const geocodeCache = new Map();
+const GEOCODE_CACHE_TTL = 10 * 60 * 1000;
 
 const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
@@ -195,9 +197,14 @@ function buildGeocodingCandidates(locationName, locationCandidates, originalText
 }
 
 async function geocodeLocation(locationName, locationCandidates = [], originalText = '') {
-  const queries = buildGeocodingCandidates(locationName, locationCandidates, originalText);
+  const queries = buildGeocodingCandidates(locationName, locationCandidates, originalText).slice(0, 7);
   if (!queries.length) return null;
+  const now = Date.now();
   for (const query of queries) {
+    const cacheKey = normalizeLocationQuery(query).toLowerCase();
+    const cached = geocodeCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+    if (cached) geocodeCache.delete(cacheKey);
     const url = new URL('https://nominatim.openstreetmap.org/search');
     url.searchParams.set('q', query);
     url.searchParams.set('format', 'jsonv2');
@@ -224,8 +231,11 @@ async function geocodeLocation(locationName, locationCandidates = [], originalTe
       const lat = Number(best.lat);
       const lng = Number(best.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const value = { lat, lng, matchedQuery: query, displayName: best.display_name || query };
+      geocodeCache.set(cacheKey, { value, expiresAt: now + GEOCODE_CACHE_TTL });
+      if (geocodeCache.size > 500) geocodeCache.delete(geocodeCache.keys().next().value);
       console.log(`Location matched: query="${query}" -> "${best.display_name}"`);
-      return { lat, lng, matchedQuery: query, displayName: best.display_name || query };
+      return value;
     } catch (error) { console.error(`Nominatim query error: query=${query}`, error); }
   }
   return null;
@@ -262,7 +272,7 @@ async function analyzeMessage(text) {
 }
 
 app.post('/api/messages', async (req, res) => {
-  const { text, userId } = req.body || {};
+  const { text, userId, replyToId, replyToUsername } = req.body || {};
   if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
   const cleanText = text.trim();
   const cleanUserId = userId.trim().slice(0, 200);
@@ -277,8 +287,23 @@ app.post('/api/messages', async (req, res) => {
         else geocodeError = '場所を地図上で特定できませんでした';
       } catch (error) { console.error('ジオコーディング失敗:', error); geocodeError = '地図検索サービスに接続できませんでした'; }
     }
-    const message = { text: cleanText, userId: cleanUserId, createdAt: new Date().toISOString(), locationData };
-    io.emit('receive-message', { username: cleanUserId, message: cleanText, timestamp: new Date().toLocaleTimeString('ja-JP'), userId: cleanUserId, locationData });
+    const message = {
+      text: cleanText,
+      userId: cleanUserId,
+      createdAt: new Date().toISOString(),
+      locationData,
+      replyToId: typeof replyToId === 'string' ? replyToId.trim().slice(0, 120) : '',
+      replyToUsername: typeof replyToUsername === 'string' ? replyToUsername.trim().slice(0, 50) : ''
+    };
+    io.emit('receive-message', {
+      username: cleanUserId,
+      message: cleanText,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: cleanUserId,
+      locationData,
+      replyToId: message.replyToId,
+      replyToUsername: message.replyToUsername
+    });
     return res.json({ ...message, analysis, geocodeError });
   } catch (error) {
     console.error('メッセージ解析に失敗しました:', error);
@@ -353,6 +378,8 @@ io.on('connection', socket => {
     const lng = Number(data?.lng);
     const eventType = eventTypes.includes(data?.eventType) ? data.eventType : 'その他';
     const message = typeof data?.message === 'string' ? data.message.trim().slice(0, 2000) : '';
+    const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
+    const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-location', message: '選択した場所が正しくありません。' });
@@ -378,7 +405,9 @@ io.on('connection', socket => {
       message,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
       userId: socket.id,
-      locationData
+      locationData,
+      replyToId,
+      replyToUsername
     });
 
     if (typeof ack === 'function') ack({ ok: true });
@@ -412,7 +441,19 @@ io.on('connection', socket => {
 
   socket.on('send-message', data => {
     const user = users[socket.id];
-    if (user && typeof data?.message === 'string' && data.message.trim()) io.emit('receive-message', { username: user.username, message: data.message.trim(), timestamp: new Date().toLocaleTimeString('ja-JP'), userId: socket.id, locationData: null });
+    const message = typeof data?.message === 'string' ? data.message.trim().slice(0, 2000) : '';
+    if (!user || !message) return;
+    const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
+    const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
+    io.emit('receive-message', {
+      username: user.username,
+      message,
+      timestamp: new Date().toLocaleTimeString('ja-JP'),
+      userId: socket.id,
+      locationData: null,
+      replyToId,
+      replyToUsername
+    });
   });
 
   socket.on('call-offer', payload => {
