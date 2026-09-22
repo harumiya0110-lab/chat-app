@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
-import { purgeAllSavedMessages } from './firebase-persistence.mjs';
 import { registerChatBackgroundPersistence } from './chat-background-persistence.mjs';
 
 const app = express();
@@ -235,22 +234,6 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
-
-app.post('/api/admin/purge-messages', async (req, res) => {
-  const expected = process.env.PURGE_MESSAGES_TOKEN || '';
-  const supplied = String(req.get('x-purge-token') || req.query.token || '');
-  if (!expected || supplied !== expected) return res.status(403).json({ ok: false, error: 'forbidden' });
-
-  try {
-    const result = await purgeAllSavedMessages();
-    if (!result.ok) return res.status(503).json(result);
-    io.emit('chat-history-cleared');
-    return res.json(result);
-  } catch (error) {
-    console.error('投稿履歴の全削除に失敗しました:', error);
-    return res.status(500).json({ ok: false, error: 'purge-failed' });
-  }
-});
 
 const users = {};
 
