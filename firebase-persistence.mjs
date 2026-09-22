@@ -303,4 +303,16 @@ export async function purgeAllSavedMessages() {
   return { ok: true, deleted };
 }
 
+
+if (process.env.PURGE_MESSAGES_ON_START === '1') {
+  setTimeout(async () => {
+    try {
+      const result = await purgeAllSavedMessages();
+      console.log(`One-time message history purge completed: deleted=${result.deleted}`);
+    } catch (error) {
+      console.error('One-time message history purge failed:', error);
+    }
+  }, 0);
+}
+
 export const firebasePersistenceEnabled = enabled;
