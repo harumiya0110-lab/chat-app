@@ -161,6 +161,9 @@
     choice.hidden = true;
     loginView.hidden = false;
     signupView.hidden = true;
+    // メールアドレスログインでは、ゲスト参加用のユーザー名欄に
+    // アカウント名を自動入力しないようにする。
+    usernameInput.value = '';
     setAccountStatus('');
     emailLoginInput.focus();
   }
