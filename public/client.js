@@ -287,43 +287,75 @@ function addVideo(data) {
   scrollToBottom();
 }
 
-function joinChat() {
-  const username = usernameInput.value.trim();
-  if (!username) return alert('ニックネームを入力してください');
-  if (username.length > 20) return alert('ニックネームは20文字以内にしてください');
-  // メールログイン時などに認証イベントが重複しても、参加要求は一度だけ送信します。
-  if (isJoiningChat || joinBtn.disabled) return;
-  isJoiningChat = true;
-  joinBtn.disabled = true;
-  socket.emit('set-username', username);
-}
-
-joinBtn.addEventListener('click', joinChat);
-usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
-
 function handleChatAccepted({ username, users: onlineUsers } = {}) {
   const acceptedUsername = String(username || '').trim();
   if (!acceptedUsername) return;
+
+  // 同じ参加完了通知がイベントとACKの両方から届いても二重処理しません。
+  const alreadyJoined = !isJoiningChat && currentUsername === acceptedUsername && chatMain && !chatMain.hidden;
+  if (alreadyJoined) return;
+
   isJoiningChat = false;
   currentUsername = acceptedUsername;
   usernameDisplay.textContent = acceptedUsername;
   setupPanel.hidden = true;
   chatMain.hidden = false;
+  chatMain.removeAttribute('hidden');
   document.body.classList.remove('pre-auth');
   updateUsersList(Array.isArray(onlineUsers) ? onlineUsers : []);
   joinBtn.disabled = false;
-  messageInput.focus();
-  if (window.ruralMap?.invalidateSize) {
-    setTimeout(() => window.ruralMap.invalidateSize(true), 100);
-  }
 
-  // 再参加時に前回の履歴を残したまま追加しないよう、チャット表示を一度リセットします。
-  // これで同じ投稿がログイン回数に応じて2回・3回と表示されるのを防ぎます。
+  // ログイン直後の画面切り替えを確実に反映します。
+  requestAnimationFrame(() => {
+    document.body.classList.remove('pre-auth');
+    setupPanel.hidden = true;
+    chatMain.hidden = false;
+    chatMain.removeAttribute('hidden');
+    if (window.ruralMap?.invalidateSize) window.ruralMap.invalidateSize(true);
+    messageInput?.focus();
+  });
+
+  // index.html 側の表示ガードとも同期します。
+  window.dispatchEvent(new CustomEvent('username-accepted', {
+    detail: { username: acceptedUsername }
+  }));
+
   if (messages) messages.replaceChildren();
   isHistoryLoading = true;
   window.__ruralHistoryLoading = true;
   setStatus('チャット履歴を読み込んでいます…');
 }
+
+function joinChat() {
+  const username = usernameInput.value.trim();
+  if (!username) return alert('ニックネームを入力してください');
+  if (username.length > 20) return alert('ニックネームは20文字以内にしてください');
+  if (isJoiningChat || joinBtn.disabled) return;
+
+  isJoiningChat = true;
+  joinBtn.disabled = true;
+  setStatus('チャットに接続しています…');
+
+  socket.timeout(10000).emit('set-username', username, result => {
+    if (result?.ok) {
+      handleChatAccepted(result);
+      return;
+    }
+
+    isJoiningChat = false;
+    joinBtn.disabled = false;
+    const message = result?.message || (
+      result?.reason === 'timeout'
+        ? 'サーバーへの接続がタイムアウトしました。'
+        : 'チャットへの参加に失敗しました。'
+    );
+    setStatus(message);
+    alert(message);
+  });
+}
+
+joinBtn.addEventListener('click', joinChat);
+usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
 
 socket.on('username-accepted', handleChatAccepted);
 
