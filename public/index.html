@@ -12,10 +12,8 @@
     body.pre-auth #map,
     body.pre-auth .regional-points,
     body.pre-auth .theme-shop-open,
-    body.pre-auth #online-count { display:none!important; }
-    body.pre-auth .app-main { grid-template-columns:1fr; }
-    body.pre-auth .chat-panel { width:min(760px,100%); margin:0 auto; }
-    body.pre-auth .setup-panel { min-height:70vh; display:flex; flex-direction:column; justify-content:center; }
+    body.pre-auth #online-count,
+    body.pre-auth #chat-main { display:none!important; }
     #initial-input-holder { display:contents; }
   </style>
 </head>
@@ -75,11 +73,11 @@
   </script>
   <style id="pre-auth-layout-guard">
     body.pre-auth{background:#eef2e9!important;color:#21342c!important;overflow-x:hidden!important;}
-    body.pre-auth .app-header{display:flex!important;padding:16px 24px!important;background:#234d3c!important;color:#fff!important;}
-    body.pre-auth .app-main{display:grid!important;grid-template-columns:1fr!important;gap:14px!important;max-width:1500px!important;margin:14px auto!important;padding:0 14px!important;}
-    body.pre-auth .chat-panel{display:block!important;width:min(760px,100%)!important;min-height:650px!important;margin:0 auto!important;background:#fff!important;border:1px solid #d9e2d6!important;border-radius:12px!important;overflow:hidden!important;}
-    body.pre-auth #setup-panel.setup-panel{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:14px!important;min-height:70vh!important;height:auto!important;padding:30px!important;text-align:center!important;background:linear-gradient(145deg,#f5f8f2,#e6eee3)!important;}
-    body.pre-auth #setup-panel input{width:min(340px,100%)!important;padding:12px 14px!important;border:1px solid #b9c9b8!important;border-radius:8px!important;background:#fff!important;color:#21342c!important;}
+    body.pre-auth .app-header{display:flex!important;padding:12px 18px!important;background:#234d3c!important;color:#fff!important;}
+    body.pre-auth .app-main{display:block!important;max-width:760px!important;margin:0 auto!important;padding:0 8px!important;}
+    body.pre-auth .chat-panel{display:block!important;width:min(560px,100%)!important;min-height:0!important;margin:0 auto!important;background:#fff!important;border:1px solid #d9e2d6!important;border-radius:10px!important;overflow:hidden!important;}
+    body.pre-auth #setup-panel.setup-panel{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:10px!important;min-height:0!important;height:auto!important;padding:22px 16px 24px!important;text-align:center!important;background:linear-gradient(145deg,#f5f8f2,#e6eee3)!important;}
+    body.pre-auth #setup-panel input{width:min(340px,100%)!important;padding:11px 13px!important;border:1px solid #b9c9b8!important;border-radius:8px!important;background:#fff!important;color:#21342c!important;}
     body.pre-auth #setup-panel button{border:0!important;border-radius:8px!important;padding:10px 14px!important;background:#d96b3b!important;color:#fff!important;}
     body.pre-auth .map-panel,body.pre-auth .header-user,body.pre-auth #map,body.pre-auth .regional-points,body.pre-auth .theme-shop-open,body.pre-auth #online-count,body.pre-auth #chat-main{display:none!important;}
 
