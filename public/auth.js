@@ -279,7 +279,7 @@
     window.ruralFirebaseAuth.useDeviceLanguage();
 
     window.ruralFirebaseAuth.onAuthStateChanged(user => {
-      if (window.__ruralSignupInProgress) return;
+      if (window.__ruralSignupInProgress || window.__ruralExplicitLoginInProgress) return;
       if (!user) {
         accountStatus.textContent = '';
         accountStatus.classList.remove('account-error');
@@ -305,14 +305,26 @@
     const password = passwordLoginInput.value;
     if (!email || !password) return setAccountStatus('メールアドレスとパスワードを入力してください。', true);
     setButtonsDisabled(true);
+    window.__ruralExplicitLoginInProgress = true;
     setAccountStatus('メールでログインしています…');
     try {
       await ensureFirebase();
-      await window.ruralFirebaseAuth.signInWithEmailAndPassword(email, password);
+
+      // 既存のFirebaseセッションをそのまま再利用せず、今回入力された
+      // メールアドレス＋パスワードで必ず再認証します。
+      if (window.ruralFirebaseAuth.currentUser) {
+        await window.ruralFirebaseAuth.signOut();
+      }
+
+      const result = await window.ruralFirebaseAuth.signInWithEmailAndPassword(email, password);
+      window.__ruralExplicitLoginInProgress = false;
+      announceAuthenticated(result.user);
     } catch (error) {
+      window.__ruralExplicitLoginInProgress = false;
       console.error(error);
       setAccountStatus(friendlyError(error), true);
     } finally {
+      window.__ruralExplicitLoginInProgress = false;
       setButtonsDisabled(false);
     }
   }
