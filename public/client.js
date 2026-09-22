@@ -309,9 +309,13 @@ function handleChatAccepted({ username, users: onlineUsers } = {}) {
   usernameDisplay.textContent = acceptedUsername;
   setupPanel.hidden = true;
   chatMain.hidden = false;
-  joinBtn.disabled = false;
+  document.body.classList.remove('pre-auth');
   updateUsersList(Array.isArray(onlineUsers) ? onlineUsers : []);
+  joinBtn.disabled = false;
   messageInput.focus();
+  if (window.ruralMap?.invalidateSize) {
+    setTimeout(() => window.ruralMap.invalidateSize(true), 100);
+  }
 
   // 再参加時に前回の履歴を残したまま追加しないよう、チャット表示を一度リセットします。
   // これで同じ投稿がログイン回数に応じて2回・3回と表示されるのを防ぎます。
