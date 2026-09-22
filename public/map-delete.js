@@ -352,20 +352,26 @@
     return marker;
   };
 
-  socket.on('receive-message', data => {
+  function decorateMarkerFromMessage(data) {
     if (!data?.locationData) return;
-    setTimeout(() => {
-      const marker = findMarkerForMessage(data);
-      if (!marker) return;
+    const marker = findMarkerForMessage(data);
+    if (!marker) return;
 
-      marker.__deleteOwnerName = typeof data.username === 'string' ? data.username : null;
-      marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
-      marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
-      marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
-      marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
-      ownerMarkers.add(marker);
-      addDeleteControl(marker);
-    }, 0);
+    marker.__deleteOwnerName = typeof data.username === 'string' ? data.username : null;
+    marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
+    marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
+    marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
+    marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
+    ownerMarkers.add(marker);
+    addDeleteControl(marker);
+  }
+
+  socket.on('receive-message', decorateMarkerFromMessage);
+
+  socket.on('chat-history', history => {
+    for (const data of Array.isArray(history) ? history : []) {
+      decorateMarkerFromMessage(data);
+    }
   });
 
   socket.on('map-pin-help-updated', data => {
