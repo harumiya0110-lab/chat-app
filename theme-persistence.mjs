@@ -37,7 +37,10 @@ function cloneState(state = DEFAULT_STATE) {
   const owned = [...new Set(['forest', ...legacyThemes, ...legacyChatColors])].filter(id => THEME_CATALOG[id]);
   const requestedTheme = THEME_CATALOG[state.currentTheme] ? state.currentTheme : '';
   const requestedChat = THEME_CATALOG[state.currentChatColor] ? state.currentChatColor : '';
-  const current = requestedChat && (!requestedTheme || requestedTheme === 'forest') ? requestedChat : (requestedTheme || requestedChat || 'forest');
+  // 統合テーマでは現在選択中の色を1つだけ持つ。旧データでは旧チャット色を優先して引き継ぐ。
+  const current = requestedChat && requestedTheme === 'forest' && requestedChat !== 'forest'
+    ? requestedChat
+    : (requestedTheme || requestedChat || 'forest');
   if (!owned.includes(current)) owned.push(current);
   return {
     points: Math.max(0, Math.floor(Number(state.points || 0))),
@@ -279,7 +282,8 @@ async function exchangeTheme(socket, themeId, ack) {
         ...state,
         points: state.points - cost,
         themes: [...state.themes, themeId],
-        currentTheme: themeId
+        currentTheme: themeId,
+        currentChatColor: themeId
       };
 
       // UIへの応答をFirestore保存より先に返し、Firestoreの一時的な遅延で交換がタイムアウトしないようにします。
@@ -303,6 +307,7 @@ async function selectTheme(socket, themeId, ack) {
       const state = await loadState(username);
       if (!state.themes.includes(themeId)) return ackFail(ack, 'not-owned');
       state.currentTheme = themeId;
+      state.currentChatColor = themeId;
       queueSave(username, state);
       emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
@@ -335,6 +340,8 @@ async function exchangeChatColor(socket, colorId, ack) {
       const nextState = {
         ...state,
         points: state.points - cost,
+        themes: [...state.themes, colorId],
+        currentTheme: colorId,
         chatColors: [...state.chatColors, colorId],
         currentChatColor: colorId
       };
@@ -358,6 +365,7 @@ async function selectChatColor(socket, colorId, ack) {
       const state = await loadState(username);
       if (!state.chatColors.includes(colorId)) return ackFail(ack, 'not-owned');
       state.currentChatColor = colorId;
+      state.currentTheme = colorId;
       queueSave(username, state);
       emitState(socket, username, state);
       if (typeof ack === 'function') ack({ ok: true, ...state });
