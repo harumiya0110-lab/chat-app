@@ -256,7 +256,7 @@ function fallbackAnalyzeMessage(text) {
     locationName: locationCandidates[0] || '',
     locationCandidates: locationCandidates.slice(0, 5),
     eventType,
-    summary: source.replace(/\\s+/gu, ' ').trim().slice(0, 100) || '地域のお知らせ'
+    summary: source.replace(/\s+/gu, ' ').trim().slice(0, 100) || '地域のお知らせ'
   };
 }
 
