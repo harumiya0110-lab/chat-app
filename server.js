@@ -22,6 +22,8 @@ const __dirname = path.dirname(__filename);
 
 const eventTypes = ['鳥獣目撃', '道路障害', '交通障害', '助け合い', 'イベント', 'その他'];
 const PORT = Number(process.env.PORT) || 3000;
+// 「ハル」専用管理者パスワード。未設定の場合、ハルという名前は管理者として利用できません。
+const HARU_ADMIN_PASSWORD = String(process.env.HARU_ADMIN_PASSWORD || '').trim();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const NOMINATIM_USER_AGENT = process.env.NOMINATIM_USER_AGENT || 'inaka-power-chat-map/1.0';
@@ -428,7 +430,7 @@ io.on('connection', socket => {
     socket.emit('username-accepted', { username: cleanUsername, users: onlineUsers, isAdmin });
     socket.emit('update-users', onlineUsers);
     if (typeof ack === 'function') {
-      ack({ ok: true, username: cleanUsername, users: onlineUsers });
+      ack({ ok: true, username: cleanUsername, users: onlineUsers, isAdmin });
     }
 
     void initializeThemeForSocket(socket, cleanUsername);
