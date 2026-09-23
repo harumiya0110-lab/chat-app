@@ -202,35 +202,49 @@
   }
 
   function ensureMessageActions(item) {
-    if (!item || item.dataset.messageId === '' || item.querySelector('.message-actions')) return;
+    if (!item || !item.dataset.messageId || item.dataset.messageId === '') return;
     const id = String(item.dataset.messageId || '').trim();
     const username = String(item.dataset.username || '').trim();
     if (!id || !username) return;
 
-    const actions = document.createElement('div');
-    actions.className = 'message-actions';
+    // buildMessageElement() が自分の通常投稿に削除ボタン用の
+    // .message-actions を先に作る場合があるため、操作欄の存在だけで
+    // 処理を終了せず、不足している返信・リアクション操作を追加します。
+    let actions = item.querySelector(':scope > .message-actions');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'message-actions';
+      item.appendChild(actions);
+    }
 
-    const replyBtn = document.createElement('button');
-    replyBtn.type = 'button';
-    replyBtn.className = 'message-action-btn';
-    replyBtn.textContent = '↩︎ 返信';
-    replyBtn.dataset.action = 'reply';
-
-    actions.appendChild(replyBtn);
+    if (!actions.querySelector('[data-action="reply"]')) {
+      const replyBtn = document.createElement('button');
+      replyBtn.type = 'button';
+      replyBtn.className = 'message-action-btn';
+      replyBtn.textContent = '↩︎ 返信';
+      replyBtn.dataset.action = 'reply';
+      actions.insertBefore(replyBtn, actions.querySelector('.message-actions-spacer') || null);
+    }
 
     for (const info of REACTION_TYPES) {
+      if (actions.querySelector(`[data-reaction="${info.key}"]`)) continue;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'message-action-btn';
       button.dataset.reaction = info.key;
-      actions.appendChild(button);
+      const spacer = actions.querySelector('.message-actions-spacer');
+      if (spacer) actions.insertBefore(button, spacer);
+      else actions.appendChild(button);
     }
 
-    const spacer = document.createElement('span');
-    spacer.className = 'message-actions-spacer';
-    actions.appendChild(spacer);
+    let spacer = actions.querySelector('.message-actions-spacer');
+    if (!spacer) {
+      spacer = document.createElement('span');
+      spacer.className = 'message-actions-spacer';
+      actions.appendChild(spacer);
+    }
 
-    if (item.dataset.location === '1' && username === currentUsername) {
+    if (item.dataset.location === '1' && username === currentUsername && !actions.querySelector('[data-action="resolve"]')) {
       const resolveBtn = document.createElement('button');
       resolveBtn.type = 'button';
       resolveBtn.className = 'message-action-btn';
@@ -239,23 +253,26 @@
     }
 
     if (username !== currentUsername) {
-      const reportBtn = document.createElement('button');
-      reportBtn.type = 'button';
-      reportBtn.className = 'message-action-btn';
-      reportBtn.textContent = '⚠️ 通報';
-      reportBtn.dataset.action = 'report';
-      actions.appendChild(reportBtn);
+      if (!actions.querySelector('[data-action="report"]')) {
+        const reportBtn = document.createElement('button');
+        reportBtn.type = 'button';
+        reportBtn.className = 'message-action-btn';
+        reportBtn.textContent = '⚠️ 通報';
+        reportBtn.dataset.action = 'report';
+        actions.appendChild(reportBtn);
+      }
 
-      const blockBtn = document.createElement('button');
-      blockBtn.type = 'button';
-      blockBtn.className = 'message-action-btn';
-      blockBtn.textContent = isBlocked(username) ? '🚫 ブロック中' : '🚫 ブロック';
-      blockBtn.dataset.action = 'block';
-      blockBtn.disabled = isBlocked(username);
-      actions.appendChild(blockBtn);
+      if (!actions.querySelector('[data-action="block"]')) {
+        const blockBtn = document.createElement('button');
+        blockBtn.type = 'button';
+        blockBtn.className = 'message-action-btn';
+        blockBtn.textContent = isBlocked(username) ? '🚫 ブロック中' : '🚫 ブロック';
+        blockBtn.dataset.action = 'block';
+        blockBtn.disabled = isBlocked(username);
+        actions.appendChild(blockBtn);
+      }
     }
 
-    item.appendChild(actions);
     renderReactionControls(item);
     updateResolveButton(item);
     if (isBlocked(username)) item.classList.add('rural-blocked');
