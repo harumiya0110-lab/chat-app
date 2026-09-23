@@ -1127,3 +1127,32 @@ body[data-rural-theme] .messages .message-bubble audio{
 .event-marker-area.is-loading{
   font-size:7px!important;
 }
+
+/* マップピンをさらに小型化：地名は表示せず、クリック後のポップアップで表示 */
+.event-marker{
+  width:30px!important;
+  min-width:30px!important;
+  max-width:30px!important;
+  height:30px!important;
+  min-height:30px!important;
+  max-height:30px!important;
+  padding:0!important;
+  gap:0!important;
+  border:2px solid rgba(255,255,255,.95)!important;
+  border-radius:50% 50% 50% 4px!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.24)!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+.event-marker-symbol{
+  width:auto!important;
+  height:auto!important;
+  flex:0 0 auto!important;
+  font-size:13px!important;
+  line-height:1!important;
+  transform:rotate(45deg);
+}
+.event-marker-area{
+  display:none!important;
+}
