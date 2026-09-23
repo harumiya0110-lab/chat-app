@@ -299,6 +299,11 @@ function attachPendingReplies() {
 
 function removeRenderedMessage(item) {
   if (!item || !messages) return;
+  const messageId = String(item.dataset.messageId || '').trim();
+  if (messageId && mapLocationSystemMessage?.dataset?.messageId === messageId) {
+    mapLocationSystemMessage.remove();
+    mapLocationSystemMessage = null;
+  }
   const replyToId = String(item.dataset.replyToId || '').trim();
   if (replyToId) {
     const parent = [...messages.querySelectorAll('.message')].find(message =>
@@ -803,26 +808,47 @@ async function fetchMarkerArea(point) {
   }
 }
 
+function findMessageArticleForMarker(marker) {
+  const messageId = String(marker?.__messageId || marker?.__deleteMessageId || '').trim();
+  if (!messageId || !messages) return null;
+  return [...messages.querySelectorAll('.message')].find(item => item.dataset.messageId === messageId) || null;
+}
+
 async function showMarkerAreaInChat(marker) {
   const point = marker?.getLatLng?.();
   if (!point) return;
-  const cached = markerLocationCache.get(`${point.lat.toFixed(5)},${point.lng.toFixed(5)}`);
+  const cacheKey = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+  const cached = markerLocationCache.get(cacheKey);
   if (cached) {
-    updateMarkerAreaMessage(cached);
+    updateMarkerAreaMessage(cached, marker);
     return;
   }
-  updateMarkerAreaMessage({ loading: true });
+  updateMarkerAreaMessage({ loading: true }, marker);
   const location = await fetchMarkerArea(point);
-  if (location?.error) updateMarkerAreaMessage(location);
-  else updateMarkerAreaMessage(location || { error: '都道府県・市区町村を特定できませんでした。' });
+  if (location?.error) updateMarkerAreaMessage(location, marker);
+  else updateMarkerAreaMessage(location || { error: '都道府県・市区町村を特定できませんでした。' }, marker);
 }
 
-function updateMarkerAreaMessage(location) {
+function updateMarkerAreaMessage(location, marker = null) {
   if (!messages) return;
+
+  const messageId = String(marker?.__messageId || marker?.__deleteMessageId || '').trim();
 
   if (!mapLocationSystemMessage) {
     mapLocationSystemMessage = document.createElement('div');
     mapLocationSystemMessage.className = 'system-message map-location-system-message';
+  }
+
+  if (messageId) {
+    mapLocationSystemMessage.dataset.messageId = messageId;
+  }
+
+  // 場所表示をチャット末尾に固定せず、対応する地図付き投稿の直後へ移動します。
+  // 連続投稿でも、必ず「その投稿」のすぐ下に表示されます。
+  const anchor = findMessageArticleForMarker(marker);
+  if (anchor?.parentNode) {
+    anchor.parentNode.insertBefore(mapLocationSystemMessage, anchor.nextSibling);
+  } else if (!mapLocationSystemMessage.parentNode) {
     messages.appendChild(mapLocationSystemMessage);
   }
 
