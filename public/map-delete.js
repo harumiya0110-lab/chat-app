@@ -83,31 +83,6 @@
     });
     wrap.appendChild(routeButton);
 
-    const shareButton = document.createElement('button');
-    shareButton.type = 'button';
-    shareButton.className = 'map-share-btn';
-    shareButton.textContent = '📤 場所を共有';
-    shareButton.title = 'Google Mapsの場所を共有します';
-    shareButton.addEventListener('click', async () => {
-      shareButton.disabled = true;
-      const current = marker.getLatLng?.() || latLng;
-      const title = marker.__eventType === 'イベント' ? 'イベントの場所' : '待ち合わせ場所';
-      const result = await window.ruralShareGoogleMapsLocation?.({
-        lat: current.lat,
-        lng: current.lng,
-        title,
-        text: marker.__deleteMessageText ? `${title}：${String(marker.__deleteMessageText).slice(0, 120)}` : title
-      });
-      shareButton.disabled = false;
-      if (typeof setStatus === 'function') {
-        if (result?.reason === 'cancelled') return;
-        setStatus(result?.ok
-          ? (result.method === 'share' ? 'Google Mapsの場所を共有しました。' : 'Google Mapsの場所リンクをコピーしました。')
-          : '場所の共有に失敗しました。');
-      }
-    });
-    wrap.appendChild(shareButton);
-
     actions.appendChild(wrap);
   }
 
