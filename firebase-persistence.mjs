@@ -11,7 +11,7 @@ let cachedAccessTokenExpiresAt = 0;
 // ログインのたびにFirestoreへ同じ履歴を取得しないよう、直近履歴をサーバー側で短時間キャッシュします。
 let recentMessageHistoryCache = null;
 let recentMessageHistoryPromise = null;
-const RECENT_HISTORY_PAGE_SIZE = 30;
+const RECENT_HISTORY_PAGE_SIZE = 50;
 
 function base64Url(value) {
   return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
