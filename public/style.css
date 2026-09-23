@@ -1205,3 +1205,21 @@ body[data-rural-theme] .messages .message-bubble audio{
   .chat-right > .chat-toolbar .chat-toolbar-actions{gap:5px!important}
   .chat-right > .chat-toolbar .chat-tool-action{height:34px!important;min-height:34px!important;padding:6px 9px!important}
 }
+
+/* 上部操作バーを投稿一覧より前面にしてクリックを確実に受け取る */
+.chat-right > .chat-toolbar{
+  position:relative!important;
+  z-index:20!important;
+  pointer-events:auto!important;
+}
+.chat-right > .chat-toolbar .chat-toolbar-actions{
+  position:relative!important;
+  z-index:21!important;
+  pointer-events:auto!important;
+}
+.chat-right > .chat-toolbar .chat-tool-action{
+  position:relative!important;
+  z-index:22!important;
+  pointer-events:auto!important;
+  cursor:pointer!important;
+}
