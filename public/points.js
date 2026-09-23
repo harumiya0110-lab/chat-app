@@ -12,7 +12,7 @@
   function setPoints(points) {
     const value = Number.isFinite(Number(points)) ? Math.max(0, Math.floor(Number(points))) : 0;
     pointsEl.textContent = `⭐ 地域ポイント ${value}pt`;
-    pointsEl.title = '投稿者に実際の手伝いを確認してもらうと10pt獲得';
+    pointsEl.title = '毎日ログイン+3pt、チャット利用+1pt、地図付き投稿+5pt、助け合い確認+20pt';
   }
 
   socket.on('region-points-updated', data => {
@@ -21,7 +21,13 @@
 
     const earned = Number(data.earned || 0);
     if (earned > 0 && typeof setStatus === 'function') {
-      setStatus(`🎉 投稿者が「来た！」と確認しました。地域ポイントを${earned}pt獲得しました！`);
+      const messages = {
+        'daily-login': `🎁 今日のログインで地域ポイントを${earned}pt獲得しました！`,
+        'chat-use': `💬 チャットの利用で地域ポイントを${earned}pt獲得しました！`,
+        'map-post': `📍 地域情報の投稿で地域ポイントを${earned}pt獲得しました！`,
+        'help-confirmed': `🎉 実際の助け合いが確認され、地域ポイントを${earned}pt獲得しました！`
+      };
+      setStatus(messages[data.reason] || `⭐ 地域ポイントを${earned}pt獲得しました！`);
     }
   });
 
