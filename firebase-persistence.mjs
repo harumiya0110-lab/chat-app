@@ -170,13 +170,16 @@ async function getSavedMessage(id) {
   }
 }
 
-async function deleteMessage(id, userId) {
-  if (!enabled || !id || !userId) return { ok: false, reason: 'invalid' };
+async function deleteMessage(id, username) {
+  const cleanUsername = String(username || '').trim().slice(0, 50);
+  if (!enabled || !id || !cleanUsername) return { ok: false, reason: 'invalid' };
   const saved = await getSavedMessage(id);
   if (!saved) return { ok: false, reason: 'not-found' };
-  // 削除権限は表示名ではなくSocket IDで判定します。
-  // 同じニックネームが存在しても、投稿者本人以外は削除できません。
-  if (String(saved.userId || '') !== String(userId)) return { ok: false, reason: 'not-owner' };
+  // ゲスト方式ではログアウト・再ログインのたびにSocket IDが変わるため、
+  // 投稿者のニックネームを所有者として判定します。
+  if (String(saved.username || '').normalize('NFC') !== cleanUsername.normalize('NFC')) {
+    return { ok: false, reason: 'not-owner' };
+  }
   await firestoreRequest(`/messages/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
   return { ok: true };
 }
@@ -242,7 +245,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const result = await deleteMessage(id, socket.id); if (result.ok) { socket.server.emit('map-pin-deleted', { id, username }); socket.server.emit('chat-message-deleted', { id, username }); } if (typeof ack === 'function') ack(result); }
+      try { const result = await deleteMessage(id, username); if (result.ok) { socket.server.emit('map-pin-deleted', { id, username }); socket.server.emit('chat-message-deleted', { id, username }); } if (typeof ack === 'function') ack(result); }
       catch (error) { console.error('Firestore message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
     });
 
@@ -250,7 +253,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const saved = await getSavedMessage(id); if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' }); if (saved.username !== username) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owner' }); const result = await deleteMessage(id, socket.id); if (result.ok) socket.server.emit('chat-message-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
+      try { const saved = await getSavedMessage(id); if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' }); if (String(saved.username || '').normalize('NFC') !== String(username || '').normalize('NFC')) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owner' }); const result = await deleteMessage(id, username); if (result.ok) socket.server.emit('chat-message-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
       catch (error) { console.error('Firestore chat message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
     });
 
