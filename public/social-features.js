@@ -209,6 +209,90 @@
     } catch { return false; }
   }
 
+  function isMeetingPost(item) {
+    const eventType = String(item?.dataset?.eventType || '').trim();
+    if (eventType === 'イベント') return true;
+    const bubble = item?.querySelector('.message-bubble');
+    const text = String(bubble?.textContent || '');
+    return /待ち合わせ|待合せ|集合場所|集合時間|集合|合流|待機場所/u.test(text);
+  }
+
+  function getMapMarkerForItem(item) {
+    const id = String(item?.dataset?.messageId || '').trim();
+    if (!id) return null;
+    return window.ruralMarkerByMessageId?.get(id) || null;
+  }
+
+  function ensureMapRouteShareControls(item) {
+    if (!item || item.dataset.location !== '1' || !isMeetingPost(item)) return null;
+    let host = item.querySelector(':scope > .map-route-share');
+    if (host) return host;
+
+    host = document.createElement('div');
+    host.className = 'map-route-share';
+
+    const marker = getMapMarkerForItem(item);
+    const latLng = marker?.getLatLng?.();
+    if (!latLng) return null;
+
+    const title = String(item.dataset.eventType || '').trim() === 'イベント'
+      ? 'イベントの場所'
+      : '待ち合わせ場所';
+    const messageText = String(item.querySelector('.message-bubble')?.textContent || '').trim().slice(0, 120);
+
+    const routeButton = document.createElement('button');
+    routeButton.type = 'button';
+    routeButton.className = 'message-action-btn map-route-btn';
+    routeButton.textContent = '🗺️ ルート案内';
+    routeButton.title = 'Google Mapsでこの場所までのルートを開きます';
+    routeButton.addEventListener('click', () => {
+      const current = getMapMarkerForItem(item)?.getLatLng?.() || latLng;
+      const url = window.ruralCreateGoogleMapsLocationUrl?.(current.lat, current.lng, 'directions');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+    host.appendChild(routeButton);
+
+    const shareButton = document.createElement('button');
+    shareButton.type = 'button';
+    shareButton.className = 'message-action-btn map-share-btn';
+    shareButton.textContent = '📤 場所を共有';
+    shareButton.title = 'Google Mapsの場所を共有します';
+    shareButton.addEventListener('click', async () => {
+      shareButton.disabled = true;
+      const current = getMapMarkerForItem(item)?.getLatLng?.() || latLng;
+      const result = await window.ruralShareGoogleMapsLocation?.({
+        lat: current.lat,
+        lng: current.lng,
+        title,
+        text: messageText ? `${title}：${messageText}` : title
+      });
+      shareButton.disabled = false;
+      if (typeof setStatus === 'function') {
+        if (result?.reason === 'cancelled') return;
+        setStatus(result?.ok
+          ? (result.method === 'share' ? 'Google Mapsの場所を共有しました。' : 'Google Mapsの場所リンクをコピーしました。')
+          : '場所の共有に失敗しました。');
+      }
+    });
+    host.appendChild(shareButton);
+
+    return host;
+  }
+
+  function isMeetingPost(item) {
+    const eventType = String(item?.dataset?.eventType || '').trim();
+    if (eventType === 'イベント') return true;
+    const bubble = item?.querySelector('.message-bubble');
+    const text = String(bubble?.textContent || '');
+    return /待ち合わせ|待合せ|集合場所|集合時間|集合|合流|待機場所/u.test(text);
+  }
+
+  function getMapMarkerForItem(item) {
+    const id = String(item?.dataset?.messageId || '').trim();
+    if (!id) return null;
+    return window.ruralMarkerByMessageId?.get(id) || null;
+  }
+
   function ensureMapPostReactionControls(item) {
     if (!item || item.dataset.location !== '1') return null;
 
@@ -252,6 +336,9 @@
         button.dataset.reaction = info.key;
         row.appendChild(button);
       }
+
+      const routeShareHost = ensureMapRouteShareControls(item);
+      if (routeShareHost) host.appendChild(routeShareHost);
 
       const eventType = String(item.dataset.eventType || '').trim();
       const owner = String(item.dataset.username || '').trim() === String(currentUsername || '').trim();
@@ -1147,3 +1234,21 @@
   style.textContent = "/* 親投稿の操作ボタンを押しやすいサイズに調整（返信側は従来の小型サイズを維持） */\n.messages .message:not(.reply-message) .message-actions .message-action-btn{\n  min-height:32px!important;\n  padding:6px 10px!important;\n  font-size:12px!important;\n  line-height:1.15!important;\n}\n\n/* チャット内レイアウトを安定化：長文・返信・操作ボタンが横にはみ出さないよう調整 */\n.messages .message{\n  min-width:0!important;\n  max-width:100%!important;\n  overflow:hidden!important;\n}\n.messages .message-header{\n  min-width:0!important;\n}\n.messages .message-header span{\n  min-width:0!important;\n  max-width:50%!important;\n  overflow:hidden!important;\n  text-overflow:ellipsis!important;\n  white-space:nowrap!important;\n}\n.messages .message-bubble{\n  min-width:0!important;\n  max-width:100%!important;\n  overflow-wrap:anywhere!important;\n  word-break:break-word!important;\n}\n.messages .message-actions{\n  width:100%!important;\n  max-width:100%!important;\n  min-width:0!important;\n  box-sizing:border-box!important;\n  display:flex!important;\n  flex-wrap:wrap!important;\n  align-items:center!important;\n  gap:6px!important;\n  overflow:visible!important;\n}\n.messages .message-actions .message-action-btn,\n.messages .message-actions .chat-delete-btn{\n  box-sizing:border-box!important;\n  flex:0 0 auto!important;\n  white-space:nowrap!important;\n}\n.messages .message-actions-spacer{\n  flex:1 1 12px!important;\n  min-width:12px!important;\n}\n.messages .message-replies{\n  min-width:0!important;\n  max-width:100%!important;\n  box-sizing:border-box!important;\n}\n.messages .message-replies-list{\n  min-width:0!important;\n  max-width:100%!important;\n}\n.messages .message.reply-message{\n  min-width:0!important;\n  max-width:100%!important;\n  box-sizing:border-box!important;\n}\n@media(max-width:650px){\n  .messages .message-actions{\n    gap:5px!important;\n  }\n  .messages .message-actions-spacer{\n    display:none!important;\n  }\n  .messages .message:not(.reply-message) .message-actions .message-action-btn{\n    min-height:30px!important;\n    padding:5px 8px!important;\n    font-size:11px!important;\n  }\n}\n";
   document.head.appendChild(style);
 })();
+
+
+/* イベント・待ち合わせ投稿のルート案内／共有ボタン */
+.map-route-share{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  width:100%;
+  margin-top:6px;
+}
+.map-route-share .message-action-btn{
+  flex:0 1 auto;
+}
+body[data-rural-theme] .map-route-share .message-action-btn{
+  background:var(--integrated-chat-bg)!important;
+  color:var(--theme-text)!important;
+  border-color:var(--theme-border)!important;
+}
