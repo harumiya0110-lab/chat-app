@@ -56,6 +56,61 @@
     }
   }
 
+  function isMeetingMarker(marker) {
+    if (marker?.__eventType === 'イベント') return true;
+    const text = String(marker?.__deleteMessageText || '');
+    return /待ち合わせ|待合せ|集合場所|集合時間|集合|合流|待機場所/u.test(text);
+  }
+
+  function appendRouteShareButtons(actions, marker) {
+    if (!actions || !marker?.getLatLng?.() || !isMeetingMarker(marker)) return;
+
+    const latLng = marker.getLatLng();
+    if (!Number.isFinite(Number(latLng.lat)) || !Number.isFinite(Number(latLng.lng))) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'map-route-share-popup';
+
+    const routeButton = document.createElement('button');
+    routeButton.type = 'button';
+    routeButton.className = 'map-route-btn';
+    routeButton.textContent = '🗺️ ルート案内';
+    routeButton.title = 'Google Mapsでこの場所までのルートを開きます';
+    routeButton.addEventListener('click', () => {
+      const current = marker.getLatLng?.() || latLng;
+      const url = window.ruralCreateGoogleMapsLocationUrl?.(current.lat, current.lng, 'directions');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+    wrap.appendChild(routeButton);
+
+    const shareButton = document.createElement('button');
+    shareButton.type = 'button';
+    shareButton.className = 'map-share-btn';
+    shareButton.textContent = '📤 場所を共有';
+    shareButton.title = 'Google Mapsの場所を共有します';
+    shareButton.addEventListener('click', async () => {
+      shareButton.disabled = true;
+      const current = marker.getLatLng?.() || latLng;
+      const title = marker.__eventType === 'イベント' ? 'イベントの場所' : '待ち合わせ場所';
+      const result = await window.ruralShareGoogleMapsLocation?.({
+        lat: current.lat,
+        lng: current.lng,
+        title,
+        text: marker.__deleteMessageText ? `${title}：${String(marker.__deleteMessageText).slice(0, 120)}` : title
+      });
+      shareButton.disabled = false;
+      if (typeof setStatus === 'function') {
+        if (result?.reason === 'cancelled') return;
+        setStatus(result?.ok
+          ? (result.method === 'share' ? 'Google Mapsの場所を共有しました。' : 'Google Mapsの場所リンクをコピーしました。')
+          : '場所の共有に失敗しました。');
+      }
+    });
+    wrap.appendChild(shareButton);
+
+    actions.appendChild(wrap);
+  }
+
   function renderEventVisitStatus(actions, marker) {
     const isOwner = String(marker.__deleteOwnerName || '').normalize('NFC') === String(currentUsername || '').trim().normalize('NFC');
     const interested = isEventInterested(marker);
@@ -123,6 +178,7 @@
     const extra = helpUsers.length > 8 ? ` ほか${helpUsers.length - 8}人` : '';
 
     actions.innerHTML = '';
+    appendRouteShareButtons(actions, marker);
 
     const block = document.createElement('div');
     block.className = 'map-help-block';
@@ -360,6 +416,10 @@
     .map-event-interest-btn:hover:not(:disabled){background:#fff0b8}
     .map-event-interest-btn.interested{border-color:#d6a83d;background:#fff2b8;color:#694d0b}
     .map-event-interest-btn:disabled{opacity:.65;cursor:wait}
+    .map-route-share-popup{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .map-route-share-popup button{border:1px solid #bfcfc1;background:#fff;color:#294237;border-radius:9px;padding:8px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+    .map-route-share-popup button:hover:not(:disabled){background:#eef5ef}
+    .map-route-share-popup button:disabled{opacity:.6;cursor:wait}
   `;
   document.head.appendChild(style);
 
@@ -385,6 +445,7 @@
     marker.__deleteOwnerUserId = typeof data.userId === 'string' ? data.userId : null;
     marker.__deleteMessageId = typeof data.id === 'string' ? data.id : null;
     marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
+    marker.__deleteMessageText = typeof data.message === 'string' ? data.message : (typeof data.text === 'string' ? data.text : '');
     marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
     marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
     ownerMarkers.add(marker);
