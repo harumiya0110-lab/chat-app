@@ -534,6 +534,8 @@ function joinChat() {
 
 function openAdminReports() {
   if (!isAdmin) return;
+  // 連打や二重イベントで管理画面が重複表示されないようにする。
+  document.getElementById('admin-reports-modal')?.remove();
   socket.timeout(10000).emit('get-reports', {}, (err,result)=>{
     if(err||!result?.ok){setStatus('通報一覧を取得できませんでした。');return;}
     const modal=document.createElement('div'); modal.id='admin-reports-modal'; modal.className='admin-reports-modal';
