@@ -1697,3 +1697,240 @@ body:not([data-rural-theme]) .app-header .header-user span{
   .brand-kicker{font-size:7px}
   body:not([data-rural-theme]) .app-header p{font-size:11px}
 }
+
+
+/* =========================================================
+   UI COMPONENT SYSTEM
+   Material Design 3 の考え方を取り入れた共通デザイントークン
+   ========================================================= */
+:root{
+  --ui-font-family:system-ui,-apple-system,"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --ui-font-size-body:14px;
+  --ui-font-size-label:12px;
+  --ui-font-size-caption:11px;
+  --ui-font-size-title:18px;
+  --ui-font-weight-medium:600;
+  --ui-font-weight-bold:700;
+  --ui-radius-sm:8px;
+  --ui-radius-md:12px;
+  --ui-radius-lg:16px;
+  --ui-radius-pill:999px;
+  --ui-space-1:4px;
+  --ui-space-2:8px;
+  --ui-space-3:12px;
+  --ui-space-4:16px;
+  --ui-space-5:20px;
+  --ui-control-height:44px;
+  --ui-touch-target:48px;
+  --ui-icon-size:20px;
+  --ui-focus-ring:0 0 0 3px rgba(229,138,58,.28);
+  --ui-elevation-1:0 1px 3px rgba(25,45,34,.12),0 1px 2px rgba(25,45,34,.08);
+  --ui-elevation-2:0 4px 12px rgba(25,45,34,.14),0 2px 5px rgba(25,45,34,.08);
+}
+
+html,body{
+  font-family:var(--ui-font-family);
+}
+button,input,textarea,select{
+  font-family:var(--ui-font-family);
+}
+button{
+  -webkit-tap-highlight-color:transparent;
+}
+button:focus-visible,
+[role="button"]:focus-visible{
+  outline:2px solid currentColor;
+  outline-offset:2px;
+  box-shadow:var(--ui-focus-ring);
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible{
+  outline:none;
+  box-shadow:var(--ui-focus-ring);
+}
+
+/* 共通ボタン：形・文字・余白を全画面で統一 */
+:where(
+  .setup-panel button,
+  #send-btn,
+  .users-panel button,
+  .chat-tool-action,
+  .tool-btn,
+  .message-action-btn,
+  .map-filter,
+  .call-controls button,
+  .mini-call-bar button,
+  .theme-card button,
+  .mobile-view-tab,
+  .map-help-btn,
+  .map-delete-btn,
+  .map-route-btn,
+  .map-share-btn,
+  .rural-modal-close,
+  .blocked-row button,
+  .media-preview-remove
+){
+  box-sizing:border-box;
+  font-weight:var(--ui-font-weight-bold);
+  letter-spacing:.01em;
+  transition:
+    background-color .16s ease,
+    border-color .16s ease,
+    color .16s ease,
+    box-shadow .16s ease,
+    transform .12s ease,
+    opacity .16s ease;
+}
+
+/* 標準サイズの操作ボタン */
+:where(
+  .setup-panel button,
+  #send-btn,
+  .users-panel button,
+  .chat-tool-action,
+  .tool-btn,
+  .call-controls button,
+  .mobile-view-tab,
+  .map-help-btn,
+  .map-delete-btn
+){
+  min-height:var(--ui-control-height);
+  border-radius:var(--ui-radius-md);
+}
+
+/* コンパクトなチップ・リアクション */
+:where(.message-action-btn,.map-filter,.blocked-row button){
+  min-height:36px;
+  border-radius:var(--ui-radius-pill);
+}
+
+/* アイコン操作 */
+:where(.tool-btn,.media-preview-remove,.rural-modal-close){
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.tool-btn{
+  min-width:44px;
+  padding:0 10px;
+  font-size:var(--ui-icon-size);
+}
+.media-preview-remove{
+  min-width:36px;
+}
+.rural-modal-close{
+  min-width:40px;
+}
+
+/* ラベル付きボタンのアイコンと文字の距離を統一 */
+:where(
+  .setup-panel button,
+  #send-btn,
+  .users-panel button,
+  .chat-tool-action,
+  .message-action-btn,
+  .map-filter,
+  .call-controls button,
+  .mini-call-bar button,
+  .mobile-view-tab,
+  .map-help-btn,
+  .map-delete-btn,
+  .map-route-btn,
+  .map-share-btn,
+  .theme-card button
+){
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  vertical-align:middle;
+}
+
+/* 入力部品 */
+:where(
+  .setup-panel input,
+  .input-area input[type="text"],
+  #message-input
+){
+  min-height:var(--ui-control-height);
+  border-radius:var(--ui-radius-md);
+  font-size:var(--ui-font-size-body);
+  line-height:1.4;
+}
+
+/* カード・パネルの共通角丸 */
+:where(.chat-panel,.map-panel,.call-box,.rural-modal-box,.theme-shop-box){
+  border-radius:var(--ui-radius-lg);
+}
+
+/* ホバー状態を統一 */
+@media (hover:hover){
+  :where(
+    .setup-panel button,
+    #send-btn,
+    .users-panel button,
+    .chat-tool-action,
+    .tool-btn,
+    .message-action-btn,
+    .map-filter,
+    .call-controls button,
+    .mini-call-bar button,
+    .theme-card button,
+    .mobile-view-tab,
+    .map-help-btn,
+    .map-delete-btn,
+    .map-route-btn,
+    .map-share-btn,
+    .blocked-row button
+  ):hover:not(:disabled){
+    transform:translateY(-1px);
+  }
+}
+
+/* 無効状態 */
+:where(button,input,textarea,select):disabled{
+  cursor:not-allowed;
+}
+
+/* タッチ端末ではMaterial系の操作領域を大きくする */
+@media (pointer:coarse){
+  :where(
+    .setup-panel button,
+    #send-btn,
+    .users-panel button,
+    .chat-tool-action,
+    .tool-btn,
+    .call-controls button,
+    .mobile-view-tab,
+    .map-help-btn,
+    .map-delete-btn,
+    .map-route-btn,
+    .map-share-btn
+  ){
+    min-height:var(--ui-touch-target);
+  }
+  .tool-btn{
+    min-width:var(--ui-touch-target);
+  }
+}
+
+/* 投稿の文字階層 */
+.messages .message-bubble{
+  font-family:var(--ui-font-family);
+  font-size:var(--ui-font-size-body);
+}
+.messages .message-header{
+  font-family:var(--ui-font-family);
+  font-size:var(--ui-font-size-caption);
+  font-weight:var(--ui-font-weight-medium);
+}
+.panel-heading h2,
+.users-panel h2{
+  font-weight:var(--ui-font-weight-bold);
+}
+
+/* 共通アクセントライン */
+:where(.message-action-btn.active,.map-filter.active,.map-help-btn.helping){
+  box-shadow:var(--ui-elevation-1);
+}
