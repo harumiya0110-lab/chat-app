@@ -18,6 +18,7 @@ let ruralReplyTarget = null;
 let isAdmin = false;
 let pendingMedia = null;
 let pendingMediaObjectUrl = '';
+let pendingJoinRequest = null;
 
 window.ruralSetReplyTarget = target => {
   ruralReplyTarget = target && typeof target.id === 'string' ? {
@@ -813,6 +814,49 @@ function showLoginScreen() {
   joinBtn.disabled = false;
 }
 
+function submitJoinRequest(username, adminPassword) {
+  pendingJoinRequest = { username, password: adminPassword };
+
+  if (!socket.connected) {
+    isJoiningChat = true;
+    joinBtn.disabled = true;
+    setStatus('サーバーに接続しています…');
+    socket.connect();
+    return;
+  }
+
+  const request = pendingJoinRequest;
+  pendingJoinRequest = null;
+  isJoiningChat = true;
+  joinBtn.disabled = true;
+  setStatus('チャットに参加しています…');
+
+  socket.timeout(10000).emit('set-username', request, (error, result) => {
+    if (chatMain && !chatMain.hidden && currentUsername) {
+      pendingJoinRequest = null;
+      return;
+    }
+
+    if (!error && result?.ok) {
+      pendingJoinRequest = null;
+      enterChatScreen(result.username || username, result.users, result.isAdmin === true);
+      return;
+    }
+
+    pendingJoinRequest = null;
+    isJoiningChat = false;
+    joinBtn.disabled = false;
+
+    const message = result?.message || (
+      error
+        ? 'サーバーへの接続がタイムアウトしました。接続を確認してもう一度お試しください。'
+        : 'チャットへの参加に失敗しました。'
+    );
+    setStatus(message);
+    alert(message);
+  });
+}
+
 function joinChat() {
   const username = usernameInput.value.normalize('NFC').trim();
   const adminPassword = username === 'ハル' ? (window.prompt('管理者「ハル」のパスワードを入力してください') || '') : '';
@@ -827,38 +871,7 @@ function joinChat() {
   }
   if (isJoiningChat || (chatMain && !chatMain.hidden)) return;
 
-  if (!socket.connected) {
-    setStatus('サーバーに接続しています…');
-    socket.connect();
-    joinBtn.disabled = false;
-    return;
-  }
-
-  isJoiningChat = true;
-  joinBtn.disabled = true;
-  setStatus('チャットに参加しています…');
-
-  socket.timeout(10000).emit('set-username', { username, password: adminPassword }, (error, result) => {
-    // サーバーから username-accepted が先に届いて画面が切り替わった場合は、
-    // ACK側では何もしません。
-    if (chatMain && !chatMain.hidden && currentUsername) return;
-
-    if (!error && result?.ok) {
-      enterChatScreen(result.username || username, result.users, result.isAdmin === true);
-      return;
-    }
-
-    isJoiningChat = false;
-    joinBtn.disabled = false;
-
-    const message = result?.message || (
-      error
-        ? 'サーバーへの接続がタイムアウトしました。接続を確認してもう一度お試しください。'
-        : 'チャットへの参加に失敗しました。'
-    );
-    setStatus(message);
-    alert(message);
-  });
+  submitJoinRequest(username, adminPassword);
 }
 
 function openAdminReports() {
@@ -1169,6 +1182,35 @@ socket.on('user-left', data => addSystemMessage(data.message));
 socket.on('update-users', updateUsersList);
 
 socket.on('connect', () => {
+  if (pendingJoinRequest && !currentUsername) {
+    const request = pendingJoinRequest;
+    pendingJoinRequest = null;
+    isJoiningChat = true;
+    joinBtn.disabled = true;
+    setStatus('チャットに参加しています…');
+
+    socket.timeout(10000).emit('set-username', request, (error, result) => {
+      if (chatMain && !chatMain.hidden && currentUsername) return;
+
+      if (!error && result?.ok) {
+        isJoiningChat = false;
+        enterChatScreen(result.username || request.username, result.users, result.isAdmin === true);
+        return;
+      }
+
+      isJoiningChat = false;
+      joinBtn.disabled = false;
+      const message = result?.message || (
+        error
+          ? 'サーバーへの接続に失敗しました。もう一度お試しください。'
+          : 'チャットへの参加に失敗しました。'
+      );
+      setStatus(message);
+      alert(message);
+    });
+    return;
+  }
+
   if (!currentUsername) return;
   socket.emit('get-online-users', {}, result => {
     if (result?.ok) updateUsersList(result.users);
