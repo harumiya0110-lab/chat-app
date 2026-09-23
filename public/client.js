@@ -539,9 +539,10 @@ socket.on('disconnect', () => {
   if (!currentUsername) showLoginScreen();
 });
 
-async function sendTextMessage() {
-  const text = messageInput.value.trim();
-  if (!text || !currentUsername) return;
+async function sendTextMessage(overrideText = null, overrideReplyTarget = undefined) {
+  const text = String(overrideText ?? messageInput.value).trim();
+  if (!text || !currentUsername) return false;
+  const replyTarget = overrideReplyTarget === undefined ? ruralReplyTarget : overrideReplyTarget;
   sendBtn.disabled = true;
   setStatus('AIが場所とイベント種別を解析しています…');
   try {
@@ -551,14 +552,14 @@ async function sendTextMessage() {
       body: JSON.stringify({
         text,
         userId: socket.id || `web-${crypto.randomUUID()}`,
-        replyToId: ruralReplyTarget?.id || '',
-        replyToUsername: ruralReplyTarget?.username || '',
-        replyToText: ruralReplyTarget?.message || ''
+        replyToId: replyTarget?.id || '',
+        replyToUsername: replyTarget?.username || '',
+        replyToText: replyTarget?.message || ''
       })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '送信に失敗しました');
-    messageInput.value = '';
+    if (overrideText === null) messageInput.value = '';
     ruralReplyTarget = null;
     window.dispatchEvent(new CustomEvent('rural-reply-target-changed', { detail: null }));
     if (result.locationData) {
@@ -571,6 +572,7 @@ async function sendTextMessage() {
   } catch (error) {
     console.error(error);
     setStatus(error.message || '送信中にエラーが発生しました。');
+    return false;
   } finally {
     sendBtn.disabled = false;
     messageInput.focus();
