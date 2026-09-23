@@ -44,6 +44,23 @@ function fromFirestoreFields(fields) {
   return Object.fromEntries(Object.entries(fields || {}).map(([k, v]) => [k, fromFirestoreValue(v)]));
 }
 
+function normalizeMedia(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = typeof value.id === 'string' ? value.id.trim().slice(0, 120) : '';
+  const type = value.type === 'video' ? 'video' : value.type === 'image' ? 'image' : '';
+  if (!id || !type) return null;
+  return {
+    id,
+    type,
+    filename: typeof value.filename === 'string' ? value.filename.slice(0, 200) : '',
+    mimeType: typeof value.mimeType === 'string' ? value.mimeType.slice(0, 80) : '',
+    mediaUrl: typeof value.mediaUrl === 'string' ? value.mediaUrl.slice(0, 300) : '',
+    thumbnailUrl: typeof value.thumbnailUrl === 'string' ? value.thumbnailUrl.slice(0, 300) : '',
+    size: Math.max(0, Math.min(15 * 1024 * 1024, Number(value.size) || 0)),
+    durationSec: Math.max(0, Math.min(30, Number(value.durationSec) || 0))
+  };
+}
+
 function normalizeLocationData(value) {
   if (!value || typeof value !== 'object') return null;
   const lat = Number(value.lat);
@@ -79,6 +96,7 @@ function normalizeMessage(data) {
     userId: typeof data?.userId === 'string' ? data.userId.slice(0, 200) : '',
     createdAt,
     locationData: normalizeLocationData(data?.locationData),
+    media: normalizeMedia(data?.media),
     helpUsers: cleanList(data?.helpUsers),
     helpConfirmedUsers: cleanList(data?.helpConfirmedUsers),
     reactions: cleanReactionUsers(data?.reactions),
@@ -304,6 +322,33 @@ const historyCursorBySocketId = new Map();
 const adminBySocketId = new Map();
 const originalServerEmit = SocketIOServer.prototype.emit;
 SocketIOServer.prototype.emit = function(eventName, ...args) {
+  if (eventName === 'message-media-attached' && enabled) {
+    const payload = args[0];
+    const messageId = typeof payload?.messageId === 'string' ? payload.messageId.trim() : '';
+    const media = normalizeMedia(payload?.media);
+    if (!messageId || !media) return originalServerEmit.call(this, eventName, ...args);
+
+    void (async () => {
+      try {
+        let saved = null;
+        for (let attempt = 0; attempt < 4 && !saved; attempt += 1) {
+          saved = await getSavedMessage(messageId);
+          if (!saved && attempt < 3) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (saved) {
+          await firestoreRequest(`/messages/${encodeURIComponent(messageId)}?updateMask.fieldPaths=media`, {
+            method: 'PATCH',
+            body: JSON.stringify({ fields: { media: firestoreValue(media) } })
+          });
+        }
+      } catch (error) {
+        console.error('Firestore media metadata save failed:', error);
+      }
+      originalServerEmit.call(this, eventName, { ...payload, media });
+    })();
+    return this;
+  }
+
   if (eventName !== 'receive-message' || !enabled) return originalServerEmit.call(this, eventName, ...args);
   const incoming = normalizeMessage(args[0]);
   const username = usernameBySocketId.get(incoming.userId);
