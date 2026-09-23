@@ -23,6 +23,9 @@
     { key: 'thanks', label: '🙏', title: 'ありがとう' },
     { key: 'helpful', label: '👌', title: 'グッド' }
   ];
+  const EVENT_INTEREST_STORAGE_KEY = 'rural-event-interest:';
+  const HELPABLE_EVENT_TYPE = '助け合い';
+  const EVENT_EVENT_TYPE = 'イベント';
   const BLOCKED_KEY = 'rural-blocked-users-v1';
   let unreadCount = 0;
   let loadMoreBusy = false;
@@ -183,6 +186,29 @@
     } catch { return { like: [], helpful: [], thanks: [] }; }
   }
 
+  function getHelpUsers(item) {
+    try {
+      const raw = JSON.parse(item?.dataset?.helpUsers || '[]');
+      return Array.isArray(raw) ? raw.map(value => String(value).trim()).filter(Boolean) : [];
+    } catch { return []; }
+  }
+
+  function isEventInterested(item) {
+    const id = String(item?.dataset?.messageId || '').trim();
+    if (!id || item?.dataset?.eventType !== EVENT_EVENT_TYPE) return false;
+    try { return localStorage.getItem(EVENT_INTEREST_STORAGE_KEY + id) === '1'; } catch { return false; }
+  }
+
+  function setEventInterested(item, interested) {
+    const id = String(item?.dataset?.messageId || '').trim();
+    if (!id || item?.dataset?.eventType !== EVENT_EVENT_TYPE) return false;
+    try {
+      if (interested) localStorage.setItem(EVENT_INTEREST_STORAGE_KEY + id, '1');
+      else localStorage.removeItem(EVENT_INTEREST_STORAGE_KEY + id);
+      return true;
+    } catch { return false; }
+  }
+
   function ensureMapPostReactionControls(item) {
     if (!item || item.dataset.location !== '1') return null;
 
@@ -209,6 +235,7 @@
 
     if (item.dataset.location === '1') {
       host.replaceChildren();
+
       const label = document.createElement('div');
       label.className = 'map-post-reactions-title';
       label.textContent = 'この投稿への意思表示';
@@ -225,6 +252,23 @@
         button.dataset.reaction = info.key;
         row.appendChild(button);
       }
+
+      const eventType = String(item.dataset.eventType || '').trim();
+      const owner = String(item.dataset.username || '').trim() === String(currentUsername || '').trim();
+
+      if (eventType === EVENT_EVENT_TYPE && !owner) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action-btn map-engagement-btn';
+        button.dataset.mapEngagement = 'interest';
+        row.appendChild(button);
+      } else if (eventType === HELPABLE_EVENT_TYPE && !owner) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action-btn map-engagement-btn';
+        button.dataset.mapEngagement = 'help';
+        row.appendChild(button);
+      }
     }
 
     host.querySelectorAll('[data-reaction]').forEach(button => {
@@ -238,16 +282,30 @@
       button.title = String(info?.title || '') + '（' + users.length + '人）';
       button.classList.toggle('active', Boolean(active));
     });
+
+    host.querySelectorAll('[data-map-engagement]').forEach(button => {
+      const action = button.dataset.mapEngagement;
+      if (action === 'interest') {
+        const interested = isEventInterested(item);
+        button.textContent = interested ? '✅ 行ってみたい（登録済み）' : '📅 行ってみたい';
+        button.title = interested ? '行ってみたいの登録を取り消す' : 'このイベントに行ってみたい';
+        button.classList.toggle('active', interested);
+      } else if (action === 'help') {
+        const helpUsers = getHelpUsers(item);
+        const helping = helpUsers.includes(String(currentUsername || '').trim());
+        button.textContent = helping ? '✅ 手伝える（登録済み）' : '🙋 手伝える';
+        button.title = helping ? '手伝えるを取り消す' : 'この投稿に手伝えることを伝える';
+        button.classList.toggle('active', helping);
+      }
+    });
   }
+
   function ensureMessageActions(item) {
     if (!item || !item.dataset.messageId || item.dataset.messageId === '') return;
     const id = String(item.dataset.messageId || '').trim();
     const username = String(item.dataset.username || '').trim();
     if (!id || !username) return;
 
-    // buildMessageElement() が自分の通常投稿に削除ボタン用の
-    // .message-actions を先に作る場合があるため、操作欄の存在だけで
-    // 処理を終了せず、不足している返信・リアクション操作を追加します。
     let actions = item.querySelector(':scope > .message-actions');
     if (!actions) {
       actions = document.createElement('div');
@@ -268,7 +326,7 @@
       ensureMapPostReactionControls(item);
     } else {
       for (const info of REACTION_TYPES) {
-        if (actions.querySelector(`[data-reaction="${info.key}"]`)) continue;
+        if (actions.querySelector('[data-reaction="' + info.key + '"]')) continue;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'message-action-btn';
@@ -278,6 +336,7 @@
         else actions.appendChild(button);
       }
     }
+
     let spacer = actions.querySelector('.message-actions-spacer');
     if (!spacer) {
       spacer = document.createElement('span');
@@ -651,7 +710,7 @@
   }
 
   function handleMessageAction(event) {
-    const button = event.target.closest('[data-action],[data-reaction]');
+    const button = event.target.closest('[data-action],[data-reaction],[data-map-engagement]');
     if (!button) return;
     const item = event.target.closest('.message');
     if (!item) return;
@@ -677,6 +736,37 @@
         item.dataset.status = result.status === 'resolved' ? 'resolved' : 'open';
         updateResolveButton(item);
         updateResolvedBadge(item);
+      });
+      return;
+    }
+
+    const engagement = button.dataset.mapEngagement;
+    if (engagement === 'interest') {
+      const next = !isEventInterested(item);
+      button.disabled = true;
+      const saved = setEventInterested(item, next);
+      button.disabled = false;
+      if (!saved) {
+        setStatusText('「行ってみたい」の保存に失敗しました。');
+        return;
+      }
+      renderReactionControls(item);
+      setStatusText(next ? '「行ってみたい」に登録しました。' : '「行ってみたい」を取り消しました。');
+      return;
+    }
+
+    if (engagement === 'help') {
+      button.disabled = true;
+      socket.timeout(10000).emit('toggle-help', { id }, (err, result) => {
+        button.disabled = false;
+        if (err || !result?.ok) {
+          setStatusText(result?.reason === 'not-owner' ? '自分の投稿には「手伝える」はできません。' : '「手伝える」の更新に失敗しました。');
+          return;
+        }
+        item.dataset.helpUsers = JSON.stringify(Array.isArray(result.helpUsers) ? result.helpUsers : []);
+        item.dataset.helpConfirmedUsers = JSON.stringify(Array.isArray(result.helpConfirmedUsers) ? result.helpConfirmedUsers : []);
+        renderReactionControls(item);
+        setStatusText(result.helping ? '「手伝える」に登録しました。' : '「手伝える」を取り消しました。');
       });
       return;
     }
@@ -901,7 +991,29 @@
   });
   socket.on('chat-message-deleted',()=>{window.setTimeout(()=>{enhanceAllMessages();scheduleClusterRefresh();},0);});
   socket.on('map-pin-deleted',()=>scheduleClusterRefresh());
-  socket.on('map-pin-help-updated',()=>scheduleClusterRefresh());
+  socket.on('map-pin-help-updated',data=>{
+    const id=String(data?.id||'').trim();
+    if(id){
+      const item=[...messagesEl.querySelectorAll('.message')].find(message=>message.dataset.messageId===id);
+      if(item){
+        item.dataset.helpUsers=JSON.stringify(Array.isArray(data.helpUsers)?data.helpUsers:[]);
+        item.dataset.helpConfirmedUsers=JSON.stringify(Array.isArray(data.helpConfirmedUsers)?data.helpConfirmedUsers:[]);
+        renderReactionControls(item);
+      }
+    }
+    scheduleClusterRefresh();
+  });
+  socket.on('map-pin-help-confirmed',data=>{
+    const id=String(data?.id||'').trim();
+    if(id){
+      const item=[...messagesEl.querySelectorAll('.message')].find(message=>message.dataset.messageId===id);
+      if(item){
+        item.dataset.helpConfirmedUsers=JSON.stringify(Array.isArray(data.helpConfirmedUsers)?data.helpConfirmedUsers:[]);
+        renderReactionControls(item);
+      }
+    }
+    scheduleClusterRefresh();
+  });
   document.addEventListener('click',event=>{
     if(event.target.closest('.map-filter')) window.setTimeout(scheduleClusterRefresh,80);
   });
