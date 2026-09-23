@@ -1,4 +1,11 @@
-const socket = io();
+const SOCKET_URL = String(window.RURAL_BACKEND_URL || window.location.origin).replace(/\/$/, '');
+const socket = io(SOCKET_URL, {
+  autoConnect: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  timeout: 10000
+});
 
 let currentUsername = '';
 let localStream = null;
@@ -1003,15 +1010,23 @@ socket.on('username-error', data => {
   alert(data?.message || 'この名前は使用できません');
 });
 
-socket.on('connect_error', () => {
+socket.on('connect_error', error => {
   if (currentUsername) return;
-  isJoiningChat = false;
-  joinBtn.disabled = false;
-  setStatus('サーバーに接続できません。しばらくしてからもう一度お試しください。');
+  const detail = String(error?.message || '').trim();
+  setStatus(detail
+    ? 'サーバーに接続できません（' + detail + '）。'
+    : 'サーバーに接続できません。しばらくしてからもう一度お試しください。');
+  if (!pendingJoinRequest) {
+    isJoiningChat = false;
+    joinBtn.disabled = false;
+  }
 });
 
-socket.on('disconnect', () => {
-  if (!currentUsername) showLoginScreen();
+socket.on('disconnect', reason => {
+  if (!currentUsername) {
+    showLoginScreen();
+    setStatus('サーバーとの接続が切れました。再接続しています…');
+  }
 });
 
 async function sendTextMessage(overrideText = null, overrideReplyTarget = undefined) {
@@ -1187,7 +1202,7 @@ socket.on('connect', () => {
     pendingJoinRequest = null;
     isJoiningChat = true;
     joinBtn.disabled = true;
-    setStatus('チャットに参加しています…');
+    setStatus('サーバーに接続しました。チャットに参加しています…');
 
     socket.timeout(10000).emit('set-username', request, (error, result) => {
       if (chatMain && !chatMain.hidden && currentUsername) return;
@@ -1202,7 +1217,7 @@ socket.on('connect', () => {
       joinBtn.disabled = false;
       const message = result?.message || (
         error
-          ? 'サーバーへの接続に失敗しました。もう一度お試しください。'
+          ? 'サーバーには接続できましたが、チャット参加の応答がありませんでした。もう一度お試しください。'
           : 'チャットへの参加に失敗しました。'
       );
       setStatus(message);
@@ -1211,7 +1226,11 @@ socket.on('connect', () => {
     return;
   }
 
-  if (!currentUsername) return;
+  if (!currentUsername) {
+    setStatus('サーバーに接続済みです。ニックネームを入力してください。');
+    return;
+  }
+
   socket.emit('get-online-users', {}, result => {
     if (result?.ok) updateUsersList(result.users);
   });
