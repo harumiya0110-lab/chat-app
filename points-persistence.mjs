@@ -458,7 +458,9 @@ SocketIOServer.prototype.on = function(eventName, listener) {
           try {
             const username = socket.__regionalPointsUsername;
             const initialPoints = await getPoints(username);
-            previousEmit('region-points-updated', {
+            // 履歴側のsocket.emitフックも通すことで、ログインポイントを
+            // 「地域ポイント履歴」に確実に記録します。
+            socket.emit('region-points-updated', {
               username,
               points: initialPoints,
               earned: 0
