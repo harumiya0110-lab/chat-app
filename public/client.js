@@ -187,7 +187,7 @@ function buildMessageElement(data) {
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
   item.dataset.username = typeof data.username === 'string' ? data.username : '';
   item.dataset.userId = typeof data.userId === 'string' ? data.userId : '';
-  item.dataset.location = data.locationData ? '1' : '0';
+  item.dataset.location = data.locationData && !replyToId ? '1' : '0';
   item.dataset.status = data.status === 'resolved' ? 'resolved' : 'open';
   item.dataset.reactions = JSON.stringify(data.reactions || { like: [], helpful: [], thanks: [] });
   item.dataset.messageText = String(data.message || data.text || '').slice(0, 2000);
@@ -544,7 +544,7 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
   if (!text || !currentUsername) return false;
   const replyTarget = overrideReplyTarget === undefined ? ruralReplyTarget : overrideReplyTarget;
   sendBtn.disabled = true;
-  setStatus('AIが場所とイベント種別を解析しています…');
+  setStatus(replyTarget?.id ? '返信を投稿しています…' : 'AIが場所とイベント種別を解析しています…');
   try {
     const response = await fetch('/api/messages', {
       method: 'POST',
@@ -800,6 +800,8 @@ function updateMarkerAreaMessage(location) {
 
 
 function addMarker(message) {
+  // 返信は地図へ出さない。過去のデータに場所情報が残っていても対象外にします。
+  if (String(message?.replyToId || '').trim()) return null;
   const loc = message.locationData;
   if (!loc) return;
   const lat = Number(loc.lat);
