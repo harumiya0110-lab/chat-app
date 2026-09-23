@@ -8,6 +8,11 @@ let enabled = false;
 let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
+// ログインのたびにFirestoreへ同じ履歴を取得しないよう、直近履歴をサーバー側で短時間キャッシュします。
+let recentMessageHistoryCache = null;
+let recentMessageHistoryPromise = null;
+const RECENT_HISTORY_PAGE_SIZE = 30;
+
 function base64Url(value) {
   return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
@@ -181,6 +186,8 @@ async function saveMessage(data) {
     method: 'PATCH',
     body: JSON.stringify({ fields })
   });
+  recentMessageHistoryCache = null;
+  recentMessageHistoryPromise = null;
   return message.id;
 }
 
@@ -208,6 +215,8 @@ async function deleteMessage(id, username, isAdmin = false) {
     return { ok: false, reason: 'not-owner' };
   }
   await firestoreRequest(`/messages/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+  recentMessageHistoryCache = null;
+  recentMessageHistoryPromise = null;
   return { ok: true };
 }
 
@@ -229,18 +238,65 @@ async function toggleHelper(id, username) {
 
 async function loadMessagePage(pageToken = '', pageSize = 50) {
   if (!enabled) return { messages: [], nextPageToken: '' };
-  const params = new URLSearchParams({
-    pageSize: String(Math.min(50, Math.max(1, pageSize))),
-    orderBy: 'createdAt desc'
-  });
-  if (pageToken) params.set('pageToken', pageToken);
-  const result = await firestoreRequest('/messages?' + params.toString(), { method: 'GET' });
-  const messages = (Array.isArray(result?.documents) ? result.documents : [])
-    .map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null }))
-    .filter(item => item.message)
-    .map(normalizeMessage)
-    .reverse();
-  return { messages, nextPageToken: String(result?.nextPageToken || '') };
+
+  const requestedPageSize = Math.min(50, Math.max(1, pageSize));
+  // 初回ページだけをキャッシュ。ページング用のトークンも一緒に保持します。
+  if (!pageToken && requestedPageSize === RECENT_HISTORY_PAGE_SIZE && recentMessageHistoryCache) {
+    return {
+      messages: recentMessageHistoryCache.messages.map(message => ({ ...message })),
+      nextPageToken: recentMessageHistoryCache.nextPageToken
+    };
+  }
+
+  if (!pageToken && requestedPageSize === RECENT_HISTORY_PAGE_SIZE && recentMessageHistoryPromise) {
+    const cached = await recentMessageHistoryPromise;
+    return {
+      messages: cached.messages.map(message => ({ ...message })),
+      nextPageToken: cached.nextPageToken
+    };
+  }
+
+  const fetchPage = async () => {
+    const params = new URLSearchParams({
+      pageSize: String(requestedPageSize),
+      orderBy: 'createdAt desc'
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const result = await firestoreRequest('/messages?' + params.toString(), { method: 'GET' });
+    const messages = (Array.isArray(result?.documents) ? result.documents : [])
+      .map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null }))
+      .filter(item => item.message)
+      .map(normalizeMessage)
+      .reverse();
+    return { messages, nextPageToken: String(result?.nextPageToken || '') };
+  };
+
+  if (!pageToken && requestedPageSize === RECENT_HISTORY_PAGE_SIZE) {
+    recentMessageHistoryPromise = fetchPage();
+    try {
+      const result = await recentMessageHistoryPromise;
+      recentMessageHistoryCache = {
+        messages: result.messages.map(message => ({ ...message })),
+        nextPageToken: result.nextPageToken,
+        cachedAt: Date.now()
+      };
+      return result;
+    } finally {
+      recentMessageHistoryPromise = null;
+    }
+  }
+
+  return fetchPage();
+}
+
+async function warmRecentMessageHistory() {
+  if (!enabled || recentMessageHistoryCache || recentMessageHistoryPromise) return;
+  try {
+    await loadMessagePage('', RECENT_HISTORY_PAGE_SIZE);
+    console.log('[firebase] recent chat history cache warmed');
+  } catch (error) {
+    console.warn('[firebase] recent chat history warm-up failed:', error.message);
+  }
 }
 
 const usernameBySocketId = new Map();
@@ -458,7 +514,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         originalSocketEmit('chat-history-start');
         void (async () => {
           try {
-            const page = await loadMessagePage('', 50);
+            const page = await loadMessagePage('', RECENT_HISTORY_PAGE_SIZE);
             historyCursorBySocketId.set(socket.id, page.nextPageToken);
             originalSocketEmit('chat-history', page.messages.map(message => ({
               ...message,
@@ -512,8 +568,13 @@ export async function clearAllMessages() {
     }
   }
 
+  recentMessageHistoryCache = null;
+  recentMessageHistoryPromise = null;
   console.log(`[firebase] cleared all saved messages: ${deleted}`);
   return { ok: true, deleted };
 }
+
+// サーバー起動直後から直近履歴を準備して、ログイン時の待ち時間を減らします。
+void warmRecentMessageHistory();
 
 export const firebasePersistenceEnabled = enabled;
