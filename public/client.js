@@ -15,6 +15,7 @@ let isMinimized = false;
 let isJoiningChat = false;
 let isHistoryLoading = false;
 let ruralReplyTarget = null;
+let isAdmin = false;
 
 window.ruralSetReplyTarget = target => {
   ruralReplyTarget = target && typeof target.id === 'string' ? {
@@ -169,6 +170,18 @@ function addNormalMessageDeleteControl(item, data) {
   item.appendChild(actions);
 }
 
+function addReportControl(item, data) {
+  if (!data?.id || !data?.message || data.username === currentUsername || item.querySelector('.chat-report-btn')) return;
+  const host = item.querySelector(':scope > .message-actions') || (() => { const el=document.createElement('div'); el.className='message-actions'; item.appendChild(el); return el; })();
+  const button=document.createElement('button'); button.type='button'; button.className='chat-report-btn'; button.textContent='⚑ 通報'; button.title='このメッセージを通報';
+  button.addEventListener('click',()=>{
+    const reason=window.prompt('通報理由を入力してください'); if(!reason?.trim()) return;
+    button.disabled=true; socket.timeout(10000).emit('submit-report',{id:data.id,reason:reason.trim(),message:String(data.message||data.text||'').slice(0,2000),targetUsername:String(data.username||'').slice(0,50)},(err,result)=>{
+      button.disabled=false; if(err||!result?.ok){setStatus('通報の送信に失敗しました。');return;} button.textContent='⚑ 通報済み'; setStatus('通報を送信しました。管理者が確認します。');
+    });
+  }); host.appendChild(button);
+}
+
 function buildMessageElement(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
@@ -195,6 +208,7 @@ function buildMessageElement(data) {
   item.dataset.replyPending = replyToId ? 'true' : 'false';
   if (replyToId) item.classList.add('reply-message');
   addNormalMessageDeleteControl(item, data);
+  addReportControl(item, data);
   return item;
 }
 
@@ -418,13 +432,15 @@ function addVideo(data) {
   scrollToBottom();
 }
 
-function enterChatScreen(acceptedUsername, onlineUsers = []) {
+function enterChatScreen(acceptedUsername, onlineUsers = [], admin = false) {
   const name = String(acceptedUsername || '').trim();
   if (!name) return false;
 
   isJoiningChat = false;
   currentUsername = name;
+  isAdmin = admin === true;
   usernameDisplay.textContent = name;
+  document.getElementById('admin-reports-btn')?.toggleAttribute('hidden', !isAdmin);
 
   // ログイン画面用の状態を完全に解除し、チャット画面を表示します。
   document.body.classList.remove('pre-auth');
@@ -452,10 +468,10 @@ function enterChatScreen(acceptedUsername, onlineUsers = []) {
   return true;
 }
 
-function handleChatAccepted({ username, users: onlineUsers } = {}) {
+function handleChatAccepted({ username, users: onlineUsers, isAdmin: acceptedAdmin } = {}) {
   const acceptedUsername = String(username || '').trim();
   if (!acceptedUsername) return;
-  enterChatScreen(acceptedUsername, onlineUsers);
+  enterChatScreen(acceptedUsername, onlineUsers, acceptedAdmin === true);
 }
 
 function showLoginScreen() {
@@ -470,6 +486,7 @@ function showLoginScreen() {
 
 function joinChat() {
   const username = usernameInput.value.normalize('NFC').trim();
+  const adminPassword = username === 'ハル' ? (window.prompt('管理者「ハル」のパスワードを入力してください') || '') : '';
   if (!username) {
     alert('ニックネームを入力してください');
     usernameInput.focus();
@@ -492,13 +509,13 @@ function joinChat() {
   joinBtn.disabled = true;
   setStatus('チャットに参加しています…');
 
-  socket.timeout(10000).emit('set-username', username, (error, result) => {
+  socket.timeout(10000).emit('set-username', { username, password: adminPassword }, (error, result) => {
     // サーバーから username-accepted が先に届いて画面が切り替わった場合は、
     // ACK側では何もしません。
     if (chatMain && !chatMain.hidden && currentUsername) return;
 
     if (!error && result?.ok) {
-      enterChatScreen(result.username || username, result.users);
+      enterChatScreen(result.username || username, result.users, result.isAdmin === true);
       return;
     }
 
@@ -514,6 +531,19 @@ function joinChat() {
     alert(message);
   });
 }
+
+function openAdminReports() {
+  if (!isAdmin) return;
+  socket.timeout(10000).emit('get-reports', {}, (err,result)=>{
+    if(err||!result?.ok){setStatus('通報一覧を取得できませんでした。');return;}
+    const modal=document.createElement('div'); modal.id='admin-reports-modal'; modal.className='admin-reports-modal';
+    const reports=Array.isArray(result.reports)?result.reports:[];
+    modal.innerHTML=`<div class="admin-reports-box"><div class="admin-reports-header"><strong>⚑ 通報確認</strong><button type="button" class="admin-reports-close">×</button></div><div class="admin-reports-list">${reports.length?reports.map(r=>`<article class="admin-report-item"><div><strong>${escapeHtml(r.targetUsername||'不明')}</strong> <span>${escapeHtml(r.reason||'')}</span></div><p>${escapeHtml(r.message||'')}</p><small>通報者：${escapeHtml(r.reporterUsername||'不明')}　${escapeHtml(r.createdAt?new Date(r.createdAt).toLocaleString('ja-JP'):'')}</small></article>`).join(''):'<p class="admin-reports-empty">現在、通報はありません。</p>'}</div></div>`;
+    document.body.appendChild(modal); modal.querySelector('.admin-reports-close')?.addEventListener('click',()=>modal.remove());
+  });
+}
+document.getElementById('admin-reports-btn')?.addEventListener('click',openAdminReports);
+socket.on('chat-report-created',()=>{if(isAdmin) document.getElementById('admin-reports-btn')?.classList.add('has-new-report');});
 
 joinBtn.addEventListener('click', joinChat);
 usernameInput.addEventListener('keydown', event => {
