@@ -1574,3 +1574,126 @@ body[data-rural-theme] .messages .message.reply-message .message-bubble *,
 body[data-rural-theme] .messages .message.reply-message .message-bubble a{
   color:var(--message-text-color)!important;
 }
+
+
+/* ブランド基準色：地域の自然・人のつながり・あたたかさを表現 */
+body:not([data-rural-theme]){
+  --brand-green:#2F6B4F;
+  --brand-green-dark:#214A39;
+  --brand-orange:#E58A3A;
+  --brand-cream:#F7F3E8;
+  --brand-sky:#DCEDEF;
+}
+body:not([data-rural-theme]){
+  background:var(--brand-cream);
+  color:#263A31;
+}
+body:not([data-rural-theme]) .app-header{
+  background:var(--brand-green);
+  padding:13px 24px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+}
+.brand-logo{
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+  border-radius:12px;
+  background:var(--brand-cream);
+  box-shadow:0 2px 8px rgba(33,74,57,.16);
+}
+.brand-kicker{
+  margin-bottom:1px;
+  color:rgba(255,255,255,.72);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.16em;
+  line-height:1.2;
+}
+body:not([data-rural-theme]) .app-header h1{
+  font-size:clamp(20px,3vw,29px);
+  letter-spacing:.01em;
+}
+body:not([data-rural-theme]) .app-header p{
+  margin-top:4px;
+  color:rgba(255,255,255,.86);
+}
+.setup-logo{
+  width:72px;
+  height:72px;
+  border-radius:18px;
+  margin-bottom:2px;
+  box-shadow:0 5px 16px rgba(33,74,57,.12);
+}
+.setup-brand-name{
+  color:var(--brand-green);
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.06em;
+}
+body.pre-auth .setup-logo{
+  width:72px!important;
+  height:72px!important;
+  border-radius:18px!important;
+  margin-bottom:0!important;
+}
+body.pre-auth .setup-brand-name{
+  display:block!important;
+  margin-top:2px!important;
+  font-size:12px!important;
+  color:#2F6B4F!important;
+}
+body:not([data-rural-theme]) .setup-panel{
+  background:linear-gradient(145deg,#FBFAF5,#E9F1EA);
+}
+body:not([data-rural-theme]) .setup-panel button,
+body:not([data-rural-theme]) #send-btn{
+  background:var(--brand-orange);
+}
+body:not([data-rural-theme]) .setup-panel button:hover:not(:disabled){
+  background:#D97832;
+}
+body:not([data-rural-theme]) .users-panel,
+body:not([data-rural-theme]) .input-area{
+  background:#F3F0E7;
+}
+body:not([data-rural-theme]) .map-filter.active{
+  background:var(--brand-green);
+  border-color:var(--brand-green);
+}
+body:not([data-rural-theme]) .map-filter:hover{
+  background:#E7F0EA;
+}
+body:not([data-rural-theme]) .chat-panel,
+body:not([data-rural-theme]) .map-panel{
+  border-color:#D6E0D6;
+}
+body:not([data-rural-theme]) .messages{
+  background:#FFFDF8;
+}
+body:not([data-rural-theme]) .message:not(.reply-message){
+  border-color:#D2DED3;
+}
+body:not([data-rural-theme]) .message.own{
+  border-left-color:var(--brand-green);
+}
+body:not([data-rural-theme]) .message.reply-message{
+  border-left-color:#7895A0;
+}
+body:not([data-rural-theme]) .panel-heading{
+  background:#FBFAF5;
+}
+body:not([data-rural-theme]) .app-header .header-user span{
+  background:rgba(255,255,255,.14);
+}
+@media(max-width:650px){
+  body:not([data-rural-theme]) .app-header{padding:11px 14px}
+  .brand{gap:8px}
+  .brand-logo{width:38px;height:38px;flex-basis:38px;border-radius:10px}
+  .brand-kicker{font-size:7px}
+  body:not([data-rural-theme]) .app-header p{font-size:11px}
+}
