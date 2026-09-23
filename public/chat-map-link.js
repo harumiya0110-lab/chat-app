@@ -40,6 +40,14 @@
   function attachMapLink(article) {
     if (!article || article.dataset.mapLinkReady === 'true') return;
 
+    // 返信メッセージには「地図で見る」を表示しません。
+    // 返信元に場所情報があっても、返信本文は地図リンクの対象外です。
+    const replyToId = String(article.dataset.replyToId || '').trim();
+    if (replyToId) return;
+
+    // 地図情報を持つ通常投稿だけを対象にします。
+    if (article.dataset.location !== '1') return;
+
     const messageText = getMessageText(article);
     if (!messageText) return;
 
