@@ -9,12 +9,16 @@
   const HISTORY_CACHE_KEY_PREFIX = 'rural-points-history-v2:';
   const HISTORY_CACHE_TTL = 5 * 60 * 1000;
 
-  function currentUsername() {
-    return String(window.currentUsername || globalThis.currentUsername || '').trim();
+  function getCurrentUsername() {
+    try {
+      return String(typeof currentUsername !== 'undefined' ? currentUsername : '').trim();
+    } catch {
+      return '';
+    }
   }
 
   function cacheKey() {
-    const username = currentUsername();
+    const username = getCurrentUsername();
     return username ? HISTORY_CACHE_KEY_PREFIX + encodeURIComponent(username) : '';
   }
 
@@ -128,7 +132,7 @@
 
     const list = modal.querySelector('.points-history-list');
     const cached = readCachedHistory();
-    const displayedPoints = Number(pointsEl.textContent.match(/(\\d+)pt/)?.[1] || 0);
+    const displayedPoints = Number(pointsEl.textContent.match(/(\d+)pt/)?.[1] || 0);
 
     if (cached) {
       renderHistory(cached.history, cached.points || displayedPoints);
