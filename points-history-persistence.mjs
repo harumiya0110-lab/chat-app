@@ -218,7 +218,24 @@ export function registerPointsHistory(io) {
         // 現在ポイントが0より大きければFirestoreから再取得します。
         let history = await loadHistory(username);
         if (currentPoints > 0 && history.length === 0) {
-          history = await loadHistory(username, { force: true });
+          // ポイント付与直後は「ポイント保存」と「履歴保存」が別々に完了するため、
+          // 数百msだけ待って再確認します。
+          for (let attempt = 0; attempt < 3 && history.length === 0; attempt += 1) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+            history = await loadHistory(username, { force: true });
+          }
+
+          // このユーザーのポイントが履歴機能導入前に獲得されたもので、
+          // 個別の履歴が存在しない場合でも「ポイントを持っているのに
+          // 履歴なし」と誤解しないよう、既存ポイントを明示します。
+          if (history.length === 0) {
+            history = [{
+              points: currentPoints,
+              reason: '📦 履歴記録開始前からの保有ポイント',
+              messageId: '',
+              createdAt: ''
+            }];
+          }
         }
 
         const recent = history.slice(0, 50);
