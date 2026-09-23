@@ -129,7 +129,8 @@ function trimChatMessages() {
 }
 
 function addNormalMessageDeleteControl(item, data) {
-  if (data.username !== currentUsername || !data.id) return;
+  const isOwner = data.username === currentUsername;
+  if ((!isOwner && !isAdmin) || !data.id) return;
 
   const actions = document.createElement('div');
   actions.className = 'message-actions';
@@ -138,20 +139,19 @@ function addNormalMessageDeleteControl(item, data) {
   deleteButton.type = 'button';
   deleteButton.className = 'chat-delete-btn';
   deleteButton.textContent = '🗑 削除';
-  deleteButton.title = data.locationData
-    ? '自分の地図情報付き投稿を削除します'
-    : '自分の投稿だけ削除できます';
+  deleteButton.title = isAdmin && !isOwner
+    ? '管理者としてこの投稿を削除します'
+    : (data.locationData ? '自分の地図情報付き投稿を削除します' : '自分の投稿だけ削除できます');
 
   deleteButton.addEventListener('click', () => {
-    if (!window.confirm(data.locationData
-      ? 'この地図情報付き投稿を削除しますか？地図のピンも削除されます。'
-      : 'この投稿を削除しますか？')) return;
+    const prompt = data.locationData
+      ? (isAdmin && !isOwner ? 'この地図情報付き投稿を管理者として削除しますか？地図のピンも削除されます。' : 'この地図情報付き投稿を削除しますか？地図のピンも削除されます。')
+      : (isAdmin && !isOwner ? 'この投稿を管理者として削除しますか？' : 'この投稿を削除しますか？');
+    if (!window.confirm(prompt)) return;
 
     deleteButton.disabled = true;
     deleteButton.textContent = '削除中…';
 
-    // 地図情報付き投稿は、既存の地図ピン削除処理を使って
-    // チャット投稿と地図ピンを同時に削除します。
     const deleteEvent = data.locationData ? 'delete-map-pin' : 'delete-chat-message';
 
     socket.emit(deleteEvent, { id: data.id }, result => {
@@ -159,9 +159,10 @@ function addNormalMessageDeleteControl(item, data) {
         deleteButton.disabled = false;
         deleteButton.textContent = '🗑 削除';
         const reasonMessages = {
-          'not-owner': '自分の投稿だけ削除できます。',
+          'not-owner': 'この投稿を削除する権限がありません。',
           'not-found': '投稿が見つかりません。',
           'unauthorized': 'ログインしてから削除してください。',
+          'forbidden': '管理者権限が必要です。',
           'server-error': '削除中にエラーが発生しました。'
         };
         setStatus(reasonMessages[result.reason] || '投稿の削除に失敗しました。');
@@ -174,7 +175,7 @@ function addNormalMessageDeleteControl(item, data) {
       ruralMarkerByMessageId.delete(data.id);
       setStatus(data.locationData
         ? '地図情報付き投稿と地図のピンを削除しました。'
-        : '自分の投稿を削除しました。');
+        : '投稿を削除しました。');
       scrollToBottom();
     });
   });
@@ -551,14 +552,81 @@ function joinChat() {
 
 function openAdminReports() {
   if (!isAdmin) return;
-  // 連打や二重イベントで管理画面が重複表示されないようにする。
   document.getElementById('admin-reports-modal')?.remove();
-  socket.timeout(10000).emit('get-reports', {}, (err,result)=>{
-    if(err||!result?.ok){setStatus('通報一覧を取得できませんでした。');return;}
-    const modal=document.createElement('div'); modal.id='admin-reports-modal'; modal.className='admin-reports-modal';
-    const reports=Array.isArray(result.reports)?result.reports:[];
-    modal.innerHTML=`<div class="admin-reports-box"><div class="admin-reports-header"><strong>⚑ 通報確認</strong><button type="button" class="admin-reports-close">×</button></div><div class="admin-reports-list">${reports.length?reports.map(r=>`<article class="admin-report-item"><div><strong>${escapeHtml(r.targetUsername||'不明')}</strong> <span>${escapeHtml(r.reason||'')}</span></div><p>${escapeHtml(r.message||'')}</p><small>通報者：${escapeHtml(r.reporterUsername||'不明')}　${escapeHtml(r.createdAt?new Date(r.createdAt).toLocaleString('ja-JP'):'')}</small></article>`).join(''):'<p class="admin-reports-empty">現在、通報はありません。</p>'}</div></div>`;
-    document.body.appendChild(modal); modal.querySelector('.admin-reports-close')?.addEventListener('click',()=>modal.remove());
+  socket.timeout(10000).emit('get-reports', {}, (err, result) => {
+    if (err || !result?.ok) {
+      setStatus('通報一覧を取得できませんでした。');
+      return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'admin-reports-modal';
+    modal.className = 'admin-reports-modal';
+    const reports = Array.isArray(result.reports) ? result.reports : [];
+
+    modal.innerHTML = `
+      <div class="admin-reports-box">
+        <div class="admin-reports-header">
+          <strong>⚑ 通報確認</strong>
+          <div class="admin-reports-header-actions">
+            <button type="button" class="admin-clear-all-btn">🗑 全チャット削除</button>
+            <button type="button" class="admin-reports-close">×</button>
+          </div>
+        </div>
+        <div class="admin-reports-list">
+          ${reports.length ? reports.map(r => `
+            <article class="admin-report-item">
+              <div class="admin-report-top">
+                <div><strong>${escapeHtml(r.targetUsername || '不明')}</strong> <span>${escapeHtml(r.reason || '')}</span></div>
+                <button type="button" class="admin-report-move-btn" data-report-message-id="${escapeHtml(r.messageId || '')}" ${r.messageId ? '' : 'disabled'}>このメッセージに移動する</button>
+              </div>
+              <p>${escapeHtml(r.message || '')}</p>
+              <small>通報者：${escapeHtml(r.reporterUsername || '不明')}　${escapeHtml(r.createdAt ? new Date(r.createdAt).toLocaleString('ja-JP') : '')}</small>
+            </article>`).join('') : '<p class="admin-reports-empty">現在、通報はありません。</p>'}
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.querySelector('.admin-reports-close')?.addEventListener('click', () => modal.remove());
+
+    modal.querySelectorAll('[data-report-message-id]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const messageId = String(button.dataset.reportMessageId || '').trim();
+        if (!messageId) return;
+        button.disabled = true;
+        button.textContent = '移動中…';
+        const focused = await window.ruralFocusMessageById?.(messageId);
+        button.disabled = false;
+        button.textContent = 'このメッセージに移動する';
+        if (focused) {
+          modal.remove();
+          setStatus('通報されたメッセージを表示しました。');
+        } else {
+          setStatus('通報されたメッセージを履歴から見つけられませんでした。');
+        }
+      });
+    });
+
+    modal.querySelector('.admin-clear-all-btn')?.addEventListener('click', () => {
+      if (!window.confirm('すべてのチャット投稿と地図ピンを削除しますか？この操作は元に戻せません。')) return;
+
+      const button = modal.querySelector('.admin-clear-all-btn');
+      if (button) { button.disabled = true; button.textContent = '削除中…'; }
+      socket.timeout(15000).emit('admin-clear-all-chat', {}, (clearErr, clearResult) => {
+        if (clearErr || !clearResult?.ok) {
+          if (button) { button.disabled = false; button.textContent = '🗑 全チャット削除'; }
+          const reason = clearResult?.reason === 'disabled'
+            ? 'Firestore保存が無効のため全チャット削除を実行できません。'
+            : clearResult?.reason === 'forbidden'
+              ? '管理者権限が必要です。'
+              : '全チャットの削除に失敗しました。';
+          setStatus(reason);
+          return;
+        }
+        modal.remove();
+        setStatus(`すべてのチャットを削除しました（${Number(clearResult.deleted || 0)}件）。`);
+      });
+    });
   });
 }
 document.getElementById('admin-reports-btn')?.addEventListener('click',openAdminReports);
