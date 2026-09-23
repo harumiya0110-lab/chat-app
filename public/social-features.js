@@ -335,15 +335,41 @@
   }
 
   function focusMessage(id) {
-    if (!id) return;
-    const item = messagesEl.querySelector(`.message[data-message-id="${CSS.escape(id)}"]`);
-    if (!item) return;
+    if (!id) return false;
+    const safeId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(String(id)) : String(id).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    const item = messagesEl.querySelector(`.message[data-message-id="${safeId}"]`);
+    if (!item) return false;
     item.classList.remove('rural-highlight');
     void item.offsetWidth;
     item.classList.add('rural-highlight');
     item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    window.setTimeout(() => item.classList.remove('rural-highlight'), 2200);
+    window.setTimeout(() => item.classList.remove('rural-highlight'), 3200);
+    return true;
   }
+
+  async function focusMessageById(id) {
+    const targetId = String(id || '').trim();
+    if (!targetId) return false;
+
+    if (focusMessage(targetId)) return true;
+
+    // 通報された投稿が最初の50件より古い場合は、履歴を追加読み込みして探します。
+    for (let attempt = 0; attempt < 20 && hasMoreHistory; attempt += 1) {
+      loadMoreHistory();
+      await new Promise(resolve => {
+        const wait = () => {
+          if (!loadMoreBusy) resolve();
+          else window.setTimeout(wait, 80);
+        };
+        wait();
+      });
+      if (focusMessage(targetId)) return true;
+    }
+
+    return false;
+  }
+
+  window.ruralFocusMessageById = focusMessageById;
 
   function focusMapForMessage(id) {
     if (!id || typeof map === 'undefined') return;
