@@ -159,7 +159,7 @@ function addNormalMessageDeleteControl(item, data) {
         return;
       }
 
-      item.remove();
+      removeRenderedMessage(item);
       setStatus('自分の投稿を削除しました。');
       scrollToBottom();
     });
@@ -269,6 +269,33 @@ function attachPendingReplies() {
   if (!messages) return;
   const pending = [...messages.querySelectorAll('.message.reply-message[data-reply-pending="true"]')];
   pending.forEach(item => attachReplyToParent(item, { replyToId: item.dataset.replyToId || '' }));
+}
+
+function removeRenderedMessage(item) {
+  if (!item || !messages) return;
+  const replyToId = String(item.dataset.replyToId || '').trim();
+  if (replyToId) {
+    const parent = [...messages.querySelectorAll('.message')].find(message =>
+      message !== item && message.dataset.messageId === replyToId
+    );
+    item.remove();
+    if (parent) {
+      const thread = parent.querySelector(':scope > .message-replies');
+      if (thread) {
+        const list = thread.querySelector(':scope > .message-replies-list');
+        const toggle = thread.querySelector(':scope > .message-replies-toggle');
+        const count = list?.querySelectorAll(':scope > .message.reply-message').length || 0;
+        if (toggle) {
+          toggle.hidden = count === 0;
+          toggle.textContent = count ? `↳ 返信 ${count}件` : '↳ 返信';
+          if (count === 0) toggle.setAttribute('aria-expanded', 'true');
+        }
+        if (count === 0) thread.remove();
+      }
+    }
+    return;
+  }
+  item.remove();
 }
 
 window.ruralOrganizeReplies = attachPendingReplies;
@@ -618,7 +645,7 @@ socket.on('chat-message-deleted', data => {
   const id = typeof data?.id === 'string' ? data.id : '';
   if (!id) return;
   messages.querySelectorAll('.message').forEach(item => {
-    if (item.dataset.messageId === id) item.remove();
+    if (item.dataset.messageId === id) removeRenderedMessage(item);
   });
   const marker = ruralMarkerByMessageId.get(id);
   if (marker && map.hasLayer(marker)) map.removeLayer(marker);
