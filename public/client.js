@@ -595,6 +595,22 @@ socket.on('chat-history-end', () => {
   setStatus('場所を含む投稿はAIが解析して地図に表示します。');
 });
 
+function clearAllDisplayedPosts() {
+  if (messages) messages.replaceChildren();
+  ruralMarkerByMessageId.forEach(marker => {
+    try {
+      if (map && typeof map.hasLayer === 'function' && map.hasLayer(marker)) map.removeLayer(marker);
+    } catch (error) {
+      console.warn('地図ピンのリセットに失敗しました:', error);
+    }
+  });
+  ruralMarkerByMessageId.clear();
+  markerLocationCache.clear();
+  mapLocationSystemMessage = null;
+  ruralReplyTarget = null;
+  window.dispatchEvent(new CustomEvent('rural-reply-target-changed', { detail: null }));
+}
+
 socket.on('chat-message-deleted', data => {
   const id = typeof data?.id === 'string' ? data.id : '';
   if (!id) return;
@@ -604,6 +620,10 @@ socket.on('chat-message-deleted', data => {
   const marker = ruralMarkerByMessageId.get(id);
   if (marker && map.hasLayer(marker)) map.removeLayer(marker);
   ruralMarkerByMessageId.delete(id);
+});
+
+socket.on('chat-posts-cleared', () => {
+  clearAllDisplayedPosts();
 });
 
 socket.on('receive-image', addImage);
