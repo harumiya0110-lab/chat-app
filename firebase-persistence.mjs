@@ -470,12 +470,16 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 export async function clearAllMessages() {
   if (!enabled) return { ok: false, reason: 'disabled', deleted: 0 };
   let deleted = 0;
-  let pageToken = '';
-  do {
+
+  // ページを削除しながらページトークンを進めると、削除によって
+  // 次ページの位置がずれて一部の投稿が残る可能性があるため、
+  // 常に先頭ページを取り直して全件がなくなるまで削除します。
+  while (true) {
     const params = new URLSearchParams({ pageSize: '300' });
-    if (pageToken) params.set('pageToken', pageToken);
     const result = await firestoreRequest('/messages?' + params.toString(), { method: 'GET' });
     const documents = Array.isArray(result?.documents) ? result.documents : [];
+    if (!documents.length) break;
+
     for (const document of documents) {
       const name = String(document?.name || '');
       if (!name) continue;
@@ -484,8 +488,8 @@ export async function clearAllMessages() {
       await firestoreRequest('/' + idPath.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE' });
       deleted += 1;
     }
-    pageToken = String(result?.nextPageToken || '');
-  } while (pageToken);
+  }
+
   console.log(`[firebase] cleared all saved messages: ${deleted}`);
   return { ok: true, deleted };
 }
