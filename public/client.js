@@ -322,7 +322,7 @@ function updateMapMarkerMedia(messageId, media) {
 }
 
 async function prepareImageFile(file) {
-  if (!file || !/^image\\/(?:jpeg|png|webp)$/i.test(file.type || '')) {
+  if (!file || !/^image\/(?:jpeg|png|webp)$/i.test(file.type || '')) {
     throw new Error('JPG・PNG・WebP画像のみ利用できます。');
   }
   if (file.size > 12 * 1024 * 1024) throw new Error('画像は12MB以下にしてください。');
