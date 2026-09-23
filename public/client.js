@@ -569,6 +569,7 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
     } else {
       setStatus('投稿しました。場所を特定できない投稿はチャットのみ表示します。');
     }
+    return true;
   } catch (error) {
     console.error(error);
     setStatus(error.message || '送信中にエラーが発生しました。');
@@ -578,6 +579,8 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
     messageInput.focus();
   }
 }
+
+window.ruralSendTextMessage = sendTextMessage;
 
 sendBtn.addEventListener('click', sendTextMessage);
 messageInput.addEventListener('keydown', e => {
