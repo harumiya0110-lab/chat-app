@@ -1045,16 +1045,23 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
       clearPendingMedia();
     }
 
+    const mediaWasSavedToFirestore = mediaResult?.ok && mediaResult?.media?.persistent === true;
+    const mediaSaveNotice = mediaWasSavedToFirestore
+      ? 'Firestoreにも保存しました。'
+      : mediaResult?.ok
+        ? 'サーバーには共有しましたが、Firestore保存を確認できませんでした。'
+        : '';
+
     if (result.locationData) {
       setStatus(
         mediaResult?.ok
-          ? `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加し、メディアも共有しました。`
+          ? `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加し、メディアも共有しました。${mediaSaveNotice ? ` ${mediaSaveNotice}` : ''}`
           : mediaToSend
             ? `${result.locationData.locationName} にピンを追加しましたが、メディアの共有に失敗しました。`
             : `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`
       );
     } else if (mediaResult?.ok) {
-      setStatus('投稿とメディアを共有しました。');
+      setStatus(`投稿とメディアを共有しました。${mediaSaveNotice ? ` ${mediaSaveNotice}` : ''}`);
     } else if (mediaToSend) {
       setStatus('投稿しましたが、メディアの共有に失敗しました。');
     } else if (result.geocodeError) {
