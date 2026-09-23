@@ -824,9 +824,11 @@ function addMarker(message) {
   marker.__messageId = messageId;
   marker.on('click', async () => {
     marker.setPopupContent(`${popup}<br><span>📍 県・市を確認しています…</span>`);
+    window.ruralRefreshMarkerPopupActions?.(marker);
     const location = await fetchMarkerArea({ lat, lng });
     if (location?.error) {
       marker.setPopupContent(`${popup}<br><strong>📍 ${escapeHtml(location.error)}</strong>`);
+      window.ruralRefreshMarkerPopupActions?.(marker);
     } else {
       const prefecture = String(location?.prefecture || '').trim();
       const city = String(location?.city || '').trim();
@@ -836,6 +838,7 @@ function addMarker(message) {
           ? `${popup}<br><strong>📍 ${escapeHtml(area)}</strong>`
           : `${popup}<br><strong>📍 都道府県・市区町村を特定できませんでした。</strong>`
       );
+      window.ruralRefreshMarkerPopupActions?.(marker);
     }
     void showMarkerAreaInChat(marker);
     window.dispatchEvent(new CustomEvent('rural-map-marker-clicked', { detail: { marker, messageId } }));
