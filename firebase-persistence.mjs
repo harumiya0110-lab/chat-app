@@ -803,7 +803,13 @@ export async function clearAllMessages() {
 
   recentMessageHistoryCache = null;
   recentMessageHistoryPromise = null;
-  console.log(`[firebase] cleared all saved messages: ${deleted}`);
+  let deletedMedia = 0;
+  try {
+    deletedMedia = await clearAllMediaAssets();
+  } catch (error) {
+    console.error('[firebase] clear all media assets failed:', error);
+  }
+  console.log(`[firebase] cleared all saved messages: ${deleted}, media assets: ${deletedMedia}`);
   return { ok: true, deleted };
 }
 
