@@ -1141,81 +1141,9 @@
   window.__ruralToolbarHandlersReady = true;
 })();
 
-/* 親投稿の操作ボタンを押しやすいサイズに調整（返信側は従来の小型サイズを維持） */
-.messages .message:not(.reply-message) .message-actions .message-action-btn{
-  min-height:32px!important;
-  padding:6px 10px!important;
-  font-size:12px!important;
-  line-height:1.15!important;
-}
-
-/* チャット内レイアウトを安定化：長文・返信・操作ボタンが横にはみ出さないよう調整 */
-.messages .message{
-  min-width:0!important;
-  max-width:100%!important;
-  overflow:hidden!important;
-}
-.messages .message-header{
-  min-width:0!important;
-}
-.messages .message-header span{
-  min-width:0!important;
-  max-width:50%!important;
-  overflow:hidden!important;
-  text-overflow:ellipsis!important;
-  white-space:nowrap!important;
-}
-.messages .message-bubble{
-  min-width:0!important;
-  max-width:100%!important;
-  overflow-wrap:anywhere!important;
-  word-break:break-word!important;
-}
-.messages .message-actions{
-  width:100%!important;
-  max-width:100%!important;
-  min-width:0!important;
-  box-sizing:border-box!important;
-  display:flex!important;
-  flex-wrap:wrap!important;
-  align-items:center!important;
-  gap:6px!important;
-  overflow:visible!important;
-}
-.messages .message-actions .message-action-btn,
-.messages .message-actions .chat-delete-btn{
-  box-sizing:border-box!important;
-  flex:0 0 auto!important;
-  white-space:nowrap!important;
-}
-.messages .message-actions-spacer{
-  flex:1 1 12px!important;
-  min-width:12px!important;
-}
-.messages .message-replies{
-  min-width:0!important;
-  max-width:100%!important;
-  box-sizing:border-box!important;
-}
-.messages .message-replies-list{
-  min-width:0!important;
-  max-width:100%!important;
-}
-.messages .message.reply-message{
-  min-width:0!important;
-  max-width:100%!important;
-  box-sizing:border-box!important;
-}
-@media(max-width:650px){
-  .messages .message-actions{
-    gap:5px!important;
-  }
-  .messages .message-actions-spacer{
-    display:none!important;
-  }
-  .messages .message:not(.reply-message) .message-actions .message-action-btn{
-    min-height:30px!important;
-    padding:5px 8px!important;
-    font-size:11px!important;
-  }
-}
+(() => {
+  const style = document.createElement('style');
+  style.id = 'rural-social-layout-fix';
+  style.textContent = "/* 親投稿の操作ボタンを押しやすいサイズに調整（返信側は従来の小型サイズを維持） */\n.messages .message:not(.reply-message) .message-actions .message-action-btn{\n  min-height:32px!important;\n  padding:6px 10px!important;\n  font-size:12px!important;\n  line-height:1.15!important;\n}\n\n/* チャット内レイアウトを安定化：長文・返信・操作ボタンが横にはみ出さないよう調整 */\n.messages .message{\n  min-width:0!important;\n  max-width:100%!important;\n  overflow:hidden!important;\n}\n.messages .message-header{\n  min-width:0!important;\n}\n.messages .message-header span{\n  min-width:0!important;\n  max-width:50%!important;\n  overflow:hidden!important;\n  text-overflow:ellipsis!important;\n  white-space:nowrap!important;\n}\n.messages .message-bubble{\n  min-width:0!important;\n  max-width:100%!important;\n  overflow-wrap:anywhere!important;\n  word-break:break-word!important;\n}\n.messages .message-actions{\n  width:100%!important;\n  max-width:100%!important;\n  min-width:0!important;\n  box-sizing:border-box!important;\n  display:flex!important;\n  flex-wrap:wrap!important;\n  align-items:center!important;\n  gap:6px!important;\n  overflow:visible!important;\n}\n.messages .message-actions .message-action-btn,\n.messages .message-actions .chat-delete-btn{\n  box-sizing:border-box!important;\n  flex:0 0 auto!important;\n  white-space:nowrap!important;\n}\n.messages .message-actions-spacer{\n  flex:1 1 12px!important;\n  min-width:12px!important;\n}\n.messages .message-replies{\n  min-width:0!important;\n  max-width:100%!important;\n  box-sizing:border-box!important;\n}\n.messages .message-replies-list{\n  min-width:0!important;\n  max-width:100%!important;\n}\n.messages .message.reply-message{\n  min-width:0!important;\n  max-width:100%!important;\n  box-sizing:border-box!important;\n}\n@media(max-width:650px){\n  .messages .message-actions{\n    gap:5px!important;\n  }\n  .messages .message-actions-spacer{\n    display:none!important;\n  }\n  .messages .message:not(.reply-message) .message-actions .message-action-btn{\n    min-height:30px!important;\n    padding:5px 8px!important;\n    font-size:11px!important;\n  }\n}\n";
+  document.head.appendChild(style);
+})();
