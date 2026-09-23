@@ -86,29 +86,47 @@ async function firestoreRequest(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-async function addHistory(username, points, messageId, reason = 'help-confirmed') {
+function historyReasonLabel(reason) {
+  return reason === 'help-confirmed' ? '🤝 実際の助け合い' :
+    reason === 'daily-login' ? '📅 毎日のログイン' :
+    reason === 'chat-use' ? '💬 チャット利用' :
+    reason === 'map-post' ? '📍 地域情報の投稿' :
+    '地域活動への協力';
+}
+
+async function addHistory(username, points, messageId, reason = 'help-confirmed', historyId = '') {
   if (!enabled || !username || !Number.isFinite(Number(points)) || Number(points) <= 0) return;
   const safeUsername = encodeURIComponent(String(username));
+  const cleanReason = String(reason || 'community-use');
+  const cleanHistoryId = String(historyId || '').trim().slice(0, 240);
+  const fields = {
+    points: firestoreValue(Math.floor(Number(points))),
+    reason: firestoreValue(historyReasonLabel(cleanReason)),
+    reasonKey: firestoreValue(cleanReason),
+    messageId: firestoreValue(messageId || ''),
+    historyId: firestoreValue(cleanHistoryId),
+    createdAt: firestoreValue(new Date().toISOString())
+  };
+
   try {
-    await firestoreRequest(`/regionalPoints/${safeUsername}/pointHistory`, {
-      method: 'POST',
-      body: JSON.stringify({
-        fields: {
-          points: firestoreValue(Math.floor(Number(points))),
-          reason: firestoreValue(
-            reason === 'help-confirmed' ? '🤝 実際の助け合い' :
-            reason === 'daily-login' ? '📅 毎日のログイン' :
-            reason === 'chat-use' ? '💬 チャット利用' :
-            reason === 'map-post' ? '📍 地域情報の投稿' :
-            '地域活動への協力'
-          ),
-          messageId: firestoreValue(messageId || ''),
-          createdAt: firestoreValue(new Date().toISOString())
-        }
-      })
-    });
+    if (cleanHistoryId) {
+      // 同じポイント獲得イベントが複数回通知されても重複履歴にならないよう、
+      // イベントごとの固定IDで保存します。
+      const safeHistoryId = encodeURIComponent(cleanHistoryId);
+      await firestoreRequest(`/regionalPoints/${safeUsername}/pointHistory/${safeHistoryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields })
+      });
+    } else {
+      await firestoreRequest(`/regionalPoints/${safeUsername}/pointHistory`, {
+        method: 'POST',
+        body: JSON.stringify({ fields })
+      });
+    }
+    return true;
   } catch (error) {
     console.error(`[points-history] save failed user=${username}:`, error.message);
+    return false;
   }
 }
 
@@ -193,7 +211,7 @@ export function registerPointsHistory(io) {
         const earned = Number(data?.earned || 0);
         if (username && earned > 0) {
           historyCache.delete(username);
-          void addHistory(username, earned, data?.messageId, data?.reason)
+          void addHistory(username, earned, data?.messageId, data?.reason, data?.historyId)
             .then(() => {
               // 書き込み完了後に必ず古いキャッシュを破棄します。
               historyCache.delete(username);
@@ -263,7 +281,7 @@ export function registerPointsHistory(io) {
           // ポイント付与後の履歴キャッシュを古いままにしない。
           historyCache.delete(username);
           if (earned > 0) {
-            void addHistory(username, earned, data.messageId, data.reason)
+            void addHistory(username, earned, data.messageId, data.reason, data.historyId)
               .then(() => {
                 historyCache.delete(username);
               });
