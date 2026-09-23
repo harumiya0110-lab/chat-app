@@ -135,7 +135,7 @@
     margin-top:6px;
   }
   .map-route-share .message-action-btn{
-    flex:0 1 auto;
+    flex:0 0 auto;
   }
   body[data-rural-theme] .map-route-share .message-action-btn{
     background:var(--integrated-chat-bg)!important;
@@ -254,8 +254,6 @@
     const title = String(item.dataset.eventType || '').trim() === 'イベント'
       ? 'イベントの場所'
       : '待ち合わせ場所';
-    const messageText = String(item.querySelector('.message-bubble')?.textContent || '').trim().slice(0, 120);
-
     const routeButton = document.createElement('button');
     routeButton.type = 'button';
     routeButton.className = 'message-action-btn map-route-btn';
@@ -267,30 +265,6 @@
       if (url) window.open(url, '_blank', 'noopener,noreferrer');
     });
     host.appendChild(routeButton);
-
-    const shareButton = document.createElement('button');
-    shareButton.type = 'button';
-    shareButton.className = 'message-action-btn map-share-btn';
-    shareButton.textContent = '📤 場所を共有';
-    shareButton.title = 'Google Mapsの場所を共有します';
-    shareButton.addEventListener('click', async () => {
-      shareButton.disabled = true;
-      const current = getMapMarkerForItem(item)?.getLatLng?.() || latLng;
-      const result = await window.ruralShareGoogleMapsLocation?.({
-        lat: current.lat,
-        lng: current.lng,
-        title,
-        text: messageText ? `${title}：${messageText}` : title
-      });
-      shareButton.disabled = false;
-      if (typeof setStatus === 'function') {
-        if (result?.reason === 'cancelled') return;
-        setStatus(result?.ok
-          ? (result.method === 'share' ? 'Google Mapsの場所を共有しました。' : 'Google Mapsの場所リンクをコピーしました。')
-          : '場所の共有に失敗しました。');
-      }
-    });
-    host.appendChild(shareButton);
 
     return host;
   }
@@ -321,11 +295,6 @@
 
     if (item.dataset.location === '1') {
       host.replaceChildren();
-
-      const label = document.createElement('div');
-      label.className = 'map-post-reactions-title';
-      label.textContent = 'この投稿への意思表示';
-      host.appendChild(label);
 
       const row = document.createElement('div');
       row.className = 'map-post-reactions-row';
