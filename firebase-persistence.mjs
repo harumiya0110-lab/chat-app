@@ -144,6 +144,21 @@ async function firestoreRequest(path, options = {}) {
   return response.json();
 }
 
+async function saveReport(data) {
+  if (!enabled) return null;
+  const id = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : crypto.randomUUID();
+  const report = { id, messageId: String(data?.messageId || '').slice(0, 120), reason: String(data?.reason || '').trim().slice(0, 100), message: String(data?.message || '').trim().slice(0, 2000), targetUsername: String(data?.targetUsername || '').trim().slice(0, 50), reporterUsername: String(data?.reporterUsername || '').trim().slice(0, 50), createdAt: typeof data?.createdAt === 'string' ? data.createdAt : new Date().toISOString(), status: 'open' };
+  const fields = Object.fromEntries(Object.entries(report).filter(([key]) => key !== 'id').map(([key, value]) => [key, firestoreValue(value)]));
+  await firestoreRequest('/reports/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ fields }) });
+  return report;
+}
+async function loadReports(limit = 100) {
+  if (!enabled) return [];
+  const params = new URLSearchParams({ pageSize: String(Math.min(100, Math.max(1, limit))), orderBy: 'createdAt desc' });
+  const result = await firestoreRequest('/reports?' + params.toString(), { method: 'GET' });
+  return (Array.isArray(result?.documents) ? result.documents : []).map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null })).filter(item => item.message).map(item => ({ ...item, status: item.status === 'closed' ? 'closed' : 'open' }));
+}
+
 async function saveMessage(data) {
   if (!enabled) return null;
   const message = normalizeMessage(data);
@@ -218,6 +233,7 @@ async function loadMessagePage(pageToken = '', pageSize = 50) {
 
 const usernameBySocketId = new Map();
 const historyCursorBySocketId = new Map();
+const adminBySocketId = new Map();
 const originalServerEmit = SocketIOServer.prototype.emit;
 SocketIOServer.prototype.emit = function(eventName, ...args) {
   if (eventName !== 'receive-message' || !enabled) return originalServerEmit.call(this, eventName, ...args);
@@ -241,6 +257,33 @@ const originalServerOn = SocketIOServer.prototype.on;
 SocketIOServer.prototype.on = function(eventName, listener) {
   if (eventName !== 'connection') return originalServerOn.call(this, eventName, listener);
   const wrappedListener = (socket, ...rest) => {
+    socket.on('submit-report', async (payload = {}, ack) => {
+      const reporter = usernameBySocketId.get(socket.id);
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      const reason = typeof payload.reason === 'string' ? payload.reason.trim().slice(0, 100) : '';
+      const message = typeof payload.message === 'string' ? payload.message.trim().slice(0, 2000) : '';
+      const targetUsername = typeof payload.targetUsername === 'string' ? payload.targetUsername.trim().slice(0, 50) : '';
+      if (!reporter || !id || !reason || !message) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
+      try {
+        const report = await saveReport({ id: crypto.randomUUID(), messageId: id, reason, message, targetUsername, reporterUsername: reporter, createdAt: new Date().toISOString() });
+        if (report) for (const [socketId, admin] of adminBySocketId.entries()) if (admin) io.to(socketId).emit('chat-report-created', report);
+        if (typeof ack === 'function') ack({ ok: true });
+      } catch (error) {
+        console.error('Firestore report save failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+    socket.on('get-reports', async (_payload, ack) => {
+      if (!adminBySocketId.get(socket.id)) return typeof ack === 'function' && ack({ ok: false, reason: 'forbidden' });
+      try {
+        const reports = await loadReports(100);
+        if (typeof ack === 'function') ack({ ok: true, reports });
+      } catch (error) {
+        console.error('Firestore report load failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     socket.on('delete-map-pin', async (payload = {}, ack) => {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
@@ -337,6 +380,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
     socket.emit = (socketEventName, ...args) => {
       if (socketEventName === 'username-accepted' && args[0]?.username) {
         usernameBySocketId.set(socket.id, String(args[0].username));
+        if (args[0]?.isAdmin === true) adminBySocketId.set(socket.id, true); else adminBySocketId.delete(socket.id);
         const accepted = originalSocketEmit(socketEventName, ...args);
         historyCursorBySocketId.set(socket.id, '');
         originalSocketEmit('chat-history-start');
@@ -361,6 +405,7 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       if (socketEventName === 'disconnect') {
         usernameBySocketId.delete(socket.id);
         historyCursorBySocketId.delete(socket.id);
+        adminBySocketId.delete(socket.id);
       }
       return originalSocketEmit(socketEventName, ...args);
     };
