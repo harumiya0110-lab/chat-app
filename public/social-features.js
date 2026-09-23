@@ -20,8 +20,8 @@
 
   const REACTION_TYPES = [
     { key: 'like', label: '👍', title: 'いいね' },
-    { key: 'helpful', label: '助かった', title: '助かった' },
-    { key: 'thanks', label: 'ありがとう', title: 'ありがとう' }
+    { key: 'thanks', label: '🙏', title: 'ありがとう' },
+    { key: 'helpful', label: '👌', title: 'グッド' }
   ];
   const BLOCKED_KEY = 'rural-blocked-users-v1';
   let unreadCount = 0;
@@ -321,25 +321,91 @@
     if (hasMoreHistory) setStatusText('過去の投稿も読み込めます。');
   }
 
+  function closeInlineReplyEditors() {
+    messagesEl.querySelectorAll('.inline-reply-composer').forEach(editor => editor.remove());
+  }
+
+  function createInlineReplyEditor(item, target) {
+    closeInlineReplyEditors();
+    const editor = document.createElement('div');
+    editor.className = 'inline-reply-composer';
+    editor.innerHTML = `
+      <div class="inline-reply-label">↩︎ ${escapeHtml(target.username || '投稿者')}さんに返信</div>
+      <div class="inline-reply-row">
+        <input type="text" class="inline-reply-input" maxlength="2000" placeholder="返信を入力…" autocomplete="off">
+        <button type="button" class="inline-reply-send">返信</button>
+        <button type="button" class="inline-reply-cancel" aria-label="返信を閉じる">×</button>
+      </div>`;
+    item.appendChild(editor);
+
+    const input = editor.querySelector('.inline-reply-input');
+    const send = editor.querySelector('.inline-reply-send');
+    const cancel = editor.querySelector('.inline-reply-cancel');
+
+    cancel?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.ruralSetReplyTarget?.(null);
+    });
+
+    send?.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const text = String(input?.value || '').trim();
+      if (!text) {
+        input?.focus();
+        return;
+      }
+      if (!window.ruralSendTextMessage) {
+        setStatusText('返信機能を読み込めませんでした。ページを更新してください。');
+        return;
+      }
+      send.disabled = true;
+      try {
+        const ok = await window.ruralSendTextMessage(text, target);
+        if (ok && input) input.value = '';
+      } finally {
+        send.disabled = false;
+      }
+    });
+
+    input?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        send?.click();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancel?.click();
+      }
+    });
+    input?.focus();
+    return editor;
+  }
+
   function setReplyTarget(item) {
     const target = {
       id: item.dataset.messageId,
       username: item.dataset.username || '投稿者',
       message: item.dataset.messageText || ''
     };
+    const currentTarget = window.ruralGetReplyTarget?.();
+    if (currentTarget?.id === target.id && item.querySelector('.inline-reply-composer')) {
+      window.ruralSetReplyTarget?.(null);
+      return;
+    }
     window.ruralSetReplyTarget?.(target);
+    createInlineReplyEditor(item, target);
   }
 
   function updateReplyPreviewUi(target) {
-    if (!replyPreview) return;
-    replyPreview.hidden = !target;
     if (!target) {
+      closeInlineReplyEditors();
       if (replyPreviewUser) replyPreviewUser.textContent = '';
       if (replyPreviewText) replyPreviewText.textContent = '';
+      if (replyPreview) replyPreview.hidden = true;
       return;
     }
-    if (replyPreviewUser) replyPreviewUser.textContent = target.username || '投稿者';
-    if (replyPreviewText) replyPreviewText.textContent = target.message || '';
+    if (replyPreview) replyPreview.hidden = true;
   }
 
   function notifyStatus() {
