@@ -6,6 +6,42 @@
 
   let modal = null;
   let loading = false;
+  const HISTORY_CACHE_KEY_PREFIX = 'rural-points-history-v2:';
+  const HISTORY_CACHE_TTL = 5 * 60 * 1000;
+
+  function currentUsername() {
+    return String(window.currentUsername || globalThis.currentUsername || '').trim();
+  }
+
+  function cacheKey() {
+    const username = currentUsername();
+    return username ? HISTORY_CACHE_KEY_PREFIX + encodeURIComponent(username) : '';
+  }
+
+  function readCachedHistory() {
+    const key = cacheKey();
+    if (!key) return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!parsed || !Array.isArray(parsed.history)) return null;
+      if (Date.now() - Number(parsed.savedAt || 0) > HISTORY_CACHE_TTL) return null;
+      return { history: parsed.history, points: Number(parsed.points || 0) };
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedHistory(history, points) {
+    const key = cacheKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        history: Array.isArray(history) ? history.slice(0, 50) : [],
+        points: Number(points || 0),
+        savedAt: Date.now()
+      }));
+    } catch {}
+  }
 
   function ensureStyles() {
     if (document.getElementById('points-history-style')) return;
@@ -89,17 +125,37 @@
   function open() {
     if (!modal) modal = createModal();
     modal.hidden = false;
+
     const list = modal.querySelector('.points-history-list');
-    list.innerHTML = '<div class="points-history-loading">履歴を読み込んでいます…</div>';
+    const cached = readCachedHistory();
+    const displayedPoints = Number(pointsEl.textContent.match(/(\\d+)pt/)?.[1] || 0);
+
+    if (cached) {
+      renderHistory(cached.history, cached.points || displayedPoints);
+    } else {
+      list.innerHTML = '<div class="points-history-loading">履歴を読み込んでいます…</div>';
+      modal.querySelector('.points-history-current').textContent = String(displayedPoints);
+    }
+
+    if (loading) return;
     loading = true;
-    socket.timeout(8000).emit('request-points-history', {}, (err, result) => {
+
+    // サーバー側ではログイン直後に履歴を先読みし、さらにキャッシュも行うため高速に返せます。
+    socket.timeout(5000).emit('request-points-history', {}, (err, result) => {
       loading = false;
-      if (modal.hidden) return;
+      if (!modal || modal.hidden) return;
+
       if (err || !result?.ok) {
-        list.innerHTML = '<div class="points-history-empty">履歴を取得できませんでした。しばらくしてから再度お試しください。</div>';
+        // キャッシュがある場合は、読み込み失敗でも履歴を消さずそのまま表示します。
+        if (!cached) {
+          list.innerHTML = '<div class="points-history-empty">履歴を取得できませんでした。もう一度お試しください。</div>';
+        }
         return;
       }
-      renderHistory(result.history || [], result.points || 0);
+
+      const history = Array.isArray(result.history) ? result.history : [];
+      writeCachedHistory(history, displayedPoints);
+      renderHistory(history, displayedPoints);
     });
   }
 
