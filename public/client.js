@@ -184,7 +184,9 @@ function addNormalMessageDeleteControl(item, data) {
   item.appendChild(actions);
 }
 function addReportControl(item, data) {
-  if (!data?.id || !data?.message || data.username === currentUsername || item.querySelector('.chat-report-btn')) return;
+  const isOwnPost = String(data?.username || '').trim().normalize('NFC') === String(currentUsername || '').trim().normalize('NFC');
+  item.querySelector('.chat-report-btn')?.remove();
+  if (!data?.id || !data?.message || isOwnPost || item.querySelector('.chat-report-btn')) return;
   const host = item.querySelector(':scope > .message-actions') || (() => { const el=document.createElement('div'); el.className='message-actions'; item.appendChild(el); return el; })();
   const button=document.createElement('button'); button.type='button'; button.className='chat-report-btn'; button.textContent='⚑ 通報'; button.title='このメッセージを通報';
   button.addEventListener('click',()=>{
