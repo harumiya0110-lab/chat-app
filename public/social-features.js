@@ -757,3 +757,11 @@
     toolbarActions.insertBefore(blockedBtn,unreadBtn);
   }
 })();
+
+/* 親投稿の操作ボタンを押しやすいサイズに調整（返信側は従来の小型サイズを維持） */
+.messages .message:not(.reply-message) .message-actions .message-action-btn{
+  min-height:32px!important;
+  padding:6px 10px!important;
+  font-size:12px!important;
+  line-height:1.15!important;
+}
