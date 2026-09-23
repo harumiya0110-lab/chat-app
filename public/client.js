@@ -695,9 +695,9 @@ function createEventIcon(eventType, areaLabel = '') {
   return L.divIcon({
     className: '',
     html: `<div class="event-marker" style="background:${style.color}"><span class="event-marker-symbol">${style.symbol}</span>${labelHtml}</div>`,
-    iconSize: safeArea ? [122, 42] : [112, 42],
-    iconAnchor: safeArea ? [61, 42] : [56, 42],
-    popupAnchor: [0, -40]
+    iconSize: safeArea ? [96, 34] : [88, 34],
+    iconAnchor: safeArea ? [48, 34] : [44, 34],
+    popupAnchor: [0, -33]
   });
 }
 
