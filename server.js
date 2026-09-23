@@ -367,6 +367,8 @@ function safeAudioMime(value) {
 
 io.on('connection', socket => {
   console.log(`新しいユーザーが接続しました: ${socket.id}`);
+  // デプロイ後に接続し直したクライアントへ、投稿履歴をリセットする通知を送ります。
+  socket.emit('chat-posts-cleared');
   // 名前だけで参加するゲスト方式です。メールアドレス認証は使用しません。
   socket.on('set-username', async (username, ack) => {
     const fail = (reason, message) => {
