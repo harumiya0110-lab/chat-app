@@ -593,13 +593,13 @@ function openAdminReports() {
       button.addEventListener('click', async () => {
         const messageId = String(button.dataset.reportMessageId || '').trim();
         if (!messageId) return;
-        button.disabled = true;
-        button.textContent = '移動中…';
+
+        // 通報確認画面は先に閉じ、チャット画面へ戻ってから対象投稿へ移動します。
+        modal.remove();
+        setStatus('通報されたメッセージへ移動しています…');
+
         const focused = await window.ruralFocusMessageById?.(messageId);
-        button.disabled = false;
-        button.textContent = 'このメッセージに移動する';
         if (focused) {
-          modal.remove();
           setStatus('通報されたメッセージを表示しました。');
         } else {
           setStatus('通報されたメッセージを履歴から見つけられませんでした。');
