@@ -327,6 +327,7 @@ function addMessage(data) {
   const item = buildMessageElement(data);
   item.dataset.messageKey = getMessageKey(data);
   messages.appendChild(item);
+  window.ruralEnhanceMessage?.(item);
   if (data?.replyToId) attachReplyToParent(item, data);
   attachPendingReplies();
   if (!isHistoryLoading) {
