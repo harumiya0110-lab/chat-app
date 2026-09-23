@@ -125,6 +125,49 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+function createGoogleMapsLocationUrl(lat, lng, mode = 'directions') {
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return '';
+  const destination = encodeURIComponent(`${latitude},${longitude}`);
+  if (mode === 'search') {
+    return `https://www.google.com/maps/search/?api=1&query=${destination}`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+window.ruralCreateGoogleMapsLocationUrl = createGoogleMapsLocationUrl;
+
+async function shareGoogleMapsLocation({ lat, lng, title = '待ち合わせ・イベントの場所', text = '' } = {}) {
+  const url = createGoogleMapsLocationUrl(lat, lng, 'search');
+  if (!url) return { ok: false, reason: 'invalid-location' };
+
+  const shareData = {
+    title: String(title || '場所を共有'),
+    text: String(text || '地図上の場所を共有します'),
+    url
+  };
+
+  try {
+    if (typeof navigator.share === 'function') {
+      await navigator.share(shareData);
+      return { ok: true, method: 'share' };
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') return { ok: false, reason: 'cancelled' };
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    return { ok: true, method: 'clipboard', url };
+  } catch {
+    window.prompt('Google Mapsの場所リンクをコピーしてください。', url);
+    return { ok: true, method: 'prompt', url };
+  }
+}
+
+window.ruralShareGoogleMapsLocation = shareGoogleMapsLocation;
+
 function setStatus(text) {
   if (status) status.textContent = text;
 }
