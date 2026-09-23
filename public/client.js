@@ -578,7 +578,10 @@ function openAdminReports() {
             <article class="admin-report-item">
               <div class="admin-report-top">
                 <div><strong>${escapeHtml(r.targetUsername || '不明')}</strong> <span>${escapeHtml(r.reason || '')}</span></div>
-                <button type="button" class="admin-report-move-btn" data-report-message-id="${escapeHtml(r.messageId || '')}" ${r.messageId ? '' : 'disabled'}>このメッセージに移動する</button>
+                <div class="admin-report-actions">
+                  <button type="button" class="admin-report-move-btn" data-report-message-id="${escapeHtml(r.messageId || '')}" ${r.messageId ? '' : 'disabled'}>このメッセージに移動する</button>
+                  <button type="button" class="admin-report-delete-btn" data-report-delete-id="${escapeHtml(r.messageId || '')}" ${r.messageId ? '' : 'disabled'}>🗑 削除</button>
+                </div>
               </div>
               <p>${escapeHtml(r.message || '')}</p>
               <small>通報者：${escapeHtml(r.reporterUsername || '不明')}　${escapeHtml(r.createdAt ? new Date(r.createdAt).toLocaleString('ja-JP') : '')}</small>
@@ -588,6 +591,36 @@ function openAdminReports() {
 
     document.body.appendChild(modal);
     modal.querySelector('.admin-reports-close')?.addEventListener('click', () => modal.remove());
+
+    modal.querySelectorAll('[data-report-delete-id]').forEach(button => {
+      button.addEventListener('click', () => {
+        const messageId = String(button.dataset.reportDeleteId || '').trim();
+        if (!messageId) return;
+        if (!window.confirm('この通報を受けたメッセージを削除しますか？地図情報付き投稿の場合は地図のピンも削除されます。')) return;
+
+        button.disabled = true;
+        button.textContent = '削除中…';
+
+        socket.timeout(10000).emit('delete-chat-message', { id: messageId }, result => {
+          if (result?.ok) {
+            button.closest('.admin-report-item')?.remove();
+            setStatus('通報されたメッセージを削除しました。');
+            return;
+          }
+
+          button.disabled = false;
+          button.textContent = '🗑 削除';
+          const reasonMessages = {
+            'not-owner': 'このメッセージを削除する権限がありません。',
+            'not-found': '対象メッセージはすでに削除されています。',
+            'unauthorized': 'ログインしてから操作してください。',
+            'forbidden': '管理者権限が必要です。',
+            'server-error': 'メッセージの削除に失敗しました。'
+          };
+          setStatus(reasonMessages[result?.reason] || 'メッセージの削除に失敗しました。');
+        });
+      });
+    });
 
     modal.querySelectorAll('[data-report-message-id]').forEach(button => {
       button.addEventListener('click', async () => {
