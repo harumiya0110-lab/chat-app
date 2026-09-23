@@ -580,6 +580,9 @@ socket.on('chat-history', history => {
   }
   messages.appendChild(fragment);
 
+  // 履歴では一度に複数投稿を追加するため、DOM挿入後に返信を親投稿へ再配置します。
+  attachPendingReplies();
+
   // DOM挿入を1回にまとめた後、地図ピンを生成します。
   for (const data of items) addMarker(data);
 
