@@ -1409,3 +1409,12 @@ body[data-rural-theme] .messages .message-bubble audio{
   .admin-report-top{align-items:flex-start}
   .admin-report-move-btn{padding:6px 7px;font-size:9px}
 }
+
+.admin-report-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.admin-report-delete-btn{flex:0 0 auto;border:1px solid #e5b4b4;border-radius:8px;background:#fff5f5;color:#a52d2d;padding:6px 9px;font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+.admin-report-delete-btn:hover:not(:disabled){background:#fde6e6}
+.admin-report-delete-btn:disabled{opacity:.55;cursor:wait}
+@media(max-width:650px){
+  .admin-report-actions{width:100%;justify-content:flex-start}
+  .admin-report-delete-btn{font-size:9px;padding:6px 8px}
+}
