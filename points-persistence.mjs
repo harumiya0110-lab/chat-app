@@ -8,7 +8,14 @@ let enabled = false;
 let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
-const POINTS_PER_HELP = 10;
+const POINTS_PER_HELP = 20;
+
+// 普段の利用でも少しずつ貯まり、地域に役立つ行動では大きく貯まる設定です。
+const DAILY_LOGIN_POINTS = 3;
+const CHAT_POST_POINTS = 1;
+const MAP_POST_POINTS = 5;
+const MAX_DAILY_CHAT_POSTS = 5;
+const MAX_DAILY_MAP_POSTS = 3;
 const HELPABLE_EVENT_TYPES = new Set(['助け合い']);
 
 function base64Url(value) {
@@ -155,30 +162,105 @@ async function loadPointsLeaderboard(limit = 10) {
   return entries.sort((a,b) => b.points - a.points || a.username.localeCompare(b.username, 'ja')).slice(0, 10);
 }
 
-async function getPoints(username) {
-  if (!enabled || !username) return 0;
+async function getPointAccount(username) {
+  if (!enabled || !username) return { points: 0 };
   const safeUsername = encodeURIComponent(String(username));
   try {
     const result = await firestoreRequest(`/regionalPoints/${safeUsername}`, { method: 'GET' });
-    if (!result?.fields) return 0;
-    const fields = fromFirestoreFields(result.fields);
-    return Number(fields.points || 0);
+    if (!result?.fields) return { points: 0 };
+    return fromFirestoreFields(result.fields);
   } catch (error) {
-    if (String(error?.message || '').startsWith('Firestore request failed: 404')) return 0;
+    if (String(error?.message || '').startsWith('Firestore request failed: 404')) return { points: 0 };
     throw error;
   }
 }
 
-async function setPoints(username, points) {
+async function getPoints(username) {
+  const account = await getPointAccount(username);
+  return Number(account.points || 0);
+}
+
+async function setPoints(username, points, extraFields = {}) {
   const safeUsername = encodeURIComponent(String(username));
+  const fields = {
+    username: firestoreValue(username),
+    points: firestoreValue(Math.max(0, Math.floor(points)))
+  };
+  for (const [key, value] of Object.entries(extraFields)) {
+    fields[key] = firestoreValue(value);
+  }
   await firestoreRequest(`/regionalPoints/${safeUsername}`, {
     method: 'PATCH',
-    body: JSON.stringify({
-      fields: {
-        username: firestoreValue(username),
-        points: firestoreValue(Math.max(0, Math.floor(points)))
-      }
-    })
+    body: JSON.stringify({ fields })
+  });
+}
+
+function getJapanDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+async function awardDailyLoginPoints(username) {
+  const account = await getPointAccount(username);
+  const today = getJapanDateKey();
+  if (String(account.lastDailyLogin || '') === today) return { earned: 0, points: Number(account.points || 0) };
+
+  const currentPoints = Number(account.points || 0);
+  const newPoints = currentPoints + DAILY_LOGIN_POINTS;
+  await setPoints(username, newPoints, { lastDailyLogin: today });
+
+  return { earned: DAILY_LOGIN_POINTS, points: newPoints, reason: 'daily-login' };
+}
+
+async function awardUsagePoints(username, type, messageId = '') {
+  if (!username) return { earned: 0, points: 0 };
+
+  const today = getJapanDateKey();
+  const account = await getPointAccount(username);
+  const currentPoints = Number(account.points || 0);
+
+  const isMapPost = type === 'map-post';
+  const dateField = isMapPost ? 'dailyMapPostDate' : 'dailyChatPostDate';
+  const countField = isMapPost ? 'dailyMapPostCount' : 'dailyChatPostCount';
+  const maxPosts = isMapPost ? MAX_DAILY_MAP_POSTS : MAX_DAILY_CHAT_POSTS;
+  const perPostPoints = isMapPost ? MAP_POST_POINTS : CHAT_POST_POINTS;
+  const reason = isMapPost ? 'map-post' : 'chat-use';
+
+  const used = String(account[dateField] || '') === today
+    ? Math.max(0, Math.floor(Number(account[countField] || 0)))
+    : 0;
+
+  if (used >= maxPosts) {
+    return { earned: 0, points: currentPoints };
+  }
+
+  const newCount = used + 1;
+  const newPoints = currentPoints + perPostPoints;
+  await setPoints(username, newPoints, {
+    [dateField]: today,
+    [countField]: newCount
+  });
+
+  return {
+    earned: perPostPoints,
+    points: newPoints,
+    messageId,
+    reason
+  };
+}
+
+function emitPointAward(server, username, result) {
+  if (!server || !username || !result || Number(result.earned || 0) <= 0) return;
+  server.emit('region-points-updated', {
+    username,
+    points: result.points,
+    earned: result.earned,
+    messageId: result.messageId || '',
+    reason: result.reason || 'community-use'
   });
 }
 
@@ -281,6 +363,29 @@ async function confirmHelp(socket, payload = {}, ack) {
   }
 }
 
+
+// receive-message は「普段の利用」のポイント対象です。
+// Firebase履歴読み込みなどで再表示されるメッセージは receive-message を通らないため、
+// 過去投稿の読み込みでポイントが二重加算されることはありません。
+if (!SocketIOServer.prototype.__regionalPointsEmitPatched) {
+  const originalServerEmit = SocketIOServer.prototype.emit;
+  SocketIOServer.prototype.emit = function(eventName, ...args) {
+    if (eventName === 'receive-message' && enabled) {
+      const data = args[0] || {};
+      const username = String(data.username || '').trim();
+      const messageId = String(data.id || '').trim();
+      const isMapPost = Boolean(data.locationData && Number.isFinite(Number(data.locationData.lat)) && Number.isFinite(Number(data.locationData.lng)));
+      if (username) {
+        void awardUsagePoints(username, isMapPost ? 'map-post' : 'chat-use', messageId)
+          .then(result => emitPointAward(this, username, result))
+          .catch(error => console.error('[regional points] usage award failed:', error));
+      }
+    }
+    return originalServerEmit.call(this, eventName, ...args);
+  };
+  SocketIOServer.prototype.__regionalPointsEmitPatched = true;
+}
+
 const originalServerOn = SocketIOServer.prototype.on;
 SocketIOServer.prototype.on = function(eventName, listener) {
   if (eventName !== 'connection') return originalServerOn.call(this, eventName, listener);
@@ -351,14 +456,21 @@ SocketIOServer.prototype.on = function(eventName, listener) {
         const accepted = previousEmit(socketEventName, ...args);
         void (async () => {
           try {
-            const points = await getPoints(socket.__regionalPointsUsername);
+            const username = socket.__regionalPointsUsername;
+            const initialPoints = await getPoints(username);
             previousEmit('region-points-updated', {
-              username: socket.__regionalPointsUsername,
-              points,
+              username,
+              points: initialPoints,
               earned: 0
             });
+
+            const loginAward = await awardDailyLoginPoints(username);
+            emitPointAward(socket, username, {
+              ...loginAward,
+              reason: loginAward.earned > 0 ? 'daily-login' : ''
+            });
           } catch (error) {
-            console.error('Regional points load failed:', error);
+            console.error('Regional points load/login award failed:', error);
           }
         })();
         return accepted;
