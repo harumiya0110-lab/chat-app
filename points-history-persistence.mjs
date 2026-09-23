@@ -112,6 +112,19 @@ async function addHistory(username, points, messageId, reason = 'help-confirmed'
   }
 }
 
+async function getPointAccount(username) {
+  if (!enabled || !username) return { points: 0 };
+  const safeUsername = encodeURIComponent(String(username).trim());
+  try {
+    const result = await firestoreRequest(`/regionalPoints/${safeUsername}`, { method: 'GET' });
+    if (!result?.fields) return { points: 0 };
+    return fromFields(result.fields);
+  } catch (error) {
+    if (String(error?.message || '').startsWith('Firestore request failed: 404')) return { points: 0 };
+    throw error;
+  }
+}
+
 async function loadHistory(username, { force = false } = {}) {
   if (!enabled || !username) return [];
   const cleanUsername = String(username).trim();
@@ -164,13 +177,30 @@ export function registerPointsHistory(io) {
   io.on('connection', socket => {
     const previousEmit = socket.emit.bind(socket);
     socket.emit = (eventName, ...args) => {
-      if (eventName === 'username-accepted' && args[0]?.username) {
-        const username = String(args[0].username).trim();
-        // ログイン直後に履歴を先読みし、ユーザーが「地域ポイント」を押した瞬間に表示できるようにします。
+      const data = args[0] || {};
+
+      if (eventName === 'username-accepted' && data?.username) {
+        const username = String(data.username).trim();
+        // ログイン直後の先読みは維持します。ただし、ポイント付与直後に
+        // 古い「空履歴」が残らないよう、region-points-updated もこのsocketで監視します。
         void loadHistory(username).catch(error => {
           console.warn('[points-history] preload failed:', error.message);
         });
       }
+
+      if (eventName === 'region-points-updated') {
+        const username = String(data?.username || '').trim();
+        const earned = Number(data?.earned || 0);
+        if (username && earned > 0) {
+          historyCache.delete(username);
+          void addHistory(username, earned, data?.messageId, data?.reason)
+            .then(() => {
+              // 書き込み完了後に必ず古いキャッシュを破棄します。
+              historyCache.delete(username);
+            });
+        }
+      }
+
       return previousEmit(eventName, ...args);
     };
 
@@ -181,9 +211,22 @@ export function registerPointsHistory(io) {
         return;
       }
       try {
-        const history = await loadHistory(username);
+        const account = await getPointAccount(username);
+        const currentPoints = Math.max(0, Math.floor(Number(account.points || 0)));
+
+        // 以前の不具合で空履歴がキャッシュされていても、
+        // 現在ポイントが0より大きければFirestoreから再取得します。
+        let history = await loadHistory(username);
+        if (currentPoints > 0 && history.length === 0) {
+          history = await loadHistory(username, { force: true });
+        }
+
         const recent = history.slice(0, 50);
-        if (typeof ack === 'function') ack({ ok: true, history: recent });
+        if (typeof ack === 'function') ack({
+          ok: true,
+          history: recent,
+          points: currentPoints
+        });
       } catch (error) {
         console.error(`[points-history] load failed user=${username}:`, error.message);
         if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
@@ -202,7 +245,12 @@ export function registerPointsHistory(io) {
         if (username) {
           // ポイント付与後の履歴キャッシュを古いままにしない。
           historyCache.delete(username);
-          if (earned > 0) void addHistory(username, earned, data.messageId, data.reason);
+          if (earned > 0) {
+            void addHistory(username, earned, data.messageId, data.reason)
+              .then(() => {
+                historyCache.delete(username);
+              });
+          }
         }
       }
       return originalEmit.call(this, eventName, ...args);
