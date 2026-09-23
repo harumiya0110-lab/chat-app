@@ -213,7 +213,12 @@ async function awardDailyLoginPoints(username) {
   const newPoints = currentPoints + DAILY_LOGIN_POINTS;
   await setPoints(username, newPoints, { lastDailyLogin: today });
 
-  return { earned: DAILY_LOGIN_POINTS, points: newPoints, reason: 'daily-login' };
+  return {
+    earned: DAILY_LOGIN_POINTS,
+    points: newPoints,
+    reason: 'daily-login',
+    historyId: `daily-login:${today}`
+  };
 }
 
 async function awardUsagePoints(username, type, messageId = '') {
@@ -249,7 +254,8 @@ async function awardUsagePoints(username, type, messageId = '') {
     earned: perPostPoints,
     points: newPoints,
     messageId,
-    reason
+    reason,
+    historyId: messageId ? `${reason}:${messageId}` : `${reason}:${today}:${used + 1}`
   };
 }
 
@@ -260,7 +266,8 @@ function emitPointAward(server, username, result) {
     points: result.points,
     earned: result.earned,
     messageId: result.messageId || '',
-    reason: result.reason || 'community-use'
+    reason: result.reason || 'community-use',
+    historyId: result.historyId || ''
   });
 }
 
@@ -341,7 +348,8 @@ async function confirmHelp(socket, payload = {}, ack) {
       points: newPoints,
       earned: POINTS_PER_HELP,
       messageId: id,
-      reason: 'help-confirmed'
+      reason: 'help-confirmed',
+      historyId: `help-confirmed:${id}:${helperUsername}`
     });
     socket.server.emit('map-pin-help-confirmed', {
       id,
