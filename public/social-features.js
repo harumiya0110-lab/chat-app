@@ -837,85 +837,115 @@
   }
 }
 
-/* チャット上部ツールバーのレイアウトを安定化 */
+/* チャット上部ツールバー：検索欄と操作ボタンを2領域で安定配置 */
 .chat-toolbar{
   width:100%!important;
   min-width:0!important;
   box-sizing:border-box!important;
-  display:flex!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-rows:auto!important;
   align-items:center!important;
   gap:8px!important;
-  flex-wrap:nowrap!important;
+  padding:9px 10px!important;
 }
 .chat-search{
-  flex:1 1 auto!important;
+  grid-column:1!important;
+  grid-row:1!important;
+  width:100%!important;
   min-width:0!important;
   max-width:none!important;
   box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
 }
 .chat-search input{
-  min-width:0!important;
+  display:block!important;
   width:100%!important;
+  min-width:0!important;
+  flex:1 1 auto!important;
   box-sizing:border-box!important;
 }
 .chat-toolbar-actions{
-  flex:0 0 auto!important;
+  grid-column:2!important;
+  grid-row:1!important;
+  width:auto!important;
   min-width:0!important;
+  max-width:100%!important;
   display:flex!important;
   align-items:center!important;
   justify-content:flex-end!important;
   flex-wrap:nowrap!important;
   gap:6px!important;
 }
-.chat-toolbar-actions .chat-tool-action{
+.chat-toolbar-actions > button{
+  position:static!important;
   flex:0 0 auto!important;
-  min-height:34px!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:36px!important;
+  min-height:36px!important;
   box-sizing:border-box!important;
   display:inline-flex!important;
   align-items:center!important;
   justify-content:center!important;
+  margin:0!important;
   line-height:1.1!important;
+  white-space:nowrap!important;
 }
 .chat-toolbar-actions #notify-btn{
-  min-width:78px!important;
+  width:80px!important;
+  min-width:80px!important;
 }
 .chat-toolbar-actions #leaderboard-btn{
-  width:42px!important;
-  min-width:42px!important;
-  padding-inline:8px!important;
+  width:40px!important;
+  min-width:40px!important;
+  padding:6px 8px!important;
 }
 .chat-toolbar-actions #unread-btn{
-  min-width:72px!important;
+  width:74px!important;
+  min-width:74px!important;
+}
+.chat-toolbar-actions [title="ブロックしたユーザーを管理"]{
+  width:40px!important;
+  min-width:40px!important;
+  padding:6px 8px!important;
+}
+.chat-toolbar-actions #unread-btn[hidden]{
+  display:none!important;
 }
 @media(max-width:700px){
   .chat-toolbar{
-    flex-wrap:wrap!important;
-    align-items:stretch!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
     gap:6px!important;
   }
   .chat-search{
-    flex:1 1 100%!important;
-    width:100%!important;
+    grid-column:1!important;
+    grid-row:1!important;
   }
   .chat-toolbar-actions{
+    grid-column:1!important;
+    grid-row:2!important;
     width:100%!important;
-    flex:1 1 100%!important;
     justify-content:flex-end!important;
-  }
-  .chat-toolbar-actions #notify-btn{
-    min-width:82px!important;
   }
 }
 @media(max-width:420px){
   .chat-toolbar-actions{
-    justify-content:stretch!important;
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    width:100%!important;
+    gap:6px!important;
   }
-  .chat-toolbar-actions .chat-tool-action{
-    flex:1 1 0!important;
-    min-width:0!important;
-  }
-  .chat-toolbar-actions #leaderboard-btn{
-    width:auto!important;
+  .chat-toolbar-actions > button,
+  .chat-toolbar-actions #notify-btn,
+  .chat-toolbar-actions #leaderboard-btn,
+  .chat-toolbar-actions #unread-btn,
+  .chat-toolbar-actions [title="ブロックしたユーザーを管理"]{
+    width:100%!important;
     min-width:0!important;
   }
 }
