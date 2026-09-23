@@ -335,16 +335,41 @@
   }
 
   function focusMessage(id) {
-    if (!id) return false;
-    const safeId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(String(id)) : String(id).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
-    const item = messagesEl.querySelector(`.message[data-message-id="${safeId}"]`);
+    const targetId = String(id || '').trim();
+    if (!targetId) return false;
+    const item = [...messagesEl.querySelectorAll('.message')].find(message =>
+      String(message.dataset.messageId || '').trim() === targetId
+    );
     if (!item) return false;
+
     item.classList.remove('rural-highlight');
     void item.offsetWidth;
     item.classList.add('rural-highlight');
-    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // scrollIntoViewだけに頼らず、チャット欄自身のスクロール位置も明示的に変更します。
+    const containerRect = messagesEl.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    const nextTop = messagesEl.scrollTop + (itemRect.top - containerRect.top) -
+      Math.max(0, (messagesEl.clientHeight - itemRect.height) / 2);
+    messagesEl.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+
     window.setTimeout(() => item.classList.remove('rural-highlight'), 3200);
     return true;
+  }
+
+  function insertMessageForAdminFocus(data) {
+    if (!data || !data.id || !window.ruralBuildMessageElement) return false;
+    const targetId = String(data.id).trim();
+    if (!targetId) return false;
+    if (focusMessage(targetId)) return true;
+
+    const item = window.ruralBuildMessageElement(data);
+    if (!item) return false;
+    item.dataset.messageKey = `id:${targetId}`;
+    messagesEl.appendChild(item);
+    window.ruralEnhanceMessage?.(item);
+    window.ruralAddMarker?.(data);
+    return focusMessage(targetId);
   }
 
   async function focusMessageById(id) {
@@ -353,7 +378,7 @@
 
     if (focusMessage(targetId)) return true;
 
-    // 通報された投稿が最初の50件より古い場合は、履歴を追加読み込みして探します。
+    // まず現在の履歴を追加読み込みします。
     for (let attempt = 0; attempt < 20 && hasMoreHistory; attempt += 1) {
       loadMoreHistory();
       await new Promise(resolve => {
@@ -366,6 +391,16 @@
       if (focusMessage(targetId)) return true;
     }
 
+    // 履歴ページングの状態に依存せず、ハル本人ならサーバーから通報対象を直接取得します。
+    const result = await new Promise(resolve => {
+      socket.timeout(10000).emit('get-message-by-id', { id: targetId }, (err, response) =>
+        resolve(err ? { ok: false, reason: 'timeout' } : response || { ok: false, reason: 'unknown' })
+      );
+    });
+
+    if (result?.ok && result.message) {
+      return insertMessageForAdminFocus(result.message);
+    }
     return false;
   }
 
