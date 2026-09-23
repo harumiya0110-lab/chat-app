@@ -687,17 +687,16 @@ function updateUsersList(users) {
   }
 }
 
-function createEventIcon(eventType, areaLabel = '') {
+function createEventIcon(eventType) {
   const style = EVENT_STYLES[eventType] || EVENT_STYLES['その他'];
   if (typeof L === 'undefined' || typeof L.divIcon !== 'function') return null;
-  const safeArea = escapeHtml(String(areaLabel || '').trim());
-  const labelHtml = safeArea ? `<span class="event-marker-area">${safeArea}</span>` : '<span class="event-marker-area is-loading">場所を確認中…</span>';
+
   return L.divIcon({
     className: '',
-    html: `<div class="event-marker" style="background:${style.color}"><span class="event-marker-symbol">${style.symbol}</span>${labelHtml}</div>`,
-    iconSize: safeArea ? [96, 34] : [88, 34],
-    iconAnchor: safeArea ? [48, 34] : [44, 34],
-    popupAnchor: [0, -33]
+    html: `<div class="event-marker" style="background:${style.color}" aria-label="${escapeHtml(eventType || 'その他')}"><span class="event-marker-symbol">${style.symbol}</span></div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 44],
+    popupAnchor: [0, -40]
   });
 }
 
@@ -763,22 +762,7 @@ function updateMarkerAreaMessage(location) {
   scrollToBottom();
 }
 
-async function addMarkerLocationLabel(marker, lat, lng, type, message) {
-  const location = await fetchMarkerArea({ lat, lng });
-  if (!marker || !marker.setIcon) return;
-  if (location?.prefecture || location?.city) {
-    const areaLabel = [location.prefecture, location.city].filter(Boolean).join('');
-    const icon = createEventIcon(type, areaLabel);
-    if (icon) marker.setIcon(icon);
 
-    const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
-    const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>📍 ${escapeHtml(areaLabel)}</strong><br><strong>${escapeHtml(message.locationData?.summary || '')}</strong><br><small>${escapeHtml(message.locationData?.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
-    marker.setPopupContent(popup);
-  } else if (location?.error) {
-    const icon = createEventIcon(type, '場所を特定できません');
-    if (icon) marker.setIcon(icon);
-  }
-}
 
 function addMarker(message) {
   const loc = message.locationData;
@@ -801,11 +785,24 @@ function addMarker(message) {
   if (!icon) return null;
   const marker = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popup);
   marker.__messageId = messageId;
-  marker.on('click', () => {
+  marker.on('click', async () => {
+    marker.setPopupContent(`${popup}<br><span>📍 県・市を確認しています…</span>`);
+    const location = await fetchMarkerArea({ lat, lng });
+    if (location?.error) {
+      marker.setPopupContent(`${popup}<br><strong>📍 ${escapeHtml(location.error)}</strong>`);
+    } else {
+      const prefecture = String(location?.prefecture || '').trim();
+      const city = String(location?.city || '').trim();
+      const area = [prefecture, city].filter(Boolean).join('');
+      marker.setPopupContent(
+        area
+          ? `${popup}<br><strong>📍 ${escapeHtml(area)}</strong>`
+          : `${popup}<br><strong>📍 都道府県・市区町村を特定できませんでした。</strong>`
+      );
+    }
     void showMarkerAreaInChat(marker);
     window.dispatchEvent(new CustomEvent('rural-map-marker-clicked', { detail: { marker, messageId } }));
   });
-  void addMarkerLocationLabel(marker, lat, lng, type, message);
   if (messageId) ruralMarkerByMessageId.set(messageId, marker);
   return marker;
 }
