@@ -41,7 +41,7 @@
     const style = document.createElement('style');
     style.id = 'rural-social-features-style';
     style.textContent = `
-      .chat-toolbar{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--chat-border,#e3e9e0);background:var(--chat-panel-soft,#f8faf7)}
+      .chat-toolbar{padding:9px 10px;border-bottom:1px solid var(--chat-border,#e3e9e0);background:var(--chat-panel-soft,#f8faf7)}
       .chat-search{min-width:0;flex:1;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--chat-input,#bdcbbd);border-radius:9px;background:var(--chat-input-bg,#fff);color:var(--chat-text-soft,#68796e)}
       .chat-search input{min-width:0;flex:1;border:0;outline:0;padding:8px 2px;background:transparent;color:var(--chat-input-text,#21342c);font:inherit;font-size:12px}
       .chat-search input::placeholder{color:var(--chat-placeholder,#8c9891)}
@@ -834,118 +834,5 @@
     min-height:30px!important;
     padding:5px 8px!important;
     font-size:11px!important;
-  }
-}
-
-/* チャット上部ツールバー：検索欄と操作ボタンを2領域で安定配置 */
-.chat-toolbar{
-  width:100%!important;
-  min-width:0!important;
-  box-sizing:border-box!important;
-  display:grid!important;
-  grid-template-columns:minmax(0,1fr) auto!important;
-  grid-template-rows:auto!important;
-  align-items:center!important;
-  gap:8px!important;
-  padding:9px 10px!important;
-}
-.chat-search{
-  grid-column:1!important;
-  grid-row:1!important;
-  width:100%!important;
-  min-width:0!important;
-  max-width:none!important;
-  box-sizing:border-box!important;
-  display:flex!important;
-  align-items:center!important;
-  gap:6px!important;
-}
-.chat-search input{
-  display:block!important;
-  width:100%!important;
-  min-width:0!important;
-  flex:1 1 auto!important;
-  box-sizing:border-box!important;
-}
-.chat-toolbar-actions{
-  grid-column:2!important;
-  grid-row:1!important;
-  width:auto!important;
-  min-width:0!important;
-  max-width:100%!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:flex-end!important;
-  flex-wrap:nowrap!important;
-  gap:6px!important;
-}
-.chat-toolbar-actions > button{
-  position:static!important;
-  flex:0 0 auto!important;
-  width:auto!important;
-  min-width:0!important;
-  max-width:none!important;
-  height:36px!important;
-  min-height:36px!important;
-  box-sizing:border-box!important;
-  display:inline-flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  margin:0!important;
-  line-height:1.1!important;
-  white-space:nowrap!important;
-}
-.chat-toolbar-actions #notify-btn{
-  width:80px!important;
-  min-width:80px!important;
-}
-.chat-toolbar-actions #leaderboard-btn{
-  width:40px!important;
-  min-width:40px!important;
-  padding:6px 8px!important;
-}
-.chat-toolbar-actions #unread-btn{
-  width:74px!important;
-  min-width:74px!important;
-}
-.chat-toolbar-actions [title="ブロックしたユーザーを管理"]{
-  width:40px!important;
-  min-width:40px!important;
-  padding:6px 8px!important;
-}
-.chat-toolbar-actions #unread-btn[hidden]{
-  display:none!important;
-}
-@media(max-width:700px){
-  .chat-toolbar{
-    grid-template-columns:minmax(0,1fr)!important;
-    grid-template-rows:auto auto!important;
-    gap:6px!important;
-  }
-  .chat-search{
-    grid-column:1!important;
-    grid-row:1!important;
-  }
-  .chat-toolbar-actions{
-    grid-column:1!important;
-    grid-row:2!important;
-    width:100%!important;
-    justify-content:flex-end!important;
-  }
-}
-@media(max-width:420px){
-  .chat-toolbar-actions{
-    display:grid!important;
-    grid-template-columns:repeat(3,minmax(0,1fr))!important;
-    width:100%!important;
-    gap:6px!important;
-  }
-  .chat-toolbar-actions > button,
-  .chat-toolbar-actions #notify-btn,
-  .chat-toolbar-actions #leaderboard-btn,
-  .chat-toolbar-actions #unread-btn,
-  .chat-toolbar-actions [title="ブロックしたユーザーを管理"]{
-    width:100%!important;
-    min-width:0!important;
   }
 }
