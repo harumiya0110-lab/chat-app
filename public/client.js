@@ -16,6 +16,8 @@ let isJoiningChat = false;
 let isHistoryLoading = false;
 let ruralReplyTarget = null;
 let isAdmin = false;
+let pendingMedia = null;
+let pendingMediaObjectUrl = '';
 
 window.ruralSetReplyTarget = target => {
   ruralReplyTarget = target && typeof target.id === 'string' ? {
@@ -45,6 +47,10 @@ const imageBtn = $('image-btn');
 const imageInput = $('image-input');
 const videoBtn = $('video-btn');
 const videoInput = $('video-input');
+const mediaPreview = $('media-preview');
+const mediaPreviewContent = $('media-preview-content');
+const mediaPreviewMeta = $('media-preview-meta');
+const mediaPreviewRemove = $('media-preview-remove');
 const messages = $('messages');
 const usersList = $('users-list');
 const usernameDisplay = $('current-username');
@@ -197,6 +203,305 @@ function addReportControl(item, data) {
   }); host.appendChild(button);
 }
 
+function clearPendingMedia() {
+  if (pendingMediaObjectUrl) {
+    try { URL.revokeObjectURL(pendingMediaObjectUrl); } catch {}
+    pendingMediaObjectUrl = '';
+  }
+  pendingMedia = null;
+  mediaPreviewContent?.replaceChildren();
+  if (mediaPreviewMeta) mediaPreviewMeta.textContent = '';
+  mediaPreview?.setAttribute('hidden', '');
+}
+
+function setPendingMedia(media) {
+  clearPendingMedia();
+  pendingMedia = media || null;
+  if (!pendingMedia || !mediaPreview || !mediaPreviewContent) return;
+  mediaPreview.removeAttribute('hidden');
+
+  const label = pendingMedia.type === 'image' ? '写真' : '短動画';
+  if (mediaPreviewMeta) {
+    const size = pendingMedia.size ? `（${(pendingMedia.size / 1024 / 1024).toFixed(1)}MB）` : '';
+    mediaPreviewMeta.textContent = `${label}：${pendingMedia.filename || '添付ファイル'}${size}`;
+  }
+
+  if (pendingMedia.type === 'image' && pendingMedia.dataUrl) {
+    const img = document.createElement('img');
+    img.src = pendingMedia.dataUrl;
+    img.alt = '投稿に添付する写真のプレビュー';
+    img.loading = 'lazy';
+    mediaPreviewContent.appendChild(img);
+  } else if (pendingMedia.type === 'video' && pendingMedia.previewUrl) {
+    pendingMediaObjectUrl = pendingMedia.previewUrl;
+    const video = document.createElement('video');
+    video.src = pendingMedia.previewUrl;
+    video.controls = true;
+    video.muted = true;
+    video.playsInline = true;
+    mediaPreviewContent.appendChild(video);
+  }
+}
+
+function mediaSizeLabel(bytes) {
+  return `${(Number(bytes || 0) / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function appendMediaToMessage(item, media) {
+  if (!item || !media || !media.mediaUrl) return;
+  item.querySelector('.message-attachment')?.remove();
+
+  const host = document.createElement('div');
+  host.className = 'message-attachment';
+  const mediaUrl = String(media.mediaUrl || '').trim();
+  const thumbUrl = String(media.thumbnailUrl || '').trim();
+
+  if (media.type === 'image') {
+    const link = document.createElement('a');
+    link.href = mediaUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    const img = document.createElement('img');
+    img.src = thumbUrl || mediaUrl;
+    img.alt = media.filename || '投稿画像';
+    img.loading = 'lazy';
+    link.appendChild(img);
+    host.appendChild(link);
+  } else {
+    const video = document.createElement('video');
+    video.controls = true;
+    video.preload = 'metadata';
+    video.playsInline = true;
+    if (thumbUrl) video.poster = thumbUrl;
+    video.src = mediaUrl;
+    host.appendChild(video);
+    const meta = document.createElement('small');
+    meta.className = 'message-media-meta';
+    const duration = Number(media.durationSec || 0);
+    meta.textContent = duration > 0
+      ? `🎞️ ${mediaSizeLabel(media.size)} / ${duration.toFixed(1)}秒`
+      : `🎞️ ${mediaSizeLabel(media.size)}`;
+    host.appendChild(meta);
+  }
+
+  const name = document.createElement('small');
+  name.className = 'message-media-filename';
+  name.textContent = media.filename || (media.type === 'image' ? '写真' : '動画');
+  host.appendChild(name);
+
+  const bubble = item.querySelector('.message-bubble');
+  if (bubble) bubble.appendChild(host);
+}
+
+function updateMapMarkerMedia(messageId, media) {
+  const id = String(messageId || '').trim();
+  if (!id || !media) return;
+  const marker = ruralMarkerByMessageId.get(id);
+  if (!marker) return;
+
+  marker.__media = media;
+  const basePopup = String(marker.__basePopup || '');
+  if (!basePopup) return;
+
+  const thumb = media.thumbnailUrl
+    ? `<br><a href="${escapeHtml(media.mediaUrl || '')}" target="_blank" rel="noopener noreferrer"><img class="map-popup-media-thumb" src="${escapeHtml(media.thumbnailUrl)}" alt="投稿メディア"></a>`
+    : '';
+  const videoLink = media.type === 'video' && !media.thumbnailUrl
+    ? `<br><a href="${escapeHtml(media.mediaUrl || '')}" target="_blank" rel="noopener noreferrer">🎞️ 動画を見る</a>`
+    : '';
+  marker.setPopupContent(basePopup + thumb + videoLink);
+  window.ruralRefreshMapPopupActions?.(marker);
+}
+
+async function prepareImageFile(file) {
+  if (!file || !/^image\\/(?:jpeg|png|webp)$/i.test(file.type || '')) {
+    throw new Error('JPG・PNG・WebP画像のみ利用できます。');
+  }
+  if (file.size > 12 * 1024 * 1024) throw new Error('画像は12MB以下にしてください。');
+
+  const dataUrl = await resizeImageForAttachment(file);
+  const thumbnailDataUrl = await createImageThumbnail(dataUrl);
+  return {
+    type: 'image',
+    filename: file.name,
+    size: file.size,
+    dataUrl,
+    thumbnailDataUrl
+  };
+}
+
+function resizeImageForAttachment(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+    reader.onload = event => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+      img.onload = () => {
+        const maxWidth = 1280;
+        const scale = Math.min(1, maxWidth / Math.max(1, img.width));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('画像処理を開始できませんでした。'));
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let quality = 0.78;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        for (let i = 0; i < 4 && dataUrl.length > 2.5 * 1024 * 1024; i += 1) {
+          quality *= 0.8;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (dataUrl.length > 2.7 * 1024 * 1024) {
+          return reject(new Error('画像を2MB程度まで圧縮できませんでした。'));
+        }
+        resolve(dataUrl);
+      };
+      img.src = String(event.target?.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function createImageThumbnail(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onerror = () => reject(new Error('画像サムネイルを作成できませんでした。'));
+    img.onload = () => {
+      const scale = Math.min(1, 360 / Math.max(1, img.width));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('画像サムネイルを作成できませんでした。'));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      let quality = 0.68;
+      let thumb = canvas.toDataURL('image/jpeg', quality);
+      for (let i = 0; i < 3 && thumb.length > 250 * 1024; i += 1) {
+        quality *= 0.75;
+        thumb = canvas.toDataURL('image/jpeg', quality);
+      }
+      if (thumb.length > 300 * 1024) return reject(new Error('サムネイルを小さくできませんでした。'));
+      resolve(thumb);
+    };
+    img.src = dataUrl;
+  });
+}
+
+function createVideoThumbnail(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    const cleanup = () => {
+      try { URL.revokeObjectURL(url); } catch {}
+    };
+    const fail = message => {
+      cleanup();
+      reject(new Error(message || '動画の読み込みに失敗しました。'));
+    };
+
+    video.onloadedmetadata = () => {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return fail('動画の長さを取得できませんでした。');
+      if (video.duration > 30) return fail('動画は30秒以内にしてください。');
+      video.currentTime = Math.min(0.5, Math.max(0, video.duration / 4));
+    };
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 480 / Math.max(1, video.videoWidth));
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return fail('動画サムネイルを作成できませんでした。');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        let quality = 0.7;
+        let thumbnailDataUrl = canvas.toDataURL('image/jpeg', quality);
+        for (let i = 0; i < 3 && thumbnailDataUrl.length > 250 * 1024; i += 1) {
+          quality *= 0.75;
+          thumbnailDataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (thumbnailDataUrl.length > 300 * 1024) return fail('動画サムネイルを小さくできませんでした。');
+        const previewUrl = URL.createObjectURL(file);
+        cleanup();
+        resolve({ durationSec: video.duration, thumbnailDataUrl, previewUrl });
+      } catch {
+        fail('動画サムネイルを作成できませんでした。');
+      }
+    };
+
+    video.onerror = () => fail('動画の読み込みに失敗しました。');
+    video.src = url;
+  });
+}
+
+function handleSelectedImage(file) {
+  setStatus('写真を準備しています…');
+  prepareImageFile(file).then(media => {
+    setPendingMedia(media);
+    setStatus('写真を添付しました。送信すると投稿と一緒に共有されます。');
+  }).catch(error => {
+    clearPendingMedia();
+    setStatus(error.message || '写真の処理に失敗しました。');
+  });
+}
+
+async function handleSelectedVideo(file) {
+  if (!file) return;
+  if (file.size > 15 * 1024 * 1024) {
+    setStatus('動画は15MB以下にしてください。');
+    return;
+  }
+  try {
+    setStatus('動画のサムネイルを作成しています…');
+    const thumb = await createVideoThumbnail(file);
+    setPendingMedia({
+      type: 'video',
+      filename: file.name,
+      size: file.size,
+      file,
+      durationSec: thumb.durationSec,
+      thumbnailDataUrl: thumb.thumbnailDataUrl,
+      previewUrl: thumb.previewUrl
+    });
+    setStatus('短動画を添付しました。送信すると投稿と一緒に共有されます。');
+  } catch (error) {
+    clearPendingMedia();
+    setStatus(error.message || '動画の処理に失敗しました。');
+  }
+}
+
+async function uploadPendingMedia(messageId, media) {
+  if (!messageId || !media || !socket.connected) return { ok: false, reason: 'unavailable' };
+
+  const payload = {
+    messageId,
+    type: media.type,
+    filename: media.filename || '',
+    durationSec: media.durationSec || 0,
+    thumbnailDataUrl: media.thumbnailDataUrl || ''
+  };
+
+  if (media.type === 'image') {
+    payload.dataUrl = media.dataUrl;
+  } else {
+    payload.video = await media.file.arrayBuffer();
+    payload.videoType = media.file.type || 'video/mp4';
+  }
+
+  return await new Promise(resolve => {
+    socket.timeout(media.type === 'video' ? 120000 : 30000).emit('attach-media', payload, (err, result) => {
+      if (err) return resolve({ ok: false, reason: 'timeout' });
+      resolve(result?.ok ? result : { ok: false, reason: result?.reason || 'upload-failed' });
+    });
+  });
+}
+
 function buildMessageElement(data) {
   const item = document.createElement('article');
   item.className = 'message' + (data.username === currentUsername ? ' own' : '');
@@ -223,6 +528,7 @@ function buildMessageElement(data) {
   item.dataset.reactions = JSON.stringify(data.reactions || { like: [], helpful: [], thanks: [] });
   item.dataset.messageText = String(data.message || data.text || '').slice(0, 2000);
   item.dataset.replyToId = replyToId;
+  if (data.media) appendMediaToMessage(item, data.media);
   item.dataset.replyPending = replyToId ? 'true' : 'false';
   if (replyToId) item.classList.add('reply-message');
   addNormalMessageDeleteControl(item, data);
@@ -696,11 +1002,24 @@ socket.on('disconnect', () => {
 });
 
 async function sendTextMessage(overrideText = null, overrideReplyTarget = undefined) {
-  const text = String(overrideText ?? messageInput.value).trim();
-  if (!text || !currentUsername) return false;
   const replyTarget = overrideReplyTarget === undefined ? ruralReplyTarget : overrideReplyTarget;
+  const mediaToSend = overrideText === null ? pendingMedia : null;
+  const rawText = String(overrideText ?? messageInput.value).trim();
+  const text = rawText || (
+    mediaToSend?.type === 'image'
+      ? '📷 写真を共有しました。'
+      : mediaToSend?.type === 'video'
+        ? '🎞️ 短動画を共有しました。'
+        : ''
+  );
+
+  if ((!text && !mediaToSend) || !currentUsername) return false;
+
   sendBtn.disabled = true;
-  setStatus(replyTarget?.id ? '返信を投稿しています…' : 'AIが場所とイベント種別を解析しています…');
+  setStatus(mediaToSend
+    ? '投稿を送信してメディアを添付しています…'
+    : (replyTarget?.id ? '返信を投稿しています…' : 'AIが場所とイベント種別を解析しています…'));
+
   try {
     const response = await fetch('/api/messages', {
       method: 'POST',
@@ -715,16 +1034,35 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '送信に失敗しました');
+
     if (overrideText === null) messageInput.value = '';
     ruralReplyTarget = null;
     window.dispatchEvent(new CustomEvent('rural-reply-target-changed', { detail: null }));
+
+    let mediaResult = null;
+    if (mediaToSend && result.id) {
+      mediaResult = await uploadPendingMedia(result.id, mediaToSend);
+      clearPendingMedia();
+    }
+
     if (result.locationData) {
-      setStatus(`${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`);
+      setStatus(
+        mediaResult?.ok
+          ? `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加し、メディアも共有しました。`
+          : mediaToSend
+            ? `${result.locationData.locationName} にピンを追加しましたが、メディアの共有に失敗しました。`
+            : `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`
+      );
+    } else if (mediaResult?.ok) {
+      setStatus('投稿とメディアを共有しました。');
+    } else if (mediaToSend) {
+      setStatus('投稿しましたが、メディアの共有に失敗しました。');
     } else if (result.geocodeError) {
       setStatus(`投稿しました。ただし${result.geocodeError}。`);
     } else {
       setStatus('投稿しました。場所を特定できない投稿はチャットのみ表示します。');
     }
+
     return true;
   } catch (error) {
     console.error(error);
@@ -999,6 +1337,17 @@ function addMarker(message) {
   if (!icon) return null;
   const marker = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popup);
   marker.__messageId = messageId;
+  marker.__basePopup = popup;
+  marker.__media = message.media || null;
+  if (message.media) {
+    const thumb = message.media.thumbnailUrl
+      ? `<br><a href="${escapeHtml(message.media.mediaUrl || '')}" target="_blank" rel="noopener noreferrer"><img class="map-popup-media-thumb" src="${escapeHtml(message.media.thumbnailUrl)}" alt="投稿メディア"></a>`
+      : '';
+    const videoLink = message.media.type === 'video' && !message.media.thumbnailUrl
+      ? `<br><a href="${escapeHtml(message.media.mediaUrl || '')}" target="_blank" rel="noopener noreferrer">🎞️ 動画を見る</a>`
+      : '';
+    marker.setPopupContent(popup + thumb + videoLink);
+  }
   marker.on('click', async () => {
     marker.setPopupContent(`${popup}<br><span>📍 県・市を確認しています…</span>`);
     window.ruralRefreshMapPopupActions?.(marker);
@@ -1028,94 +1377,36 @@ window.ruralAddMarker = addMarker;
 imageBtn.addEventListener('click', () => imageInput.click());
 videoBtn.addEventListener('click', () => videoInput.click());
 
-function resizeImage(file, maxWidth = 1200, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = e => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 imageInput.addEventListener('change', async () => {
   const file = imageInput.files?.[0];
   imageInput.value = '';
-  if (!file) return;
-  if (file.size > 12 * 1024 * 1024) return alert('画像は12MB以下にしてください');
-  try {
-    if (!socket.connected) {
-      setStatus('サーバーに接続されていないため画像を送信できません。');
-      return;
-    }
-    setStatus('画像を送信しています…');
-    const dataUrl = await resizeImage(file);
-    socket.timeout(30000).emit('send-image', {
-      image: dataUrl,
-      imageType: file.type || 'image/jpeg',
-      filename: file.name
-    }, (err, result) => {
-      if (err) {
-        console.error('画像送信タイムアウト:', err);
-        setStatus('画像の送信がタイムアウトしました。');
-        return;
-      }
-      if (!result?.ok) {
-        setStatus(result.reason === 'too-large' ? '画像は12MB程度までにしてください。' : '画像の送信に失敗しました。');
-        return;
-      }
-      setStatus('画像を送信しました。');
-    });
-  } catch (error) {
-    console.error(error);
-    setStatus('画像の処理に失敗しました。');
-  }
+  if (!file || !currentUsername) return;
+  handleSelectedImage(file);
 });
 
 videoInput.addEventListener('change', async () => {
   const file = videoInput.files?.[0];
   videoInput.value = '';
-  if (!file) return;
-  if (file.size > 15 * 1024 * 1024) return alert('動画は15MB以下にしてください');
-  try {
-    if (!socket.connected) {
-      setStatus('サーバーに接続されていないため動画を送信できません。');
-      return;
-    }
-    setStatus('動画を読み込んでいます…');
-    const buffer = await file.arrayBuffer();
-    setStatus('動画を送信しています…');
-    socket.timeout(120000).emit('send-video', {
-      video: buffer,
-      videoType: file.type || 'video/mp4',
-      filename: file.name
-    }, (err, result) => {
-      if (err) {
-        console.error('動画送信タイムアウト:', err);
-        setStatus('動画の送信がタイムアウトしました。');
-        return;
-      }
-      if (!result?.ok) {
-        setStatus(result.reason === 'too-large' ? '動画は15MB以下にしてください。' : '動画の送信に失敗しました。');
-        return;
-      }
-      setStatus('動画を送信しました。');
-    });
-  } catch (error) {
-    console.error(error);
-    setStatus('動画の処理に失敗しました。');
-  }
+  if (!file || !currentUsername) return;
+  await handleSelectedVideo(file);
+});
+
+mediaPreviewRemove?.addEventListener('click', () => {
+  clearPendingMedia();
+  setStatus('添付を取り消しました。');
+});
+
+socket.on('message-media-attached', ({ messageId, media } = {}) => {
+  const id = String(messageId || '').trim();
+  if (!id || !media) return;
+
+  const item = [...messages.querySelectorAll('.message')].find(el => el.dataset.messageId === id);
+  if (item) appendMediaToMessage(item, media);
+
+  updateMapMarkerMedia(id, media);
+  setTimeout(() => updateMapMarkerMedia(id, media), 500);
+
+  if (!isHistoryLoading) scrollToBottom();
 });
 
 function setCameraOffUi(isLocal, isOn) {
