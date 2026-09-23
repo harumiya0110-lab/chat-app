@@ -167,6 +167,181 @@ async function firestoreRequest(path, options = {}) {
   return response.json();
 }
 
+
+
+const FIRESTORE_MEDIA_CHUNK_BYTES = 500 * 1024;
+
+function mediaAssetDocumentPath(id) {
+  return '/mediaAssets/' + encodeURIComponent(String(id || '').trim());
+}
+
+function mediaChunkCollectionPath(id) {
+  return mediaAssetDocumentPath(id) + '/chunks';
+}
+
+function bufferFromValue(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof ArrayBuffer) return Buffer.from(new Uint8Array(value));
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  return null;
+}
+
+async function saveMediaAsset(entry) {
+  if (!enabled || !entry?.id) return false;
+
+  const buffer = bufferFromValue(entry.buffer);
+  if (!buffer?.length) return false;
+
+  const id = String(entry.id).trim().slice(0, 120);
+  const chunkCount = Math.ceil(buffer.length / FIRESTORE_MEDIA_CHUNK_BYTES);
+  const thumbnailBuffer = bufferFromValue(entry.thumbnailBytes);
+  const metadata = {
+    messageId: String(entry.messageId || '').trim().slice(0, 120),
+    ownerUsername: String(entry.ownerUsername || '').trim().slice(0, 50),
+    type: entry.type === 'video' ? 'video' : 'image',
+    filename: String(entry.filename || '').slice(0, 200),
+    mimeType: String(entry.mimeType || '').slice(0, 80),
+    size: buffer.length,
+    durationSec: Math.max(0, Math.min(30, Number(entry.durationSec) || 0)),
+    chunkCount,
+    thumbnailBase64: thumbnailBuffer?.length ? thumbnailBuffer.toString('base64') : '',
+    thumbnailMime: String(entry.thumbnailMime || 'image/jpeg').slice(0, 80),
+    createdAt: new Date(Number(entry.createdAt) || Date.now()).toISOString()
+  };
+
+  const fields = Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key, firestoreValue(value)]));
+  await firestoreRequest(mediaAssetDocumentPath(id), {
+    method: 'PATCH',
+    body: JSON.stringify({ fields })
+  });
+
+  for (let index = 0; index < chunkCount; index += 1) {
+    const start = index * FIRESTORE_MEDIA_CHUNK_BYTES;
+    const chunk = buffer.subarray(start, Math.min(buffer.length, start + FIRESTORE_MEDIA_CHUNK_BYTES));
+    const chunkId = String(index).padStart(6, '0');
+    await firestoreRequest(mediaChunkCollectionPath(id) + '/' + chunkId, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fields: {
+          index: firestoreValue(index),
+          dataBase64: firestoreValue(chunk.toString('base64'))
+        }
+      })
+    });
+  }
+
+  return true;
+}
+
+async function loadMediaAsset(id) {
+  if (!enabled || !id) return null;
+  const safeId = String(id).trim();
+  try {
+    const metadataDoc = await firestoreRequest(mediaAssetDocumentPath(safeId), { method: 'GET' });
+    if (!metadataDoc?.fields) return null;
+
+    const metadata = fromFirestoreFields(metadataDoc.fields);
+    const chunkCount = Math.max(0, Math.min(100, Number(metadata.chunkCount) || 0));
+    if (!chunkCount) return null;
+
+    const chunks = [];
+    let pageToken = '';
+    do {
+      const params = new URLSearchParams({ pageSize: '100' });
+      if (pageToken) params.set('pageToken', pageToken);
+      const result = await firestoreRequest(mediaChunkCollectionPath(safeId) + '?' + params.toString(), { method: 'GET' });
+      for (const document of Array.isArray(result?.documents) ? result.documents : []) {
+        const fields = fromFirestoreFields(document.fields || {});
+        const index = Number(fields.index);
+        const dataBase64 = typeof fields.dataBase64 === 'string' ? fields.dataBase64 : '';
+        if (Number.isInteger(index) && index >= 0 && dataBase64) chunks.push({ index, dataBase64 });
+      }
+      pageToken = String(result?.nextPageToken || '');
+    } while (pageToken);
+
+    chunks.sort((a, b) => a.index - b.index);
+    if (chunks.length !== chunkCount || chunks.some((chunk, index) => chunk.index !== index)) {
+      throw new Error('Firestoreメディアチャンクが不足しています');
+    }
+
+    const buffer = Buffer.concat(chunks.map(chunk => Buffer.from(chunk.dataBase64, 'base64')));
+    const expectedSize = Math.max(0, Number(metadata.size) || 0);
+    if (!expectedSize || buffer.length !== expectedSize) {
+      throw new Error('Firestoreメディアサイズが一致しません');
+    }
+
+    let thumbnailBytes = null;
+    if (typeof metadata.thumbnailBase64 === 'string' && metadata.thumbnailBase64) {
+      thumbnailBytes = Buffer.from(metadata.thumbnailBase64, 'base64');
+    }
+
+    return {
+      id: safeId,
+      messageId: String(metadata.messageId || '').trim(),
+      ownerUsername: String(metadata.ownerUsername || '').trim(),
+      type: metadata.type === 'video' ? 'video' : 'image',
+      filename: String(metadata.filename || ''),
+      mimeType: String(metadata.mimeType || (metadata.type === 'video' ? 'video/mp4' : 'image/jpeg')),
+      buffer,
+      thumbnailBytes,
+      thumbnailMime: String(metadata.thumbnailMime || 'image/jpeg'),
+      durationSec: Math.max(0, Math.min(30, Number(metadata.durationSec) || 0)),
+      createdAt: Date.parse(String(metadata.createdAt || '')) || Date.now(),
+      bytes: buffer.length,
+      persistent: true
+    };
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
+}
+
+async function deleteMediaAsset(id) {
+  if (!enabled || !id) return false;
+  const safeId = String(id).trim();
+
+  while (true) {
+    const result = await firestoreRequest(mediaChunkCollectionPath(safeId) + '?pageSize=100', { method: 'GET' });
+    const documents = Array.isArray(result?.documents) ? result.documents : [];
+    if (!documents.length) break;
+    for (const document of documents) {
+      const name = String(document?.name || '');
+      if (!name) continue;
+      const idPath = name.split('/documents/').pop();
+      if (!idPath) continue;
+      await firestoreRequest('/' + idPath.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE' });
+    }
+  }
+
+  try {
+    await firestoreRequest(mediaAssetDocumentPath(safeId), { method: 'DELETE' });
+  } catch (error) {
+    if (error.status !== 404) throw error;
+  }
+  return true;
+}
+
+async function clearAllMediaAssets() {
+  if (!enabled) return 0;
+  let deleted = 0;
+
+  while (true) {
+    const result = await firestoreRequest('/mediaAssets?pageSize=100', { method: 'GET' });
+    const documents = Array.isArray(result?.documents) ? result.documents : [];
+    if (!documents.length) break;
+
+    for (const document of documents) {
+      const name = String(document?.name || '');
+      const id = name.split('/').pop();
+      if (!id) continue;
+      await deleteMediaAsset(decodeURIComponent(id));
+      deleted += 1;
+    }
+  }
+
+  return deleted;
+}
+
 async function saveReport(data) {
   if (!enabled) return null;
   const id = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : crypto.randomUUID();
@@ -231,6 +406,10 @@ async function deleteMessage(id, username, isAdmin = false) {
   // 投稿者のニックネームを所有者として判定します。
   if (!isAdmin && String(saved.username || '').normalize('NFC') !== cleanUsername.normalize('NFC')) {
     return { ok: false, reason: 'not-owner' };
+  }
+  if (saved.media?.id) {
+    try { await deleteMediaAsset(saved.media.id); }
+    catch (error) { console.error('Firestore media delete failed:', error); }
   }
   await firestoreRequest(`/messages/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
   recentMessageHistoryCache = null;
@@ -632,3 +811,4 @@ export async function clearAllMessages() {
 void warmRecentMessageHistory();
 
 export const firebasePersistenceEnabled = enabled;
+export { loadMediaAsset, saveMediaAsset, deleteMediaAsset, clearAllMediaAssets };
