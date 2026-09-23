@@ -1223,3 +1223,157 @@ body[data-rural-theme] .messages .message-bubble audio{
   pointer-events:auto!important;
   cursor:pointer!important;
 }
+
+/* YouTube風のコメント操作：返信と3種類のリアクションをひとまとまりで表示 */
+.messages .message-actions{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  gap:7px!important;
+  margin-top:9px!important;
+}
+.messages .message-actions .message-action-btn{
+  min-height:32px!important;
+  padding:6px 10px!important;
+  border-radius:999px!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  line-height:1.1!important;
+  background:transparent!important;
+  border:0!important;
+  color:var(--theme-text,#294237)!important;
+  cursor:pointer!important;
+}
+.messages .message-actions .message-action-btn:hover{
+  background:color-mix(in srgb,var(--theme-main-soft,#edf3eb) 75%,transparent)!important;
+}
+.messages .message-actions .message-action-btn[data-action="reply"]{
+  padding-left:4px!important;
+  padding-right:12px!important;
+}
+.messages .message-actions .message-action-btn[data-reaction]{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:4px!important;
+}
+.messages .message-actions .message-action-btn[data-reaction="like"]{color:#315b86!important}
+.messages .message-actions .message-action-btn[data-reaction="thanks"]{color:#b24c73!important}
+.messages .message-actions .message-action-btn[data-reaction="helpful"]{color:#47704f!important}
+.messages .message-actions .message-action-btn.active{
+  background:color-mix(in srgb,var(--theme-main-soft,#edf3eb) 92%,transparent)!important;
+  color:var(--theme-text,#294237)!important;
+  border:1px solid var(--theme-border-soft,#d4e3d7)!important;
+}
+.messages .message-replies{
+  margin:8px 0 0 16px!important;
+  padding:8px 0 0 14px!important;
+  border-left:2px solid var(--theme-border,#b9d2bf)!important;
+}
+.messages .message-replies-toggle{
+  min-height:30px!important;
+  padding:5px 10px!important;
+  margin:0 0 7px!important;
+  border:0!important;
+  background:transparent!important;
+  color:var(--theme-main,#2f7d4a)!important;
+  font-size:11px!important;
+  font-weight:800!important;
+}
+.messages .message-replies-toggle:hover{
+  background:var(--theme-main-pale,#edf6ef)!important;
+}
+.messages .message.reply-message{
+  padding:8px 10px!important;
+  border:0!important;
+  border-left:0!important;
+  border-radius:8px!important;
+  background:transparent!important;
+  font-size:11px!important;
+}
+.messages .message.reply-message + .message.reply-message{
+  margin-top:2px!important;
+}
+.inline-reply-composer{
+  margin-top:8px!important;
+  padding:8px 0 2px!important;
+  border-top:1px solid var(--theme-border-soft,#d4e3d7)!important;
+}
+.inline-reply-label{
+  margin-bottom:6px!important;
+  color:var(--theme-text-soft,#5d7465)!important;
+  font-size:10px!important;
+  font-weight:800!important;
+}
+.inline-reply-row{
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  min-width:0!important;
+}
+.inline-reply-input{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  width:100%!important;
+  height:34px!important;
+  padding:7px 10px!important;
+  border:1px solid var(--theme-input,#a9c4b0)!important;
+  border-radius:999px!important;
+  background:var(--theme-panel,#fff)!important;
+  color:var(--theme-text,#294237)!important;
+  font:inherit!important;
+  outline:none!important;
+  box-sizing:border-box!important;
+}
+.inline-reply-input:focus{
+  border-color:var(--theme-main,#2f7d4a)!important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--theme-main,#2f7d4a) 13%,transparent)!important;
+}
+.inline-reply-send{
+  flex:0 0 auto!important;
+  height:34px!important;
+  padding:7px 13px!important;
+  border:1px solid var(--theme-main,#2f7d4a)!important;
+  border-radius:999px!important;
+  background:var(--theme-main,#2f7d4a)!important;
+  color:#fff!important;
+  font:inherit!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  cursor:pointer!important;
+}
+.inline-reply-send:disabled{opacity:.55!important;cursor:wait!important}
+.inline-reply-cancel{
+  flex:0 0 34px!important;
+  width:34px!important;
+  height:34px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:50%!important;
+  background:var(--theme-main-soft,#edf3eb)!important;
+  color:var(--theme-text,#294237)!important;
+  font-size:17px!important;
+  cursor:pointer!important;
+}
+.reply-preview{display:none!important}
+@media(max-width:650px){
+  .messages .message-actions{
+    gap:4px!important;
+  }
+  .messages .message-actions .message-action-btn{
+    min-height:30px!important;
+    padding:5px 8px!important;
+    font-size:10px!important;
+  }
+  .messages .message-replies{
+    margin-left:10px!important;
+    padding-left:10px!important;
+  }
+  .inline-reply-row{
+    align-items:stretch!important;
+    flex-wrap:wrap!important;
+  }
+  .inline-reply-input{
+    flex-basis:100%!important;
+  }
+}
