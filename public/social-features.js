@@ -352,7 +352,10 @@
       actions.appendChild(resolveBtn);
     }
 
-    if (username !== currentUsername) {
+    const isOwnPost = username.normalize('NFC') === String(currentUsername || '').trim().normalize('NFC');
+    actions.querySelector('[data-action="report"]')?.remove();
+
+    if (!isOwnPost) {
       if (!actions.querySelector('[data-action="report"]')) {
         const reportBtn = document.createElement('button');
         reportBtn.type = 'button';
