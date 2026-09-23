@@ -6,6 +6,7 @@
   const messagesEl = $('messages');
   const notifyBtn = $('notify-btn');
   const leaderboardBtn = $('leaderboard-btn');
+  const blockedUsersBtn = $('blocked-users-btn');
   const unreadBtn = $('unread-btn');
   const unreadCountEl = $('unread-count');
   const loadMoreBtn = $('load-more-btn');
@@ -719,17 +720,9 @@
     observer.observe(messagesEl,{childList:true});
   }
 
-  // 既存のUIにブロック管理ボタンを追加します。
-  const toolbarActions=document.querySelector('.chat-toolbar-actions');
-  if(toolbarActions){
-    const blockedBtn=document.createElement('button');
-    blockedBtn.type='button';
-    blockedBtn.className='chat-tool-action';
-    blockedBtn.textContent='🚫';
-    blockedBtn.title='ブロックしたユーザーを管理';
-    blockedBtn.addEventListener('click',openBlockedManager);
-    toolbarActions.insertBefore(blockedBtn,unreadBtn);
-  }
+  blockedUsersBtn?.addEventListener('click', openBlockedManager);
+
+  window.__ruralToolbarHandlersReady = true;
 })();
 
 /* 親投稿の操作ボタンを押しやすいサイズに調整（返信側は従来の小型サイズを維持） */
