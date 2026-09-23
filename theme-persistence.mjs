@@ -244,7 +244,7 @@ function queueSave(username, state) {
   writeQueues.set(key, next);
 }
 
-function emitState(socket, username, state) {
+function emitState(socket, username, state, { syncPoints = true } = {}) {
   const clean = cloneState(state);
   socket.emit('theme-state', {
     username,
@@ -252,7 +252,17 @@ function emitState(socket, username, state) {
     catalog: THEME_CATALOG,
     chatColorCatalog: CHAT_COLOR_CATALOG
   });
-  socket.emit('region-points-updated', { username, points: clean.points, earned: 0 });
+  // 通常の交換・選択ではヘッダーの地域ポイント表示も同期します。
+  // 初回ログイン時は points-persistence が正しい残高を送るため、
+  // 別処理の古い0ptが最後に表示されないよう同期を行いません。
+  if (syncPoints) {
+    socket.emit('region-points-updated', {
+      username,
+      points: clean.points,
+      earned: 0,
+      reason: 'theme-state-sync'
+    });
+  }
 }
 
 function ackFail(ack, reason, extra = {}) {
@@ -383,7 +393,8 @@ export async function initializeThemeForSocket(socket, username) {
 
   try {
     const state = await loadState(cleanUsername);
-    emitState(socket, cleanUsername, state);
+    // 初回ログインの地域ポイント表示は points-persistence 側を正とします。
+    emitState(socket, cleanUsername, state, { syncPoints: false });
     console.log(`[theme-exchange] state initialized user=${cleanUsername} points=${state.points}`);
   } catch (error) {
     console.error(`[theme-exchange] initial state load failed user=${cleanUsername}:`, error.message);
