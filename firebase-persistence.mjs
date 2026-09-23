@@ -197,14 +197,14 @@ async function getSavedMessage(id) {
   }
 }
 
-async function deleteMessage(id, username) {
+async function deleteMessage(id, username, isAdmin = false) {
   const cleanUsername = String(username || '').trim().slice(0, 50);
   if (!enabled || !id || !cleanUsername) return { ok: false, reason: 'invalid' };
   const saved = await getSavedMessage(id);
   if (!saved) return { ok: false, reason: 'not-found' };
   // ゲスト方式ではログアウト・再ログインのたびにSocket IDが変わるため、
   // 投稿者のニックネームを所有者として判定します。
-  if (String(saved.username || '').normalize('NFC') !== cleanUsername.normalize('NFC')) {
+  if (!isAdmin && String(saved.username || '').normalize('NFC') !== cleanUsername.normalize('NFC')) {
     return { ok: false, reason: 'not-owner' };
   }
   await firestoreRequest(`/messages/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
@@ -296,20 +296,58 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       }
     });
 
+    socket.on('admin-clear-all-chat', async (_payload = {}, ack) => {
+      if (!adminBySocketId.get(socket.id)) return typeof ack === 'function' && ack({ ok: false, reason: 'forbidden' });
+      try {
+        const result = await clearAllMessages();
+        if (!result.ok) {
+          if (typeof ack === 'function') ack(result);
+          return;
+        }
+        socket.server.emit('chat-posts-cleared', { admin: true, deleted: result.deleted });
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore admin clear-all failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     socket.on('delete-map-pin', async (payload = {}, ack) => {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      const isAdmin = adminBySocketId.get(socket.id) === true;
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const result = await deleteMessage(id, username); if (result.ok) { socket.server.emit('map-pin-deleted', { id, username }); socket.server.emit('chat-message-deleted', { id, username }); } if (typeof ack === 'function') ack(result); }
-      catch (error) { console.error('Firestore message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
+      try {
+        const result = await deleteMessage(id, username, isAdmin);
+        if (result.ok) {
+          socket.server.emit('map-pin-deleted', { id, username, admin: isAdmin });
+          socket.server.emit('chat-message-deleted', { id, username, admin: isAdmin });
+        }
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore message delete failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
     });
 
     socket.on('delete-chat-message', async (payload = {}, ack) => {
       const username = usernameBySocketId.get(socket.id);
       const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      const isAdmin = adminBySocketId.get(socket.id) === true;
       if (!username || !id) return typeof ack === 'function' && ack({ ok: false, reason: 'unauthorized' });
-      try { const saved = await getSavedMessage(id); if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' }); if (String(saved.username || '').normalize('NFC') !== String(username || '').normalize('NFC')) return typeof ack === 'function' && ack({ ok: false, reason: 'not-owner' }); const result = await deleteMessage(id, username); if (result.ok) socket.server.emit('chat-message-deleted', { id, username }); if (typeof ack === 'function') ack(result); }
-      catch (error) { console.error('Firestore chat message delete failed:', error); if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' }); }
+      try {
+        const saved = await getSavedMessage(id);
+        if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' });
+        if (!isAdmin && String(saved.username || '').normalize('NFC') !== String(username || '').normalize('NFC')) {
+          return typeof ack === 'function' && ack({ ok: false, reason: 'not-owner' });
+        }
+        const result = await deleteMessage(id, username, isAdmin);
+        if (result.ok) socket.server.emit('chat-message-deleted', { id, username, admin: isAdmin });
+        if (typeof ack === 'function') ack(result);
+      } catch (error) {
+        console.error('Firestore chat message delete failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
     });
 
     socket.on('load-more-chat-history', async (_payload, ack) => {
