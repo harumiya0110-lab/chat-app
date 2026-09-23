@@ -369,4 +369,27 @@ SocketIOServer.prototype.on = function(eventName, listener) {
 
 
 
+export async function clearAllMessages() {
+  if (!enabled) return { ok: false, reason: 'disabled', deleted: 0 };
+  let deleted = 0;
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({ pageSize: '300' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const result = await firestoreRequest('/messages?' + params.toString(), { method: 'GET' });
+    const documents = Array.isArray(result?.documents) ? result.documents : [];
+    for (const document of documents) {
+      const name = String(document?.name || '');
+      if (!name) continue;
+      const idPath = name.split('/documents/').pop();
+      if (!idPath) continue;
+      await firestoreRequest('/' + idPath.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE' });
+      deleted += 1;
+    }
+    pageToken = String(result?.nextPageToken || '');
+  } while (pageToken);
+  console.log(`[firebase] cleared all saved messages: ${deleted}`);
+  return { ok: true, deleted };
+}
+
 export const firebasePersistenceEnabled = enabled;
