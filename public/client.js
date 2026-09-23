@@ -129,7 +129,7 @@ function trimChatMessages() {
 }
 
 function addNormalMessageDeleteControl(item, data) {
-  if (data.locationData || data.username !== currentUsername || !data.id) return;
+  if (data.username !== currentUsername || !data.id) return;
 
   const actions = document.createElement('div');
   actions.className = 'message-actions';
@@ -138,15 +138,23 @@ function addNormalMessageDeleteControl(item, data) {
   deleteButton.type = 'button';
   deleteButton.className = 'chat-delete-btn';
   deleteButton.textContent = '🗑 削除';
-  deleteButton.title = '自分の投稿だけ削除できます';
+  deleteButton.title = data.locationData
+    ? '自分の地図情報付き投稿を削除します'
+    : '自分の投稿だけ削除できます';
 
   deleteButton.addEventListener('click', () => {
-    if (!window.confirm('この投稿を削除しますか？')) return;
+    if (!window.confirm(data.locationData
+      ? 'この地図情報付き投稿を削除しますか？地図のピンも削除されます。'
+      : 'この投稿を削除しますか？')) return;
 
     deleteButton.disabled = true;
     deleteButton.textContent = '削除中…';
 
-    socket.emit('delete-chat-message', { id: data.id }, result => {
+    // 地図情報付き投稿は、既存の地図ピン削除処理を使って
+    // チャット投稿と地図ピンを同時に削除します。
+    const deleteEvent = data.locationData ? 'delete-map-pin' : 'delete-chat-message';
+
+    socket.emit(deleteEvent, { id: data.id }, result => {
       if (!result?.ok) {
         deleteButton.disabled = false;
         deleteButton.textContent = '🗑 削除';
@@ -161,7 +169,12 @@ function addNormalMessageDeleteControl(item, data) {
       }
 
       removeRenderedMessage(item);
-      setStatus('自分の投稿を削除しました。');
+      const marker = ruralMarkerByMessageId.get(data.id);
+      if (marker && map?.hasLayer?.(marker)) map.removeLayer(marker);
+      ruralMarkerByMessageId.delete(data.id);
+      setStatus(data.locationData
+        ? '地図情報付き投稿と地図のピンを削除しました。'
+        : '自分の投稿を削除しました。');
       scrollToBottom();
     });
   });
@@ -169,7 +182,6 @@ function addNormalMessageDeleteControl(item, data) {
   actions.appendChild(deleteButton);
   item.appendChild(actions);
 }
-
 function addReportControl(item, data) {
   if (!data?.id || !data?.message || data.username === currentUsername || item.querySelector('.chat-report-btn')) return;
   const host = item.querySelector(':scope > .message-actions') || (() => { const el=document.createElement('div'); el.className='message-actions'; item.appendChild(el); return el; })();
