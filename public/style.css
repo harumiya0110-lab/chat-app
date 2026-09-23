@@ -1156,3 +1156,129 @@ body[data-rural-theme] .messages .message-bubble audio{
 .event-marker-area{
   display:none!important;
 }
+
+/* チャット上部ツールバーをchat-main全幅に配置し、PCのchat-right幅に依存させない */
+.chat-main{
+  display:grid!important;
+  grid-template-columns:190px minmax(0,1fr)!important;
+  grid-template-rows:auto minmax(0,1fr)!important;
+  height:650px!important;
+  min-height:0!important;
+}
+.chat-main > .users-panel{
+  grid-column:1!important;
+  grid-row:2!important;
+  min-width:0!important;
+  min-height:0!important;
+}
+.chat-main > .chat-toolbar{
+  grid-column:1 / -1!important;
+  grid-row:1!important;
+  width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  display:grid!important;
+  grid-template-columns:minmax(120px,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  margin:0!important;
+}
+.chat-main > .chat-toolbar .chat-search{
+  width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+}
+.chat-main > .chat-toolbar .chat-search input{
+  width:100%!important;
+  min-width:0!important;
+  flex:1 1 auto!important;
+  box-sizing:border-box!important;
+}
+.chat-main > .chat-toolbar .chat-toolbar-actions{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:nowrap!important;
+  gap:6px!important;
+  min-width:0!important;
+  max-width:100%!important;
+}
+.chat-main > .chat-toolbar .chat-toolbar-actions > .chat-tool-action{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  height:36px!important;
+  min-height:36px!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+}
+.chat-main > .chat-toolbar #notify-btn{width:80px!important;min-width:80px!important}
+.chat-main > .chat-toolbar #leaderboard-btn{width:40px!important;min-width:40px!important;padding:6px 8px!important}
+.chat-main > .chat-toolbar #unread-btn{width:74px!important;min-width:74px!important}
+.chat-main > .chat-toolbar .chat-toolbar-actions [title="ブロックしたユーザーを管理"]{width:40px!important;min-width:40px!important;padding:6px 8px!important}
+.chat-main > .chat-toolbar #unread-btn[hidden]{display:none!important}
+.chat-main > .chat-right{
+  grid-column:2!important;
+  grid-row:2!important;
+  min-width:0!important;
+  min-height:0!important;
+}
+@media(max-width:950px){
+  .chat-main{
+    grid-template-columns:1fr!important;
+    grid-template-rows:auto minmax(0,1fr)!important;
+    height:60vh!important;
+    min-height:520px!important;
+  }
+  .chat-main > .users-panel{display:none!important}
+  .chat-main > .chat-toolbar{
+    grid-column:1!important;
+    grid-row:1!important;
+  }
+  .chat-main > .chat-right{
+    grid-column:1!important;
+    grid-row:2!important;
+  }
+}
+@media(max-width:650px){
+  .chat-main > .chat-toolbar{
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    gap:6px!important;
+    padding:7px!important;
+  }
+  .chat-main > .chat-toolbar .chat-search{
+    grid-column:1!important;
+    grid-row:1!important;
+  }
+  .chat-main > .chat-toolbar .chat-toolbar-actions{
+    grid-column:1!important;
+    grid-row:2!important;
+    width:100%!important;
+    justify-content:flex-end!important;
+  }
+}
+@media(max-width:420px){
+  .chat-main > .chat-toolbar .chat-toolbar-actions{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    width:100%!important;
+    gap:5px!important;
+  }
+  .chat-main > .chat-toolbar .chat-toolbar-actions > .chat-tool-action,
+  .chat-main > .chat-toolbar #notify-btn,
+  .chat-main > .chat-toolbar #leaderboard-btn,
+  .chat-main > .chat-toolbar #unread-btn,
+  .chat-main > .chat-toolbar .chat-toolbar-actions [title="ブロックしたユーザーを管理"]{
+    width:100%!important;
+    min-width:0!important;
+  }
+}
