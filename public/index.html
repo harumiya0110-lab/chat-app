@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>チャットマップ</title>
+  <title>まちつなマップ｜地域の出来事をつなぐチャットマップ</title>
+  <meta name="theme-color" content="#2F6B4F">
+  <meta name="description" content="地域の出来事を話して、つないで、地図で共有するコミュニティアプリ「まちつなマップ」。">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/style.css?v=20260923-parent-reply-contrast-2">
   <style>
@@ -21,15 +23,16 @@
   </style>
 </head>
 <body class="pre-auth">
-  <header class="app-header"><div><h1>チャットマップ</h1><p>地域の出来事を話すだけで、チャットと地図に共有します。</p></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
+  <header class="app-header"><div class="brand"><img class="brand-logo" src="/logo.svg" width="44" height="44" alt="まちつなマップのロゴ"><div><div class="brand-kicker">MACHITSUNA MAP</div><h1>まちつなマップ</h1><p>地域の出来事を、話して・つないで・地図で共有。</p></div></div><div class="header-user"><span id="current-username">ゲスト</span><span id="online-count">0人</span></div></header>
   <main class="app-main">
     <section class="chat-panel">
       <div id="setup-panel" class="setup-panel">
         <div class="setup-hero">
-          <div class="setup-icon" aria-hidden="true">💬</div>
+          <img class="setup-logo" src="/logo.svg" width="72" height="72" alt="">
+          <span class="setup-brand-name">まちつなマップ</span>
           <span class="setup-eyebrow">地域のチャット</span>
-          <h2>地域のチャットに参加</h2>
-          <p class="setup-lead">地域のみんなで、出来事や情報を気軽に共有できます。</p>
+          <h2>地域のつながりに参加</h2>
+          <p class="setup-lead">地域のみんなで、出来事や情報を気軽に共有できます。全国どこでも使える地域コミュニティです。</p>
         </div>
         <div class="setup-form">
           <label for="username-input">ニックネーム</label>
