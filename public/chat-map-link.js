@@ -180,7 +180,7 @@
     marker.addTo = function(targetMap) {
       const result = previousAddTo(targetMap);
 
-      if (targetMap === map && !marker.__mapMarkerLimitTracked) {
+      if (targetMap === map && !marker.__ruralCluster && !marker.__mapMarkerLimitTracked) {
         marker.__mapMarkerLimitTracked = true;
         trackedMarkers.push(marker);
         pruneOldMarkers();
