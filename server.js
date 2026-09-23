@@ -292,6 +292,89 @@ async function analyzeMessage(text) {
   return normalizeAnalysis(extractJson(content));
 }
 
+const messageOwners = new Map();
+
+const mediaStore = new Map();
+const MEDIA_TTL_MS = 2 * 60 * 60 * 1000;
+const MAX_MEDIA_ITEMS = 250;
+const MAX_MEDIA_TOTAL_BYTES = 300 * 1024 * 1024;
+let trackedMediaBytes = 0;
+
+function decodeDataUrl(value) {
+  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/i.exec(String(value || ''));
+  if (!match) return null;
+  try {
+    return { mime: match[1].toLowerCase(), buffer: Buffer.from(match[2], 'base64') };
+  } catch {
+    return null;
+  }
+}
+
+function safeImageMime(value) {
+  return typeof value === 'string' && /^image\/(?:jpeg|png|webp)$/i.test(value) ? value.toLowerCase() : '';
+}
+
+function removeStoredMedia(id) {
+  const key = String(id || '').trim();
+  const entry = mediaStore.get(key);
+  if (!entry) return;
+  trackedMediaBytes = Math.max(0, trackedMediaBytes - Number(entry.bytes || 0));
+  mediaStore.delete(key);
+}
+
+function pruneMediaStore() {
+  const cutoff = Date.now() - MEDIA_TTL_MS;
+  for (const [mediaId, entry] of mediaStore.entries()) {
+    if (Number(entry.createdAt || 0) < cutoff) removeStoredMedia(mediaId);
+  }
+  while (mediaStore.size > MAX_MEDIA_ITEMS || trackedMediaBytes > MAX_MEDIA_TOTAL_BYTES) {
+    const oldestId = mediaStore.keys().next().value;
+    if (!oldestId) break;
+    removeStoredMedia(oldestId);
+  }
+}
+
+function storeMedia(entry) {
+  pruneMediaStore();
+  removeStoredMedia(entry.id);
+  const bytes = Number(entry.bytes || entry.buffer?.length || 0);
+  mediaStore.set(entry.id, { ...entry, bytes });
+  trackedMediaBytes += bytes;
+  pruneMediaStore();
+}
+
+function buildMediaMeta(entry) {
+  return {
+    id: entry.id,
+    type: entry.type,
+    filename: entry.filename || null,
+    mimeType: entry.mimeType,
+    mediaUrl: `/api/media/${encodeURIComponent(entry.id)}`,
+    thumbnailUrl: entry.thumbnailBytes?.length ? `/api/media/${encodeURIComponent(entry.id)}/thumbnail` : '',
+    size: Number(entry.bytes || 0),
+    durationSec: Number.isFinite(Number(entry.durationSec)) ? Number(entry.durationSec) : 0
+  };
+}
+
+app.get('/api/media/:id/thumbnail', (req, res) => {
+  pruneMediaStore();
+  const entry = mediaStore.get(String(req.params?.id || '').trim());
+  if (!entry || !entry.thumbnailBytes?.length) return res.status(404).json({ error: 'サムネイルが見つかりません。' });
+  res.setHeader('Content-Type', entry.thumbnailMime || 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(entry.thumbnailBytes);
+});
+
+app.get('/api/media/:id', (req, res) => {
+  pruneMediaStore();
+  const entry = mediaStore.get(String(req.params?.id || '').trim());
+  if (!entry?.buffer?.length) return res.status(404).json({ error: 'メディアが見つかりません。サーバー上の保存期間を過ぎた可能性があります。' });
+  res.setHeader('Content-Type', entry.mimeType);
+  res.setHeader('Content-Length', String(entry.buffer.length));
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(entry.buffer);
+});
+
 app.post('/api/messages', async (req, res) => {
   const { text, userId, replyToId, replyToUsername, replyToText } = req.body || {};
   if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
@@ -336,6 +419,7 @@ app.post('/api/messages', async (req, res) => {
       replyToUsername: cleanReplyToUsername,
       replyToText: cleanReplyToText
     };
+    messageOwners.set(message.id, { socketId: cleanUserId });
     io.emit('receive-message', {
       id: message.id,
       username: cleanUserId,
@@ -482,8 +566,10 @@ io.on('connection', socket => {
       matchedQuery: 'manual-map-selection'
     };
 
+    const locationMessageId = randomUUID();
+    messageOwners.set(locationMessageId, { socketId: socket.id });
     socket.server.emit('receive-message', {
-      id: randomUUID(),
+      id: locationMessageId,
       username: user.username,
       message,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
@@ -494,6 +580,99 @@ io.on('connection', socket => {
     });
 
     if (typeof ack === 'function') ack({ ok: true });
+  });
+
+
+  socket.on('attach-media', (data, ack) => {
+    const user = users[socket.id];
+    const messageId = typeof data?.messageId === 'string' ? data.messageId.trim() : '';
+    const type = data?.type === 'video' ? 'video' : data?.type === 'image' ? 'image' : '';
+    const owner = messageOwners.get(messageId);
+    if (!user || !messageId || !type) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid' });
+      return;
+    }
+    if (!owner || owner.socketId !== socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'not-owner' });
+      return;
+    }
+
+    const filename = typeof data?.filename === 'string' ? data.filename.trim().slice(0, 200) : '';
+    const durationSec = Math.max(0, Math.min(30, Number(data?.durationSec) || 0));
+    let buffer = null;
+    let mimeType = '';
+    let thumbnailBytes = null;
+    let thumbnailMime = 'image/jpeg';
+
+    if (type === 'image') {
+      const parsed = decodeDataUrl(data?.dataUrl);
+      mimeType = safeImageMime(parsed?.mime);
+      buffer = parsed?.buffer || null;
+      if (!buffer || !mimeType) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
+        return;
+      }
+      if (buffer.length > 2 * 1024 * 1024) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
+        return;
+      }
+    } else {
+      buffer = Buffer.isBuffer(data?.video)
+        ? data.video
+        : data?.video instanceof ArrayBuffer
+          ? Buffer.from(new Uint8Array(data.video))
+          : ArrayBuffer.isView(data?.video)
+            ? Buffer.from(data.video.buffer, data.video.byteOffset, data.video.byteLength)
+            : null;
+      mimeType = safeVideoMime(data?.videoType);
+      if (!buffer || !mimeType) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-format' });
+        return;
+      }
+      if (buffer.length > 15 * 1024 * 1024) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'too-large' });
+        return;
+      }
+      if (durationSec > 30) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'too-long' });
+        return;
+      }
+    }
+
+    const thumb = decodeDataUrl(data?.thumbnailDataUrl);
+    if (thumb?.buffer?.length) {
+      if (!/^image\/(?:jpeg|png|webp)$/i.test(thumb.mime)) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-thumbnail' });
+        return;
+      }
+      if (thumb.buffer.length > 300 * 1024) {
+        if (typeof ack === 'function') ack({ ok: false, reason: 'thumbnail-too-large' });
+        return;
+      }
+      thumbnailBytes = thumb.buffer;
+      thumbnailMime = thumb.mime.toLowerCase();
+    }
+
+    const mediaId = `media-${randomUUID()}`;
+    storeMedia({
+      id: mediaId,
+      messageId,
+      ownerId: socket.id,
+      ownerUsername: user.username,
+      type,
+      filename,
+      mimeType,
+      buffer,
+      thumbnailBytes,
+      thumbnailMime,
+      durationSec,
+      createdAt: Date.now(),
+      bytes: buffer.length
+    });
+
+    const media = buildMediaMeta(mediaStore.get(mediaId));
+    socket.server.emit('message-media-attached', { messageId, media });
+    if (typeof ack === 'function') ack({ ok: true, messageId, media });
   });
 
   socket.on('send-image', (data, ack) => {
@@ -553,8 +732,10 @@ io.on('connection', socket => {
     const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
     const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
     const replyToText = typeof data?.replyToText === 'string' ? data.replyToText.trim().slice(0, 200) : '';
+    const normalMessageId = randomUUID();
+    messageOwners.set(normalMessageId, { socketId: socket.id });
     io.emit('receive-message', {
-      id: randomUUID(),
+      id: normalMessageId,
       username: user.username,
       message,
       timestamp: new Date().toLocaleTimeString('ja-JP'),
