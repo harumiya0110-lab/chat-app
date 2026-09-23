@@ -9,11 +9,46 @@
   pointsEl.textContent = '⭐ 地域ポイント 0pt';
   headerUser.insertBefore(pointsEl, onlineCount);
 
-  function setPoints(points) {
+  const POINTS_CACHE_KEY = 'rural-regional-points:';
+
+  function getPointsCacheKey(username = '') {
+    const clean = String(username || '').trim();
+    return clean ? POINTS_CACHE_KEY + encodeURIComponent(clean) : '';
+  }
+
+  function readCachedPoints(username = '') {
+    const key = getPointsCacheKey(username);
+    if (!key) return null;
+    try {
+      const value = Number.parseInt(localStorage.getItem(key) || '', 10);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function cachePoints(username, points) {
+    const key = getPointsCacheKey(username);
+    if (!key) return;
+    try {
+      localStorage.setItem(key, String(points));
+    } catch {}
+  }
+
+  function setPoints(points, username = currentUsername) {
     const value = Number.isFinite(Number(points)) ? Math.max(0, Math.floor(Number(points))) : 0;
     pointsEl.textContent = `⭐ 地域ポイント ${value}pt`;
     pointsEl.title = '毎日ログイン+3pt、チャット利用+1pt、地図付き投稿+5pt、助け合い確認+20pt';
+    if (username) cachePoints(username, value);
   }
+
+  // 再ログイン直後でも、サーバーから最新残高が届くまで
+  // 前回の残高を表示して、一瞬0ptに戻るのを防ぎます。
+  socket.on('username-accepted', data => {
+    const username = String(data?.username || '').trim();
+    const cached = readCachedPoints(username);
+    if (username && cached !== null) setPoints(cached, username);
+  });
 
   socket.on('region-points-updated', data => {
     if (!data || data.username !== currentUsername) return;
