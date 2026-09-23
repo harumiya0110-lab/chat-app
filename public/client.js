@@ -214,6 +214,9 @@ function buildMessageElement(data) {
   item.dataset.username = typeof data.username === 'string' ? data.username : '';
   item.dataset.userId = typeof data.userId === 'string' ? data.userId : '';
   item.dataset.location = data.locationData && !replyToId ? '1' : '0';
+  item.dataset.eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : '';
+  item.dataset.helpUsers = JSON.stringify(Array.isArray(data.helpUsers) ? data.helpUsers : []);
+  item.dataset.helpConfirmedUsers = JSON.stringify(Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : []);
   item.dataset.status = data.status === 'resolved' ? 'resolved' : 'open';
   item.dataset.reactions = JSON.stringify(data.reactions || { like: [], helpful: [], thanks: [] });
   item.dataset.messageText = String(data.message || data.text || '').slice(0, 2000);
@@ -996,6 +999,7 @@ function addMarker(message) {
   marker.__messageId = messageId;
   marker.on('click', async () => {
     marker.setPopupContent(`${popup}<br><span>📍 県・市を確認しています…</span>`);
+    window.ruralRefreshMapPopupActions?.(marker);
     const location = await fetchMarkerArea({ lat, lng });
     if (location?.error) {
       marker.setPopupContent(`${popup}<br><strong>📍 ${escapeHtml(location.error)}</strong>`);
@@ -1009,6 +1013,7 @@ function addMarker(message) {
           : `${popup}<br><strong>📍 都道府県・市区町村を特定できませんでした。</strong>`
       );
     }
+    window.ruralRefreshMapPopupActions?.(marker);
     void showMarkerAreaInChat(marker);
     window.dispatchEvent(new CustomEvent('rural-map-marker-clicked', { detail: { marker, messageId } }));
   });
