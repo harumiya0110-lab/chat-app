@@ -871,47 +871,124 @@
   }
 
   function removeClusters() {
-    for (const cluster of clusters) {
-      if (map?.hasLayer(cluster)) map.removeLayer(cluster);
-    }
+    clusters.forEach(cluster => {
+      try {
+        if (map?.hasLayer?.(cluster)) map.removeLayer(cluster);
+      } catch {}
+    });
     clusters = [];
   }
 
+  function makeClusterIcon(count) {
+    if (typeof L === 'undefined' || typeof L.divIcon !== 'function') return null;
+    const size = count >= 100 ? 54 : count >= 10 ? 48 : 42;
+    return L.divIcon({
+      className: 'rural-marker-cluster-icon',
+      html: `<div class="rural-cluster-number" style="width:${size}px;height:${size}px">${count}</div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2]
+    });
+  }
+
   function refreshClusters() {
-    if (typeof map === 'undefined') return;
+    if (!map || typeof map.getZoom !== 'function') return;
+
     removeClusters();
+
     const markers = [...(window.ruralMarkerByMessageId?.values?.() || [])];
-    const unique = [...new Set(markers)].filter(marker => marker && marker.__messageId);
+    const unique = [...new Set(markers)].filter(marker =>
+      marker && marker.__messageId && typeof marker.getLatLng === 'function'
+    );
+
     const activeFilter = document.querySelector('.map-filter.active')?.dataset.filter || 'all';
 
-    unique.forEach(marker => {
-      if (!marker) return;
-      marker.__ruralClusterManaged = true;
+    // 表示対象だけを一度復元します。
+    for (const marker of unique) {
+      marker.__ruralClusterHidden = false;
       const allowed = activeFilter === 'all' || marker.__eventType === activeFilter;
-      if (allowed) map.addLayer(marker);
-      else if (map.hasLayer(marker)) map.removeLayer(marker);
-    });
+      if (allowed) {
+        if (!map.hasLayer(marker)) map.addLayer(marker);
+      } else if (map.hasLayer(marker)) {
+        map.removeLayer(marker);
+      }
+    }
 
-    if (map.getZoom() >= 12) return;
-    const cellSize = map.getZoom() <= 9 ? 0.12 : 0.045;
+    // 十分に拡大したら、各ピンをそのまま表示します。
+    const zoom = map.getZoom();
+    const CLUSTER_DISABLE_ZOOM = 15;
+    if (zoom >= CLUSTER_DISABLE_ZOOM) return;
+
+    // 緯度経度の固定セルではなく画面上のピクセル距離でまとめるため、
+    // 地域やズームレベルが変わっても「見た目の密集度」に応じてクラスタリングします。
+    const GRID_SIZE = zoom <= 9 ? 90 : zoom <= 12 ? 72 : 58;
     const groups = new Map();
+
     for (const marker of unique) {
       if (!map.hasLayer(marker)) continue;
-      const p = marker.getLatLng?.();
-      if (!p) continue;
-      const key = `${Math.floor(p.lat/cellSize)}:${Math.floor(p.lng/cellSize)}`;
+      const point = marker.getLatLng();
+      if (!point) continue;
+
+      const screen = map.latLngToLayerPoint(point);
+      const cellX = Math.floor(screen.x / GRID_SIZE);
+      const cellY = Math.floor(screen.y / GRID_SIZE);
+      const key = `${cellX}:${cellY}`;
+
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(marker);
     }
 
     for (const members of groups.values()) {
       if (members.length < 2) continue;
-      const avg = members.reduce((acc,m)=>{const p=m.getLatLng();acc.lat+=p.lat;acc.lng+=p.lng;return acc;},{lat:0,lng:0});
-      avg.lat/=members.length; avg.lng/=members.length;
-      members.forEach(marker => { marker.__ruralClusterHidden = true; if (map.hasLayer(marker)) map.removeLayer(marker); });
-      const cluster=L.circleMarker([avg.lat,avg.lng],{radius:19,color:getComputedStyle(document.body).getPropertyValue('--theme-main').trim()||'#2f7d4a',weight:3,fillColor:getComputedStyle(document.body).getPropertyValue('--theme-main').trim()||'#2f7d4a',fillOpacity:.95});
-      cluster.bindTooltip(String(members.length),{permanent:true,direction:'center',className:'pin-cluster-label',offset:[0,0]});
-      cluster.on('click',()=>map.fitBounds(L.latLngBounds(members.map(m=>m.getLatLng())),{padding:[35,35],maxZoom:15}));
+
+      const latLngs = members.map(marker => marker.getLatLng()).filter(Boolean);
+      if (latLngs.length < 2) continue;
+
+      members.forEach(marker => {
+        marker.__ruralClusterHidden = true;
+        if (map.hasLayer(marker)) map.removeLayer(marker);
+      });
+
+      const bounds = L.latLngBounds(latLngs);
+      const center = bounds.getCenter();
+      const icon = makeClusterIcon(members.length);
+
+      const cluster = icon
+        ? L.marker(center, {
+            icon,
+            keyboard: true,
+            title: `${members.length}件の投稿`
+          })
+        : L.circleMarker(center, {
+            radius: 20,
+            weight: 3,
+            fillOpacity: 0.95
+          });
+
+      cluster.__ruralClusterMembers = members;
+      cluster.bindTooltip(`${members.length}件の投稿`, {
+        direction: 'top',
+        offset: [0, -18],
+        opacity: 0.95
+      });
+
+      cluster.on('click', () => {
+        const currentZoom = map.getZoom();
+        const targetZoom = Math.min(
+          16,
+          Math.max(currentZoom + 2, map.getBoundsZoom(bounds, false, L.point(40, 40)))
+        );
+
+        if (members.length === 2) {
+          map.setView(center, Math.min(17, targetZoom), { animate: true });
+        } else {
+          map.fitBounds(bounds, {
+            padding: [45, 45],
+            maxZoom: 16,
+            animate: true
+          });
+        }
+      });
+
       cluster.addTo(map);
       clusters.push(cluster);
     }
