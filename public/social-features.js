@@ -4,8 +4,6 @@
 
   const $ = id => document.getElementById(id);
   const messagesEl = $('messages');
-  const searchInput = $('message-search');
-  const clearSearchBtn = $('clear-search');
   const notifyBtn = $('notify-btn');
   const leaderboardBtn = $('leaderboard-btn');
   const unreadBtn = $('unread-btn');
@@ -26,7 +24,6 @@
   ];
   const BLOCKED_KEY = 'rural-blocked-users-v1';
   let unreadCount = 0;
-  let searchQuery = '';
   let loadMoreBusy = false;
   let hasMoreHistory = false;
   let clusters = [];
@@ -42,10 +39,6 @@
     style.id = 'rural-social-features-style';
     style.textContent = `
       .chat-toolbar{padding:9px 10px;border-bottom:1px solid var(--chat-border,#e3e9e0);background:var(--chat-panel-soft,#f8faf7)}
-      .chat-search{min-width:0;flex:1;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--chat-input,#bdcbbd);border-radius:9px;background:var(--chat-input-bg,#fff);color:var(--chat-text-soft,#68796e)}
-      .chat-search input{min-width:0;flex:1;border:0;outline:0;padding:8px 2px;background:transparent;color:var(--chat-input-text,#21342c);font:inherit;font-size:12px}
-      .chat-search input::placeholder{color:var(--chat-placeholder,#8c9891)}
-      .chat-search button{border:0;background:transparent;color:var(--chat-text-soft,#68796e);font-size:18px;cursor:pointer;padding:2px 4px}
       .chat-toolbar-actions{display:flex;gap:6px;align-items:center}
       .chat-tool-action{border:1px solid var(--chat-input,#bdcbbd);border-radius:8px;padding:8px 9px;background:var(--chat-input-bg,#fff);color:var(--chat-text,#294237);cursor:pointer;font:inherit;font-size:11px;font-weight:700;white-space:nowrap}
       .chat-tool-action:hover{background:var(--chat-surface,#eef4ec)}
@@ -323,25 +316,8 @@
   }
 
   function applySearch() {
-    searchQuery = String(searchInput?.value || '').trim().toLowerCase();
-    if (clearSearchBtn) clearSearchBtn.hidden = !searchQuery;
-    let shown = 0;
-    messagesEl.querySelectorAll('.message').forEach(item => {
-      const source = [
-        item.dataset.username,
-        item.dataset.messageText,
-        item.textContent
-      ].join(' ').toLowerCase();
-      const matched = !searchQuery || source.includes(searchQuery);
-      const blocked = item.classList.contains('rural-blocked');
-      item.hidden = blocked || !matched;
-      if (matched && !blocked) shown += 1;
-    });
-    if (searchQuery) {
-      setStatusText(`検索結果：${shown}件（読み込み済みの投稿から検索しています）`);
-    } else if (hasMoreHistory) {
-      setStatusText('過去の投稿も読み込めます。');
-    }
+    filterBlockedMessages();
+    if (hasMoreHistory) setStatusText('過去の投稿も読み込めます。');
   }
 
   function setReplyTarget(item) {
@@ -558,7 +534,7 @@
     }
 
     const item = event.target.closest('.message');
-    if (!item || item.hidden || item.classList.contains('rural-blocked') || searchQuery) return;
+    if (!item || item.hidden || item.classList.contains('rural-blocked')) return;
     if (item.dataset.location === '1') {
       focusMapForMessage(item.dataset.messageId);
     }
@@ -682,8 +658,6 @@
   setupMobileTabs();
   notifyStatus();
 
-  searchInput?.addEventListener('input', applySearch);
-  clearSearchBtn?.addEventListener('click',()=>{searchInput.value='';applySearch();searchInput.focus();});
   unreadBtn?.addEventListener('click',()=>{resetUnread();messagesEl.scrollTo({top:messagesEl.scrollHeight,behavior:'smooth'});});
   messagesEl.addEventListener('scroll',()=>{if(isNearBottom()) resetUnread();});
   messagesEl.addEventListener('click',handleMessageAction);
@@ -711,7 +685,7 @@
     if(loadMoreBtn) loadMoreBtn.hidden=!hasMoreHistory;
   });
   socket.on('chat-history',()=>window.setTimeout(enhanceAllMessages,0));
-  socket.on('chat-history-end',()=>{enhanceAllMessages();if(searchQuery)applySearch();scheduleClusterRefresh();});
+  socket.on('chat-history-end',()=>{enhanceAllMessages();scheduleClusterRefresh();});
   socket.on('receive-message',data=>{
     window.setTimeout(enhanceAllMessages,0);
     markUnread(data);
