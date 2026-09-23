@@ -72,6 +72,9 @@
       .message.reply-message .message-actions{margin-top:4px;gap:3px}
       .message.reply-message .message-action-btn{font-size:9px;padding:3px 6px}
       .message-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px}
+      .map-post-reactions{margin-top:8px;padding-top:7px;border-top:1px solid var(--theme-border-soft,#dce6db)}
+      .map-post-reactions-title{margin-bottom:5px;color:var(--theme-text-soft,#64746b);font-size:10px;font-weight:800}
+      .map-post-reactions-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
       .message-action-btn{border:1px solid var(--chat-input,#c3cec1);border-radius:999px;padding:4px 7px;background:var(--chat-input-bg,#fff);color:var(--chat-text,#30483b);font:inherit;font-size:10px;cursor:pointer}
       .message-action-btn:hover{background:var(--chat-surface,#edf3eb)}
       .message-action-btn:disabled{opacity:.55;cursor:wait}
@@ -108,6 +111,7 @@
         .chat-tool-action:first-child:after{content:'🔔';font-size:14px}
         .chat-toolbar-actions{gap:4px}
         .message-action-btn{font-size:10px;padding:5px 7px}
+        .map-post-reactions-row{gap:4px}
       }
       @media(min-width:951px){.mobile-view-tabs{display:none!important}}
       @media(max-width:950px){
@@ -179,22 +183,62 @@
     } catch { return { like: [], helpful: [], thanks: [] }; }
   }
 
+  function ensureMapPostReactionControls(item) {
+    if (!item || item.dataset.location !== '1') return null;
+
+    let host = item.querySelector(':scope > .map-post-reactions');
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'map-post-reactions';
+      const bubble = item.querySelector(':scope > .message-bubble');
+      if (bubble) bubble.insertAdjacentElement('afterend', host);
+      else item.appendChild(host);
+    }
+    return host;
+  }
+
+  function getReactionRenderHost(item) {
+    if (!item) return null;
+    if (item.dataset.location === '1') return ensureMapPostReactionControls(item);
+    return item.querySelector(':scope > .message-actions');
+  }
+
   function renderReactionControls(item) {
-    const actions = item.querySelector('.message-actions');
-    if (!actions) return;
-    actions.querySelectorAll('[data-reaction]').forEach(button => {
+    const host = getReactionRenderHost(item);
+    if (!host) return;
+
+    if (item.dataset.location === '1') {
+      host.replaceChildren();
+      const label = document.createElement('div');
+      label.className = 'map-post-reactions-title';
+      label.textContent = 'この投稿への意思表示';
+      host.appendChild(label);
+
+      const row = document.createElement('div');
+      row.className = 'map-post-reactions-row';
+      host.appendChild(row);
+
+      for (const info of REACTION_TYPES) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action-btn';
+        button.dataset.reaction = info.key;
+        row.appendChild(button);
+      }
+    }
+
+    host.querySelectorAll('[data-reaction]').forEach(button => {
       const type = button.dataset.reaction;
       const reactions = getReactions(item);
       const users = reactions[type] || [];
       const me = typeof currentUsername === 'string' ? currentUsername : '';
       const active = me && users.includes(me);
       const info = REACTION_TYPES.find(r => r.key === type);
-      button.textContent = `${info?.label || ''} ${users.length || ''}`.trim();
-      button.title = `${info?.title || ''}（${users.length}人）`;
+      button.textContent = String(info?.label || '') + (users.length ? ' ' + users.length : '');
+      button.title = String(info?.title || '') + '（' + users.length + '人）';
       button.classList.toggle('active', Boolean(active));
     });
   }
-
   function ensureMessageActions(item) {
     if (!item || !item.dataset.messageId || item.dataset.messageId === '') return;
     const id = String(item.dataset.messageId || '').trim();
@@ -220,17 +264,20 @@
       actions.insertBefore(replyBtn, actions.querySelector('.message-actions-spacer') || null);
     }
 
-    for (const info of REACTION_TYPES) {
-      if (actions.querySelector(`[data-reaction="${info.key}"]`)) continue;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'message-action-btn';
-      button.dataset.reaction = info.key;
-      const spacer = actions.querySelector('.message-actions-spacer');
-      if (spacer) actions.insertBefore(button, spacer);
-      else actions.appendChild(button);
+    if (item.dataset.location === '1') {
+      ensureMapPostReactionControls(item);
+    } else {
+      for (const info of REACTION_TYPES) {
+        if (actions.querySelector(`[data-reaction="${info.key}"]`)) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action-btn';
+        button.dataset.reaction = info.key;
+        const spacer = actions.querySelector('.message-actions-spacer');
+        if (spacer) actions.insertBefore(button, spacer);
+        else actions.appendChild(button);
+      }
     }
-
     let spacer = actions.querySelector('.message-actions-spacer');
     if (!spacer) {
       spacer = document.createElement('span');
@@ -267,6 +314,7 @@
       }
     }
 
+    if (item.dataset.location === '1') ensureMapPostReactionControls(item);
     renderReactionControls(item);
     updateResolveButton(item);
     if (isBlocked(username)) item.classList.add('rural-blocked');
