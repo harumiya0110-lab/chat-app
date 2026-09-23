@@ -1391,3 +1391,21 @@ body[data-rural-theme] .messages .message-bubble audio{
 @media (max-width:650px){
   .mobile-view-tabs{display:none!important;}
 }
+
+
+/* ハル管理画面：通報から対象投稿へ移動しやすくし、全チャット削除を明確に表示します。 */
+.admin-reports-header-actions{display:flex;align-items:center;gap:8px}
+.admin-clear-all-btn{border:1px solid #d8a1a1;border-radius:8px;background:#fff5f5;color:#a52d2d;padding:7px 10px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.admin-clear-all-btn:hover:not(:disabled){background:#fde6e6}
+.admin-clear-all-btn:disabled{opacity:.6;cursor:wait}
+.admin-report-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.admin-report-top>div{min-width:0}
+.admin-report-move-btn{flex:0 0 auto;border:1px solid var(--theme-border,#cbd7c8);border-radius:8px;background:var(--theme-main-soft,#edf3eb);color:var(--theme-text,#294237);padding:6px 9px;font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+.admin-report-move-btn:hover:not(:disabled){background:var(--theme-main-pale,#f3f7f1)}
+.admin-report-move-btn:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:650px){
+  .admin-reports-header-actions{gap:5px}
+  .admin-clear-all-btn{font-size:10px;padding:6px 7px}
+  .admin-report-top{align-items:flex-start}
+  .admin-report-move-btn{padding:6px 7px;font-size:9px}
+}
