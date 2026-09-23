@@ -765,3 +765,74 @@
   font-size:12px!important;
   line-height:1.15!important;
 }
+
+/* チャット内レイアウトを安定化：長文・返信・操作ボタンが横にはみ出さないよう調整 */
+.messages .message{
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+.messages .message-header{
+  min-width:0!important;
+}
+.messages .message-header span{
+  min-width:0!important;
+  max-width:50%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.messages .message-bubble{
+  min-width:0!important;
+  max-width:100%!important;
+  overflow-wrap:anywhere!important;
+  word-break:break-word!important;
+}
+.messages .message-actions{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  gap:6px!important;
+  overflow:visible!important;
+}
+.messages .message-actions .message-action-btn,
+.messages .message-actions .chat-delete-btn{
+  box-sizing:border-box!important;
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+.messages .message-actions-spacer{
+  flex:1 1 12px!important;
+  min-width:12px!important;
+}
+.messages .message-replies{
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+.messages .message-replies-list{
+  min-width:0!important;
+  max-width:100%!important;
+}
+.messages .message.reply-message{
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+@media(max-width:650px){
+  .messages .message-actions{
+    gap:5px!important;
+  }
+  .messages .message-actions-spacer{
+    display:none!important;
+  }
+  .messages .message:not(.reply-message) .message-actions .message-action-btn{
+    min-height:30px!important;
+    padding:5px 8px!important;
+    font-size:11px!important;
+  }
+}
