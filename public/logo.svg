@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">まちつなマップ</title>
+  <desc id="desc">地域のつながりを表す地図ピンと会話マークのアイコン</desc>
+  <rect width="64" height="64" rx="16" fill="#F7F3E8"/>
+  <path d="M32 8C20.954 8 12 16.954 12 28c0 13.8 13.7 26.1 18.4 29.7a2.5 2.5 0 0 0 3.2 0C38.3 54.1 52 41.8 52 28 52 16.954 43.046 8 32 8Z" fill="#2F6B4F"/>
+  <circle cx="32" cy="27" r="10" fill="#FFFDF8"/>
+  <path d="M25 25.5c0-3.59 3.13-6.5 7-6.5s7 2.91 7 6.5-3.13 6.5-7 6.5c-1.17 0-2.27-.26-3.23-.72L25 33v-3.92a6.1 6.1 0 0 1-0-3.58Z" fill="#E58A3A"/>
+  <circle cx="29" cy="25.6" r="1.15" fill="#FFFDF8"/>
+  <circle cx="32" cy="25.6" r="1.15" fill="#FFFDF8"/>
+  <circle cx="35" cy="25.6" r="1.15" fill="#FFFDF8"/>
+</svg>
