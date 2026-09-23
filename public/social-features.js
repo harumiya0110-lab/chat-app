@@ -320,6 +320,8 @@
     if (isBlocked(username)) item.classList.add('rural-blocked');
   }
 
+  window.ruralEnhanceMessage = ensureMessageActions;
+
   function updateResolveButton(item) {
     const button = item.querySelector('[data-action="resolve"]');
     if (!button) return;
