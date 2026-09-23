@@ -612,7 +612,7 @@ io.on('connection', socket => {
   });
 
 
-  socket.on('attach-media', (data, ack) => {
+  socket.on('attach-media', async (data, ack) => {
     const user = users[socket.id];
     const messageId = typeof data?.messageId === 'string' ? data.messageId.trim() : '';
     const type = data?.type === 'video' ? 'video' : data?.type === 'image' ? 'image' : '';
