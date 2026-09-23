@@ -6,7 +6,7 @@
 
   let modal = null;
   let loading = false;
-  const HISTORY_CACHE_KEY_PREFIX = 'rural-points-history-v2:';
+  const HISTORY_CACHE_KEY_PREFIX = 'rural-points-history-v3:';
   const HISTORY_CACHE_TTL = 5 * 60 * 1000;
 
   function getCurrentUsername() {
@@ -158,8 +158,11 @@
       }
 
       const history = Array.isArray(result.history) ? result.history : [];
-      writeCachedHistory(history, displayedPoints);
-      renderHistory(history, displayedPoints);
+      const currentPoints = Number.isFinite(Number(result.points))
+        ? Math.max(0, Math.floor(Number(result.points)))
+        : displayedPoints;
+      writeCachedHistory(history, currentPoints);
+      renderHistory(history, currentPoints);
     });
   }
 
