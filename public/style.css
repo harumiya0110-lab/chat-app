@@ -1282,3 +1282,51 @@ body[data-rural-theme] .messages .message-bubble audio{
     min-width:0!important;
   }
 }
+/* チャット内操作バー：投稿一覧の真上に固定 */
+.chat-right > .chat-toolbar{
+  flex:0 0 auto!important;
+  width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  padding:9px 10px!important;
+  margin:0!important;
+  border-bottom:1px solid var(--chat-border,#e3e9e0)!important;
+  background:var(--chat-panel-soft,#f8faf7)!important;
+}
+.chat-right > .chat-toolbar .chat-toolbar-actions{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:nowrap!important;
+  gap:6px!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:100%!important;
+}
+.chat-right > .chat-toolbar .chat-tool-action{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  height:36px!important;
+  min-height:36px!important;
+  margin:0!important;
+  padding:7px 10px!important;
+  box-sizing:border-box!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+}
+.chat-right > .chat-toolbar #notify-btn{width:80px!important;min-width:80px!important}
+.chat-right > .chat-toolbar #leaderboard-btn{width:40px!important;min-width:40px!important;padding:7px 8px!important}
+.chat-right > .chat-toolbar #unread-btn{width:74px!important;min-width:74px!important}
+.chat-right > .chat-toolbar .chat-toolbar-actions [title="ブロックしたユーザーを管理"]{width:40px!important;min-width:40px!important;padding:7px 8px!important}
+@media(max-width:650px){
+  .chat-right > .chat-toolbar{padding:7px!important}
+  .chat-right > .chat-toolbar .chat-toolbar-actions{gap:5px!important;flex-wrap:wrap!important}
+  .chat-right > .chat-toolbar .chat-tool-action{height:34px!important;min-height:34px!important;padding:6px 9px!important}
+}
