@@ -91,7 +91,13 @@ async function addHistory(username, points, messageId, reason = 'help-confirmed'
       body: JSON.stringify({
         fields: {
           points: firestoreValue(Math.floor(Number(points))),
-          reason: firestoreValue(reason === 'help-confirmed' ? '🤝 助け合いに参加' : '地域活動への協力'),
+          reason: firestoreValue(
+            reason === 'help-confirmed' ? '🤝 実際の助け合い' :
+            reason === 'daily-login' ? '📅 毎日のログイン' :
+            reason === 'chat-use' ? '💬 チャット利用' :
+            reason === 'map-post' ? '📍 地域情報の投稿' :
+            '地域活動への協力'
+          ),
           messageId: firestoreValue(messageId || ''),
           createdAt: firestoreValue(new Date().toISOString())
         }
