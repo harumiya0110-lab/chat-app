@@ -333,7 +333,16 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       const targetUsername = typeof payload.targetUsername === 'string' ? payload.targetUsername.trim().slice(0, 50) : '';
       if (!reporter || !id || !reason || !message) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
       try {
-        const report = await saveReport({ id: crypto.randomUUID(), messageId: id, reason, message, targetUsername, reporterUsername: reporter, createdAt: new Date().toISOString() });
+        // クライアント側だけでなくサーバー側でも自分の投稿への通報を禁止します。
+        const saved = await getSavedMessage(id);
+        if (!saved) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' });
+        const savedUsername = String(saved.username || '').trim().normalize('NFC');
+        const reporterUsername = String(reporter || '').trim().normalize('NFC');
+        if (savedUsername && savedUsername === reporterUsername) {
+          return typeof ack === 'function' && ack({ ok: false, reason: 'own-post' });
+        }
+
+        const report = await saveReport({ id: crypto.randomUUID(), messageId: id, reason, message, targetUsername: String(saved.username || targetUsername).slice(0, 50), reporterUsername: reporter, createdAt: new Date().toISOString() });
         if (report) for (const [socketId, admin] of adminBySocketId.entries()) if (admin) io.to(socketId).emit('chat-report-created', report);
         if (typeof ack === 'function') ack({ ok: true });
       } catch (error) {
