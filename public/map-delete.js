@@ -57,7 +57,7 @@
   }
 
   function renderEventVisitStatus(actions, marker) {
-    const isOwner = String(marker.__deleteOwnerUserId || '') === String(socket?.id || '');
+    const isOwner = String(marker.__deleteOwnerName || '').normalize('NFC') === String(currentUsername || '').trim().normalize('NFC');
     const interested = isEventInterested(marker);
 
     actions.innerHTML = '';
@@ -293,7 +293,8 @@
 
       renderHelpStatus(actions, marker);
 
-      if (String(marker.__deleteOwnerUserId || '') !== String(socket?.id || '')) return;
+      // ゲストは再ログインするとSocket IDが変わるため、所有者判定はニックネームで行います。
+      if (String(marker.__deleteOwnerName || '').normalize('NFC') !== String(currentUsername || '').trim().normalize('NFC')) return;
       if (!marker.__deleteMessageId) return;
 
       const button = document.createElement('button');
