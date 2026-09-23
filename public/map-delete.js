@@ -2,6 +2,11 @@
   const ownerMarkers = new Set();
   let markerCounter = 0;
   const EVENT_INTEREST_STORAGE_KEY = 'rural-event-interest:';
+  const MAP_REACTION_TYPES = [
+    { key: 'like', label: '👍', title: 'いいね' },
+    { key: 'thanks', label: '🙏', title: 'ありがとう' },
+    { key: 'helpful', label: '👌', title: 'グッド' }
+  ];
 
   function sameLocation(a, b) {
     if (!a || !b) return false;
@@ -273,63 +278,150 @@
     actions.appendChild(block);
   }
 
+  function normalizeMapReactions(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const clean = key => Array.isArray(source[key])
+      ? [...new Set(source[key].filter(name => typeof name === 'string' && name.trim()).map(name => name.trim().slice(0, 50)))].slice(0, 100)
+      : [];
+    return { like: clean('like'), thanks: clean('thanks'), helpful: clean('helpful') };
+  }
+
+  function renderMapReactionControls(host, marker) {
+    if (!host || !marker) return;
+    host.replaceChildren();
+
+    const block = document.createElement('div');
+    block.className = 'map-reaction-block';
+
+    const title = document.createElement('div');
+    title.className = 'map-reaction-title';
+    title.textContent = 'この投稿への意思表示';
+    block.appendChild(title);
+
+    const row = document.createElement('div');
+    row.className = 'map-reaction-row';
+    const reactions = normalizeMapReactions(marker.__reactions);
+    const me = String(currentUsername || '').trim();
+
+    MAP_REACTION_TYPES.forEach(info => {
+      const users = reactions[info.key] || [];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'map-reaction-btn';
+      button.dataset.mapReaction = info.key;
+      button.title = info.title + '（' + users.length + '人）';
+      button.textContent = info.label + (users.length ? ' ' + users.length : '');
+      button.classList.toggle('active', Boolean(me && users.includes(me)));
+
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!me || !marker.__deleteMessageId || typeof socket === 'undefined' || !socket.connected) {
+          if (typeof setStatus === 'function') setStatus('チャットに参加してから意思表示してください。');
+          return;
+        }
+
+        button.disabled = true;
+        socket.timeout(10000).emit('toggle-reaction', {
+          id: marker.__deleteMessageId,
+          reaction: info.key
+        }, (error, result) => {
+          button.disabled = false;
+          if (error || !result?.ok) {
+            if (typeof setStatus === 'function') setStatus('意思表示の更新に失敗しました。');
+            return;
+          }
+          marker.__reactions = normalizeMapReactions(result.reactions);
+          refreshPopupActions(marker);
+        });
+      });
+
+      row.appendChild(button);
+    });
+
+    block.appendChild(row);
+    host.appendChild(block);
+  }
+
+  function ensurePopupActionHost(marker) {
+    const popup = marker?.getPopup?.();
+    if (!popup) return null;
+    const popupElement = popup.getElement?.();
+    let actions = popupElement?.querySelector?.('.map-pin-actions');
+    if (actions) return actions;
+
+    const currentContent = String(popup.getContent?.() || '');
+    popup.setContent(currentContent + '<div class="map-pin-actions"></div>');
+    return popup.getElement?.()?.querySelector?.('.map-pin-actions') || null;
+  }
+
+  function refreshPopupActions(marker) {
+    const actions = ensurePopupActionHost(marker);
+    if (!actions) return;
+    actions.replaceChildren();
+
+    const reactionHost = document.createElement('div');
+    reactionHost.className = 'map-reaction-host';
+    actions.appendChild(reactionHost);
+    renderMapReactionControls(reactionHost, marker);
+
+    const helpHost = document.createElement('div');
+    helpHost.className = 'map-help-host';
+    actions.appendChild(helpHost);
+    renderHelpStatus(helpHost, marker);
+
+    if (String(marker.__deleteOwnerName || '').normalize('NFC') !== String(currentUsername || '').trim().normalize('NFC')) return;
+    if (!marker.__deleteMessageId) return;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'map-delete-btn';
+    button.textContent = '🗑 このピンを削除';
+    button.addEventListener('click', () => {
+      if (!window.confirm('この投稿の地図ピンを削除しますか？')) return;
+
+      button.disabled = true;
+      button.textContent = '削除中…';
+
+      socket.emit('delete-map-pin', { id: marker.__deleteMessageId }, result => {
+        if (!result?.ok) {
+          button.disabled = false;
+          button.textContent = '🗑 このピンを削除';
+          if (typeof setStatus === 'function') {
+            const messages = {
+              'not-owner': 'この投稿は削除できません。',
+              'not-found': '投稿が見つかりません。',
+              'server-error': '削除中にエラーが発生しました。'
+            };
+            setStatus(messages[result.reason] || 'ピンの削除に失敗しました。');
+          }
+          return;
+        }
+
+        marker.__deletedByOwner = true;
+        if (typeof map !== 'undefined' && map.hasLayer(marker)) map.removeLayer(marker);
+        if (typeof setStatus === 'function') setStatus('投稿したピンを削除しました。');
+      });
+    });
+    helpHost.appendChild(button);
+  }
+
   function addDeleteControl(marker) {
     if (!marker || marker.__deleteControlReady || !marker.getPopup?.()) return;
     marker.__deleteControlReady = true;
 
     const popup = marker.getPopup();
-    const originalContent = String(popup.getContent() || '');
-    marker.__originalPopupContent = originalContent;
+    marker.__originalPopupContent = String(popup.getContent() || '');
+    popup.setContent(marker.__originalPopupContent + '<div class="map-pin-actions"></div>');
 
-    popup.setContent(`${originalContent}<div class="map-pin-actions"></div>`);
-
-    marker.on('popupopen', () => {
-      const popupElement = marker.getPopup()?.getElement?.();
-      if (!popupElement) return;
-
-      const actions = popupElement.querySelector('.map-pin-actions');
-      if (!actions) return;
-      actions.innerHTML = '';
-
-      renderHelpStatus(actions, marker);
-
-      // ゲストは再ログインするとSocket IDが変わるため、所有者判定はニックネームで行います。
-      if (String(marker.__deleteOwnerName || '').normalize('NFC') !== String(currentUsername || '').trim().normalize('NFC')) return;
-      if (!marker.__deleteMessageId) return;
-
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'map-delete-btn';
-      button.textContent = '🗑 このピンを削除';
-      button.addEventListener('click', () => {
-        if (!window.confirm('この投稿の地図ピンを削除しますか？')) return;
-
-        button.disabled = true;
-        button.textContent = '削除中…';
-
-        socket.emit('delete-map-pin', { id: marker.__deleteMessageId }, result => {
-          if (!result?.ok) {
-            button.disabled = false;
-            button.textContent = '🗑 このピンを削除';
-            if (typeof setStatus === 'function') {
-              const messages = {
-                'not-owner': 'この投稿は削除できません。',
-                'not-found': '投稿が見つかりません。',
-                'server-error': '削除中にエラーが発生しました。'
-              };
-              setStatus(messages[result.reason] || 'ピンの削除に失敗しました。');
-            }
-            return;
-          }
-
-          marker.__deletedByOwner = true;
-          if (typeof map !== 'undefined' && map.hasLayer(marker)) map.removeLayer(marker);
-          if (typeof setStatus === 'function') setStatus('投稿したピンを削除しました。');
-        });
-      });
-      actions.appendChild(button);
-    });
+    marker.on('popupopen', () => refreshPopupActions(marker));
+    marker.__refreshPopupActions = () => refreshPopupActions(marker);
   }
+
+  window.ruralRefreshMarkerPopupActions = marker => {
+    if (!marker || !marker.__deleteControlReady) return;
+    refreshPopupActions(marker);
+  };
 
   const style = document.createElement('style');
   style.id = 'map-event-interest-style';
@@ -338,6 +430,14 @@
     .map-event-interest-btn:hover:not(:disabled){background:#fff0b8}
     .map-event-interest-btn.interested{border-color:#d6a83d;background:#fff2b8;color:#694d0b}
     .map-event-interest-btn:disabled{opacity:.65;cursor:wait}
+    .map-reaction-block{margin:8px 0;padding:8px 0 2px;border-top:1px solid var(--theme-border-soft,#dde7da)}
+    .map-reaction-title{font-size:11px;font-weight:800;color:var(--theme-text,#294237);margin-bottom:6px}
+    .map-reaction-row{display:flex;flex-wrap:wrap;gap:6px}
+    .map-reaction-btn{border:1px solid var(--theme-border,#c9d6c7);border-radius:999px;background:var(--theme-panel,#fff);color:var(--theme-text,#294237);padding:6px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:background-color .15s,border-color .15s,transform .15s}
+    .map-reaction-btn:hover:not(:disabled){background:var(--theme-main-pale,#f2f7f0);transform:translateY(-1px)}
+    .map-reaction-btn.active{background:var(--theme-main-soft,#e7f1e8);border-color:var(--theme-main,#2f7d4a);color:var(--theme-main-strong,#265b3b)}
+    .map-reaction-btn:disabled{opacity:.55;cursor:wait}
+    .map-help-host{margin-top:7px}
   `;
   document.head.appendChild(style);
 
@@ -351,6 +451,7 @@
     marker.__eventType = null;
     marker.__helpUsers = [];
     marker.__helpConfirmedUsers = [];
+    marker.__reactions = { like: [], thanks: [], helpful: [] };
     return marker;
   };
 
@@ -365,6 +466,7 @@
     marker.__eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : null;
     marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
     marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
+    marker.__reactions = normalizeMapReactions(data.reactions);
     ownerMarkers.add(marker);
     addDeleteControl(marker);
   }
@@ -388,8 +490,7 @@
 
     const popup = layer.getPopup?.();
     const popupElement = popup?.getElement?.();
-    const actions = popupElement?.querySelector?.('.map-pin-actions');
-    if (actions) renderHelpStatus(actions, layer);
+    if (popupElement?.querySelector?.('.map-pin-actions')) refreshPopupActions(layer);
   });
 
   socket.on('map-pin-help-confirmed', data => {
@@ -404,8 +505,17 @@
 
     const popup = layer.getPopup?.();
     const popupElement = popup?.getElement?.();
-    const actions = popupElement?.querySelector?.('.map-pin-actions');
-    if (actions) renderHelpStatus(actions, layer);
+    if (popupElement?.querySelector?.('.map-pin-actions')) refreshPopupActions(layer);
+  });
+
+  socket.on('message-reactions-updated', data => {
+    const id = typeof data?.id === 'string' ? data.id : '';
+    if (!id || typeof map === 'undefined') return;
+    const layer = window.ruralMarkerByMessageId?.get(id);
+    if (!layer) return;
+    layer.__reactions = normalizeMapReactions(data.reactions);
+    const popupElement = layer.getPopup?.()?.getElement?.();
+    if (popupElement?.querySelector?.('.map-pin-actions')) refreshPopupActions(layer);
   });
 
   socket.on('map-pin-deleted', data => {
