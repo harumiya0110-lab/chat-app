@@ -615,7 +615,7 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
 
 window.ruralSendTextMessage = sendTextMessage;
 
-sendBtn.addEventListener('click', sendTextMessage);
+sendBtn.addEventListener('click', () => sendTextMessage());
 messageInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
