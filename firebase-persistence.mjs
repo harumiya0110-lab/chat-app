@@ -156,7 +156,19 @@ async function loadReports(limit = 100) {
   if (!enabled) return [];
   const params = new URLSearchParams({ pageSize: String(Math.min(100, Math.max(1, limit))), orderBy: 'createdAt desc' });
   const result = await firestoreRequest('/reports?' + params.toString(), { method: 'GET' });
-  return (Array.isArray(result?.documents) ? result.documents : []).map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null })).filter(item => item.message).map(item => ({ ...item, status: item.status === 'closed' ? 'closed' : 'open' }));
+  const seen = new Set();
+  return (Array.isArray(result?.documents) ? result.documents : [])
+    .map(doc => ({ ...fromFirestoreFields(doc.fields || {}), id: String(doc.name || '').split('/').pop() || null }))
+    .filter(item => item.message)
+    .filter(item => {
+      // 同じ通報が複数回保存されてしまった場合でも、管理画面では1件だけ表示する。
+      const key = [item.messageId, item.reporterUsername, item.reason, item.message].map(value => String(value || '').trim()).join('\u001f');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(item => ({ ...item, status: item.status === 'closed' ? 'closed' : 'open' }))
+    .slice(0, limit);
 }
 
 async function saveMessage(data) {
