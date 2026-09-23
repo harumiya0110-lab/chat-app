@@ -8,6 +8,10 @@ let enabled = false;
 let cachedAccessToken = null;
 let cachedAccessTokenExpiresAt = 0;
 
+const HISTORY_CACHE_TTL_MS = 60 * 1000;
+const historyCache = new Map();
+const historyPromises = new Map();
+
 function base64Url(value) {
   return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
@@ -108,20 +112,49 @@ async function addHistory(username, points, messageId, reason = 'help-confirmed'
   }
 }
 
-async function loadHistory(username) {
+async function loadHistory(username, { force = false } = {}) {
   if (!enabled || !username) return [];
-  const safeUsername = encodeURIComponent(String(username));
-  try {
-    const result = await firestoreRequest(`/regionalPoints/${safeUsername}/pointHistory?pageSize=50` , { method: 'GET' });
-    const documents = Array.isArray(result?.documents) ? result.documents : [];
-    return documents.map(document => {
-      const fields = fromFields(document.fields || {});
-      return { points: Number(fields.points || 0), reason: String(fields.reason || '地域活動への協力'), messageId: String(fields.messageId || ''), createdAt: String(fields.createdAt || '') };
-    }).filter(item => item.points > 0).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch (error) {
-    if (String(error?.message || '').startsWith('Firestore request failed: 404')) return [];
-    throw error;
+  const cleanUsername = String(username).trim();
+  const cached = historyCache.get(cleanUsername);
+  if (!force && cached && Date.now() - cached.cachedAt < HISTORY_CACHE_TTL_MS) {
+    return cached.history.map(item => ({ ...item }));
   }
+
+  if (!force && historyPromises.has(cleanUsername)) {
+    const pending = await historyPromises.get(cleanUsername);
+    return pending.map(item => ({ ...item }));
+  }
+
+  const safeUsername = encodeURIComponent(cleanUsername);
+  const fetchPromise = (async () => {
+    try {
+      const result = await firestoreRequest(`/regionalPoints/${safeUsername}/pointHistory?pageSize=50&orderBy=createdAt%20desc`, { method: 'GET' });
+      const documents = Array.isArray(result?.documents) ? result.documents : [];
+      const history = documents.map(document => {
+        const fields = fromFields(document.fields || {});
+        return {
+          points: Number(fields.points || 0),
+          reason: String(fields.reason || '地域活動への協力'),
+          messageId: String(fields.messageId || ''),
+          createdAt: String(fields.createdAt || '')
+        };
+      }).filter(item => item.points > 0).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      historyCache.set(cleanUsername, { history, cachedAt: Date.now() });
+      return history;
+    } catch (error) {
+      if (String(error?.message || '').startsWith('Firestore request failed: 404')) {
+        historyCache.set(cleanUsername, { history: [], cachedAt: Date.now() });
+        return [];
+      }
+      throw error;
+    } finally {
+      historyPromises.delete(cleanUsername);
+    }
+  })();
+
+  historyPromises.set(cleanUsername, fetchPromise);
+  return (await fetchPromise).map(item => ({ ...item }));
 }
 
 export function registerPointsHistory(io) {
@@ -129,6 +162,18 @@ export function registerPointsHistory(io) {
   io.__pointsHistoryRegistered = true;
 
   io.on('connection', socket => {
+    const previousEmit = socket.emit.bind(socket);
+    socket.emit = (eventName, ...args) => {
+      if (eventName === 'username-accepted' && args[0]?.username) {
+        const username = String(args[0].username).trim();
+        // ログイン直後に履歴を先読みし、ユーザーが「地域ポイント」を押した瞬間に表示できるようにします。
+        void loadHistory(username).catch(error => {
+          console.warn('[points-history] preload failed:', error.message);
+        });
+      }
+      return previousEmit(eventName, ...args);
+    };
+
     socket.on('request-points-history', async (_payload, ack) => {
       const username = String(socket.__regionalPointsUsername || '').trim();
       if (!username) {
@@ -154,7 +199,11 @@ export function registerPointsHistory(io) {
         const data = args[0] || {};
         const earned = Number(data.earned || 0);
         const username = String(data.username || '').trim();
-        if (earned > 0 && username) void addHistory(username, earned, data.messageId, data.reason);
+        if (username) {
+          // ポイント付与後の履歴キャッシュを古いままにしない。
+          historyCache.delete(username);
+          if (earned > 0) void addHistory(username, earned, data.messageId, data.reason);
+        }
       }
       return originalEmit.call(this, eventName, ...args);
     };
