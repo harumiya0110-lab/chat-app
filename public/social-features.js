@@ -577,15 +577,30 @@
     const reason = window.prompt('通報理由を入力してください。例：迷惑行為、危険な情報、不適切な内容など');
     const clean = String(reason || '').trim().slice(0, 100);
     if (!clean) return;
+
+    const id = String(item.dataset.messageId || '').trim();
+    const message = String(item.dataset.messageText || item.querySelector('.message-bubble')?.textContent || '').trim().slice(0, 2000);
+    const targetUsername = String(item.dataset.username || '').trim().slice(0, 50);
+    if (!id || !message) {
+      setStatusText('通報対象のメッセージ情報を取得できませんでした。');
+      return;
+    }
+
     const button = item.querySelector('[data-action="report"]');
     if (button) { button.disabled = true; button.textContent = '送信中…'; }
-    socket.timeout(8000).emit('report-message', { id: item.dataset.messageId, reason: clean }, (err, result) => {
-      if (button) { button.disabled = false; button.textContent = '⚠️ 通報'; }
+    socket.timeout(10000).emit('submit-report', {
+      id,
+      reason: clean,
+      message,
+      targetUsername
+    }, (err, result) => {
       if (err || !result?.ok) {
-        setStatusText(result?.message || '通報の送信に失敗しました。');
+        if (button) { button.disabled = false; button.textContent = '⚠️ 通報'; }
+        setStatusText(result?.message || '通報の送信に失敗しました。もう一度お試しください。');
         return;
       }
-      setStatusText('通報を受け付けました。確認対象として記録しました。');
+      if (button) { button.disabled = true; button.textContent = '✅ 通報済み'; }
+      setStatusText('通報を受け付けました。管理者が確認します。');
     });
   }
 
