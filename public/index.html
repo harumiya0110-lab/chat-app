@@ -40,17 +40,20 @@
       </div>
       <div id="chat-main" class="chat-main" hidden>
         <aside class="users-panel"><h2>オンラインユーザー</h2><ul id="users-list"></ul></aside>
-        <div class="chat-toolbar">
-          <div class="chat-search"><span aria-hidden="true">🔎</span><input id="message-search" type="search" placeholder="投稿を検索…" autocomplete="off"><button id="clear-search" type="button" hidden aria-label="検索をクリア">×</button></div>
-          <div class="chat-toolbar-actions"><button id="notify-btn" type="button" class="chat-tool-action">🔔 通知</button><button id="leaderboard-btn" type="button" class="chat-tool-action">🏆</button><button id="unread-btn" type="button" class="chat-tool-action unread-btn" hidden>新着 <span id="unread-count">0</span></button></div>
-        </div>
         <div class="chat-right">
+          <div class="chat-toolbar">
+            <div class="chat-toolbar-actions">
+              <button id="notify-btn" type="button" class="chat-tool-action">🔔 通知</button>
+              <button id="leaderboard-btn" type="button" class="chat-tool-action">🏆</button>
+              <button id="unread-btn" type="button" class="chat-tool-action unread-btn" hidden>新着 <span id="unread-count">0</span></button>
+            </div>
+          </div>
           <button id="load-more-btn" type="button" class="load-more-btn" hidden>↑ 過去の投稿を読み込む</button>
           <div id="messages" class="messages" aria-live="polite"></div>
           <div id="reply-preview" class="reply-preview" hidden><div><span>↩︎ 返信先：</span><strong id="reply-preview-user"></strong><p id="reply-preview-text"></p></div><button id="reply-cancel" type="button" aria-label="返信を取り消す">×</button></div>
           <div class="status" id="status">投稿前に「場所を付ける」を選べます。</div><div class="input-area"><button id="image-btn" class="tool-btn" title="画像を送る">📷</button><input type="file" id="image-input" accept="image/*" hidden><button id="video-btn" class="tool-btn" title="動画を送る">🎞️</button><input type="file" id="video-input" accept="video/*" hidden><label class="location-toggle" title="オンにすると投稿内容から場所を解析して地図に表示します"><input type="checkbox" id="location-checkbox"><span>📍 場所を付ける</span></label><input id="message-input" maxlength="2000" placeholder="例：〇〇橋付近で道路が通れません" autocomplete="off"><button id="send-btn">送信</button></div>
         </div>
-      </div>/div>
+      </div>
     </section>
     <section class="map-panel"><div class="panel-heading"><div><h2>地域マップ</h2><p>投稿された場所を色分けして表示します。</p></div><div class="map-filters" aria-label="投稿種類の表示切替"><span class="filter-title">表示：</span><button type="button" class="map-filter active" data-filter="all">すべて</button><button type="button" class="map-filter" data-filter="交通障害">🔴 交通障害</button><button type="button" class="map-filter" data-filter="助け合い">🟢 助け合い</button><button type="button" class="map-filter" data-filter="イベント">🟠 イベント</button><button type="button" class="map-filter" data-filter="鳥獣目撃">🟣 鳥獣目撃</button><button type="button" class="map-filter" data-filter="その他">⚪ その他</button></div><div class="legend"><span><i class="legend-dot traffic"></i>交通障害</span><span><i class="legend-dot help"></i>助け合い</span><span><i class="legend-dot event"></i>イベント</span><span><i class="legend-dot wildlife"></i>鳥獣目撃</span><span><i class="legend-dot other"></i>その他</span></div></div><div id="map"></div></section>
   </main>
