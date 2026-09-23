@@ -879,109 +879,141 @@
     clusters = [];
   }
 
+  function getClusterRadiusPx(zoom) {
+    if (zoom <= 9) return 96;
+    if (zoom <= 11) return 82;
+    if (zoom <= 13) return 68;
+    return 54;
+  }
+
   function makeClusterIcon(count) {
     if (typeof L === 'undefined' || typeof L.divIcon !== 'function') return null;
     const size = count >= 100 ? 54 : count >= 10 ? 48 : 42;
     return L.divIcon({
       className: 'rural-marker-cluster-icon',
-      html: `<div class="rural-cluster-number" style="width:${size}px;height:${size}px">${count}</div>`,
+      html: '<div class="rural-cluster-number" style="width:' + size + 'px;height:' + size + 'px">' + count + '</div>',
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2]
     });
   }
 
   function refreshClusters() {
-    if (!map || typeof map.getZoom !== 'function') return;
+    const currentMap = window.ruralMap;
+    if (!currentMap || typeof currentMap.getZoom !== 'function' || typeof currentMap.latLngToLayerPoint !== 'function') return;
 
     removeClusters();
 
     const markers = [...(window.ruralMarkerByMessageId?.values?.() || [])];
     const unique = [...new Set(markers)].filter(marker =>
-      marker && marker.__messageId && typeof marker.getLatLng === 'function'
+      marker &&
+      !marker.__deletedByOwner &&
+      !marker.__removedByMarkerLimit &&
+      marker.__messageId &&
+      typeof marker.getLatLng === 'function'
     );
 
     const activeFilter = document.querySelector('.map-filter.active')?.dataset.filter || 'all';
+    const visibleMarkers = [];
 
-    // 表示対象だけを一度復元します。
     for (const marker of unique) {
       marker.__ruralClusterHidden = false;
       const allowed = activeFilter === 'all' || marker.__eventType === activeFilter;
-      if (allowed) {
-        if (!map.hasLayer(marker)) map.addLayer(marker);
-      } else if (map.hasLayer(marker)) {
-        map.removeLayer(marker);
+      if (!allowed) {
+        if (currentMap.hasLayer(marker)) currentMap.removeLayer(marker);
+        continue;
       }
+      if (!currentMap.hasLayer(marker)) currentMap.addLayer(marker);
+      visibleMarkers.push(marker);
     }
 
-    // 十分に拡大したら、各ピンをそのまま表示します。
-    const zoom = map.getZoom();
+    // 十分に拡大したら、クラスタリングせず個別ピンを表示します。
+    const zoom = currentMap.getZoom();
     const CLUSTER_DISABLE_ZOOM = 15;
-    if (zoom >= CLUSTER_DISABLE_ZOOM) return;
+    if (zoom >= CLUSTER_DISABLE_ZOOM || visibleMarkers.length < 2) return;
 
-    // 緯度経度の固定セルではなく画面上のピクセル距離でまとめるため、
-    // 地域やズームレベルが変わっても「見た目の密集度」に応じてクラスタリングします。
-    const GRID_SIZE = zoom <= 9 ? 90 : zoom <= 12 ? 72 : 58;
-    const groups = new Map();
+    const radius = getClusterRadiusPx(zoom);
+    const points = visibleMarkers
+      .map(marker => ({
+        marker,
+        point: currentMap.latLngToLayerPoint(marker.getLatLng())
+      }))
+      .filter(entry => entry.point && Number.isFinite(entry.point.x) && Number.isFinite(entry.point.y));
 
-    for (const marker of unique) {
-      if (!map.hasLayer(marker)) continue;
-      const point = marker.getLatLng();
-      if (!point) continue;
+    // 画面上の実際の距離で近いピン同士をまとめます。
+    // 固定緯度経度グリッドを使わないため、グリッド境界でクラスタが不自然に分断されません。
+    const unassigned = new Set(points.map((_, index) => index));
 
-      const screen = map.latLngToLayerPoint(point);
-      const cellX = Math.floor(screen.x / GRID_SIZE);
-      const cellY = Math.floor(screen.y / GRID_SIZE);
-      const key = `${cellX}:${cellY}`;
+    while (unassigned.size > 0) {
+      const seedIndex = unassigned.values().next().value;
+      unassigned.delete(seedIndex);
 
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(marker);
-    }
+      const members = [points[seedIndex]];
+      let centerX = points[seedIndex].point.x;
+      let centerY = points[seedIndex].point.y;
+      let changed = true;
 
-    for (const members of groups.values()) {
+      while (changed) {
+        changed = false;
+        for (const index of [...unassigned]) {
+          const candidate = points[index];
+          const dx = candidate.point.x - centerX;
+          const dy = candidate.point.y - centerY;
+          if (Math.hypot(dx, dy) <= radius) {
+            members.push(candidate);
+            unassigned.delete(index);
+            centerX = members.reduce((sum, item) => sum + item.point.x, 0) / members.length;
+            centerY = members.reduce((sum, item) => sum + item.point.y, 0) / members.length;
+            changed = true;
+          }
+        }
+      }
+
       if (members.length < 2) continue;
 
-      const latLngs = members.map(marker => marker.getLatLng()).filter(Boolean);
-      if (latLngs.length < 2) continue;
-
-      members.forEach(marker => {
+      const memberMarkers = members.map(item => item.marker);
+      memberMarkers.forEach(marker => {
         marker.__ruralClusterHidden = true;
-        if (map.hasLayer(marker)) map.removeLayer(marker);
+        if (currentMap.hasLayer(marker)) currentMap.removeLayer(marker);
       });
+
+      const latLngs = memberMarkers.map(marker => marker.getLatLng()).filter(Boolean);
+      if (latLngs.length < 2) continue;
 
       const bounds = L.latLngBounds(latLngs);
       const center = bounds.getCenter();
-      const icon = makeClusterIcon(members.length);
-
+      const icon = makeClusterIcon(memberMarkers.length);
       const cluster = icon
         ? L.marker(center, {
             icon,
             keyboard: true,
-            title: `${members.length}件の投稿`
+            title: memberMarkers.length + '件の投稿'
           })
-        : L.circleMarker(center, {
-            radius: 20,
-            weight: 3,
-            fillOpacity: 0.95
-          });
+        : L.circleMarker(center, { radius: 20, weight: 3, fillOpacity: 0.95 });
 
-      cluster.__ruralClusterMembers = members;
-      cluster.bindTooltip(`${members.length}件の投稿`, {
+      // 他のマーカー管理処理から「実データのピン」として扱われないよう明示します。
+      cluster.__ruralCluster = true;
+      cluster.__ruralClusterMembers = memberMarkers;
+
+      cluster.bindTooltip(memberMarkers.length + '件の投稿', {
         direction: 'top',
         offset: [0, -18],
         opacity: 0.95
       });
 
       cluster.on('click', () => {
-        const currentZoom = map.getZoom();
+        const currentZoom = currentMap.getZoom();
         const targetZoom = Math.min(
           16,
-          Math.max(currentZoom + 2, map.getBoundsZoom(bounds, false, L.point(40, 40)))
+          Math.max(
+            currentZoom + 2,
+            currentMap.getBoundsZoom(bounds, false, L.point(40, 40))
+          )
         );
 
-        if (members.length === 2) {
-          map.setView(center, Math.min(17, targetZoom), { animate: true });
+        if (memberMarkers.length === 2) {
+          currentMap.setView(center, Math.min(17, targetZoom), { animate: true });
         } else {
-          map.fitBounds(bounds, {
+          currentMap.fitBounds(bounds, {
             padding: [45, 45],
             maxZoom: 16,
             animate: true
@@ -989,14 +1021,14 @@
         }
       });
 
-      cluster.addTo(map);
+      cluster.addTo(currentMap);
       clusters.push(cluster);
     }
   }
 
   function scheduleClusterRefresh() {
     if (clusterRefreshTimer) window.clearTimeout(clusterRefreshTimer);
-    clusterRefreshTimer=window.setTimeout(refreshClusters,120);
+    clusterRefreshTimer = window.setTimeout(refreshClusters, 120);
   }
 
   function handleMarkerClick(event) {
