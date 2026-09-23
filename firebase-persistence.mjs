@@ -296,6 +296,28 @@ SocketIOServer.prototype.on = function(eventName, listener) {
       }
     });
 
+    socket.on('get-message-by-id', async (payload = {}, ack) => {
+      if (!adminBySocketId.get(socket.id)) return typeof ack === 'function' && ack({ ok: false, reason: 'forbidden' });
+      const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+      if (!id) return typeof ack === 'function' && ack({ ok: false, reason: 'invalid' });
+      try {
+        const message = await getSavedMessage(id);
+        if (!message) return typeof ack === 'function' && ack({ ok: false, reason: 'not-found' });
+        if (typeof ack === 'function') {
+          ack({
+            ok: true,
+            message: {
+              ...message,
+              timestamp: new Date(message.createdAt).toLocaleTimeString('ja-JP')
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Firestore message fetch by id failed:', error);
+        if (typeof ack === 'function') ack({ ok: false, reason: 'server-error' });
+      }
+    });
+
     socket.on('admin-clear-all-chat', async (_payload = {}, ack) => {
       if (!adminBySocketId.get(socket.id)) return typeof ack === 'function' && ack({ ok: false, reason: 'forbidden' });
       try {
