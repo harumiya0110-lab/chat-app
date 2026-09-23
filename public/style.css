@@ -1102,3 +1102,28 @@ body[data-rural-theme] .messages .message-bubble audio{
   font-size:8px;
   opacity:.9;
 }
+
+
+/* マップピンをコンパクト化 */
+.event-marker{
+  min-width:88px!important;
+  max-width:96px!important;
+  min-height:34px!important;
+  padding:4px 5px!important;
+  gap:4px!important;
+  border-radius:18px 18px 18px 4px!important;
+}
+.event-marker-symbol{
+  width:19px!important;
+  height:19px!important;
+  flex-basis:19px!important;
+  font-size:12px!important;
+}
+.event-marker-area{
+  max-width:65px!important;
+  font-size:8px!important;
+  line-height:1.05!important;
+}
+.event-marker-area.is-loading{
+  font-size:7px!important;
+}
