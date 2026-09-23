@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { GoogleGenAI, Type } from '@google/genai';
 import { registerThemePersistence, initializeThemeForSocket } from './theme-persistence.mjs';
 import { registerPointsHistory } from './points-history-persistence.mjs';
+import { loadMediaAsset, saveMediaAsset } from './firebase-persistence.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -356,19 +357,47 @@ function buildMediaMeta(entry) {
   };
 }
 
-app.get('/api/media/:id/thumbnail', (req, res) => {
+app.get('/api/media/:id/thumbnail', async (req, res) => {
   pruneMediaStore();
-  const entry = mediaStore.get(String(req.params?.id || '').trim());
+  const id = String(req.params?.id || '').trim();
+  let entry = mediaStore.get(id);
+
+  if (!entry?.thumbnailBytes?.length) {
+    try {
+      const persisted = await loadMediaAsset(id);
+      if (persisted) {
+        entry = persisted;
+        storeMedia(entry);
+      }
+    } catch (error) {
+      console.error('Firestore thumbnail load failed:', error);
+    }
+  }
+
   if (!entry || !entry.thumbnailBytes?.length) return res.status(404).json({ error: 'サムネイルが見つかりません。' });
   res.setHeader('Content-Type', entry.thumbnailMime || 'image/jpeg');
   res.setHeader('Cache-Control', 'public, max-age=300');
   res.send(entry.thumbnailBytes);
 });
 
-app.get('/api/media/:id', (req, res) => {
+app.get('/api/media/:id', async (req, res) => {
   pruneMediaStore();
-  const entry = mediaStore.get(String(req.params?.id || '').trim());
-  if (!entry?.buffer?.length) return res.status(404).json({ error: 'メディアが見つかりません。サーバー上の保存期間を過ぎた可能性があります。' });
+  const id = String(req.params?.id || '').trim();
+  let entry = mediaStore.get(id);
+
+  if (!entry?.buffer?.length) {
+    try {
+      const persisted = await loadMediaAsset(id);
+      if (persisted) {
+        entry = persisted;
+        storeMedia(entry);
+      }
+    } catch (error) {
+      console.error('Firestore media load failed:', error);
+    }
+  }
+
+  if (!entry?.buffer?.length) return res.status(404).json({ error: 'メディアが見つかりません。Firestore上の保存データが存在しない可能性があります。' });
   res.setHeader('Content-Type', entry.mimeType);
   res.setHeader('Content-Length', String(entry.buffer.length));
   res.setHeader('Cache-Control', 'public, max-age=300');
@@ -670,7 +699,17 @@ io.on('connection', socket => {
       bytes: buffer.length
     });
 
-    const media = buildMediaMeta(mediaStore.get(mediaId));
+    let persistent = false;
+    try {
+      persistent = await saveMediaAsset(mediaStore.get(mediaId));
+    } catch (error) {
+      console.error('Firestore media save failed:', error);
+    }
+    const storedEntry = mediaStore.get(mediaId);
+    if (storedEntry) storedEntry.persistent = persistent;
+
+    const media = buildMediaMeta(storedEntry);
+    media.persistent = persistent;
     socket.server.emit('message-media-attached', { messageId, media });
     if (typeof ack === 'function') ack({ ok: true, messageId, media });
   });
