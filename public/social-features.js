@@ -75,6 +75,8 @@
       .map-post-reactions{margin-top:8px;padding-top:7px;border-top:1px solid var(--theme-border-soft,#dce6db)}
       .map-post-reactions-title{margin-bottom:5px;color:var(--theme-text-soft,#64746b);font-size:10px;font-weight:800}
       .map-post-reactions-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+      .map-post-delete-btn{margin-left:auto;border-color:#efc3c3;background:#fff5f5;color:#a52d2d}
+      .map-post-delete-btn:hover{background:#fbe8e8}
       .message-action-btn{border:1px solid var(--chat-input,#c3cec1);border-radius:999px;padding:4px 7px;background:var(--chat-input-bg,#fff);color:var(--chat-text,#30483b);font:inherit;font-size:10px;cursor:pointer}
       .message-action-btn:hover{background:var(--chat-surface,#edf3eb)}
       .message-action-btn:disabled{opacity:.55;cursor:wait}
@@ -224,6 +226,16 @@
         button.className = 'message-action-btn';
         button.dataset.reaction = info.key;
         row.appendChild(button);
+      }
+
+      if (String(item.dataset.username || '').normalize('NFC') === String(currentUsername || '').trim().normalize('NFC')) {
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'message-action-btn map-post-delete-btn';
+        deleteButton.dataset.action = 'delete-map-post';
+        deleteButton.textContent = '🗑 削除';
+        deleteButton.title = '自分の地図投稿だけ削除できます';
+        row.appendChild(deleteButton);
       }
     }
 
@@ -587,6 +599,32 @@
     if (button.dataset.action === 'map') return focusMapForMessage(id);
     if (button.dataset.action === 'report') return reportMessage(item);
     if (button.dataset.action === 'block') return blockMessageUser(item);
+
+    if (button.dataset.action === 'delete-map-post') {
+      if (String(item.dataset.username || '').normalize('NFC') !== String(currentUsername || '').trim().normalize('NFC')) {
+        setStatusText('自分の地図投稿だけ削除できます。');
+        return;
+      }
+      if (!window.confirm('この地図投稿を削除しますか？')) return;
+      button.disabled = true;
+      button.textContent = '削除中…';
+      socket.timeout(10000).emit('delete-chat-message', { id }, (err, result) => {
+        if (err || !result?.ok) {
+          button.disabled = false;
+          button.textContent = '🗑 削除';
+          const messages = {
+            'not-owner': '自分の地図投稿だけ削除できます。',
+            'not-found': '投稿が見つかりません。',
+            'unauthorized': 'ログインしてから削除してください。',
+            'server-error': '削除中にエラーが発生しました。'
+          };
+          setStatusText(messages[result?.reason] || '地図投稿の削除に失敗しました。');
+          return;
+        }
+        setStatusText('自分の地図投稿を削除しました。');
+      });
+      return;
+    }
 
     if (button.dataset.action === 'resolve') {
       button.disabled = true;
