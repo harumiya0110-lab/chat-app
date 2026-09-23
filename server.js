@@ -380,21 +380,27 @@ io.on('connection', socket => {
   // デプロイ後に接続し直したクライアントへ、投稿履歴をリセットする通知を送ります。
   socket.emit('chat-posts-cleared');
   // 名前だけで参加するゲスト方式です。メールアドレス認証は使用しません。
-  socket.on('set-username', async (username, ack) => {
+  socket.on('set-username', async (payload, ack) => {
     const fail = (reason, message) => {
       if (typeof ack === 'function') ack({ ok: false, reason, message });
     };
 
-    if (typeof username !== 'string' || !username.trim()) {
+    const requestedUsername = typeof payload === 'string' ? payload : payload?.username;
+    const adminPassword = typeof payload === 'object' && payload ? String(payload.password || '') : '';
+    if (typeof requestedUsername !== 'string' || !requestedUsername.trim()) {
       fail('invalid', 'ニックネームを入力してください。');
       return;
     }
 
-    const cleanUsername = username.normalize('NFC').trim().slice(0, 50);
-
-    // 「ハル」だけはアップデート移行時の名前競合による参加制限を解除します。
-    // メールアカウントとゲスト参加は別管理のため、他の名前の制限や認証方式には影響しません。
+    const cleanUsername = requestedUsername.normalize('NFC').trim().slice(0, 50);
     const isHaru = cleanUsername === 'ハル';
+    const isAdmin = isHaru && Boolean(HARU_ADMIN_PASSWORD) && adminPassword === HARU_ADMIN_PASSWORD;
+    if (isHaru && !isAdmin) {
+      const message = HARU_ADMIN_PASSWORD ? '「ハル」は管理者専用の名前です。管理者パスワードを入力してください。' : '管理者設定が未完了です。HARU_ADMIN_PASSWORDをサーバー環境変数に設定してください。';
+      socket.emit('username-error', { message });
+      fail('admin-required', message);
+      return;
+    }
     const isTaken = Object.values(users).some(u =>
       u.authType === 'guest' &&
       u.username?.normalize('NFC').toLowerCase() === cleanUsername.toLowerCase()
@@ -410,7 +416,8 @@ io.on('connection', socket => {
       id: socket.id,
       username: cleanUsername,
       timestamp: new Date(),
-      authType: 'guest'
+      authType: isAdmin ? 'admin' : 'guest',
+      isAdmin
     };
 
     const onlineUsers = Object.values(users).map(user => ({
@@ -418,7 +425,7 @@ io.on('connection', socket => {
       username: user.username
     }));
 
-    socket.emit('username-accepted', { username: cleanUsername, users: onlineUsers });
+    socket.emit('username-accepted', { username: cleanUsername, users: onlineUsers, isAdmin });
     socket.emit('update-users', onlineUsers);
     if (typeof ack === 'function') {
       ack({ ok: true, username: cleanUsername, users: onlineUsers });
