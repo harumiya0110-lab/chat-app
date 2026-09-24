@@ -208,7 +208,7 @@
       setStatus?.('出来事の種類を選択してください。');
       return;
     }
-    if (eventType === 'イベント' && !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(eventStartAt)) {
+    if (eventType === 'イベント' && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(eventStartAt)) {
       eventStartInput.focus();
       setStatus?.('イベントの開催日時を入力してください。');
       return;
