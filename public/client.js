@@ -514,6 +514,58 @@ function readFileAsDataUrl(file) {
   });
 }
 
+async function waitForMediaPersistence(mediaId, messageId) {
+  const id = String(mediaId || '').trim();
+  if (!id) return { ok: false, reason: 'no-media-id', message: '保存確認用のメディアIDがありません。' };
+
+  const backendBase = String(
+    window.RURAL_BACKEND_URL || window.location.origin
+  ).replace(/\/$/, '');
+  const statusUrl = backendBase + '/api/media/' + encodeURIComponent(id) + '/persistence-status';
+  const deadline = Date.now() + 120000;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(statusUrl, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (result?.status === 'saved') {
+        return {
+          ok: true,
+          persisted: true,
+          mediaId: id
+        };
+      }
+
+      if (result?.status === 'failed') {
+        return {
+          ok: false,
+          reason: 'firestore-save-failed',
+          message: result?.error || 'Firestoreへの保存に失敗しました。'
+        };
+      }
+    } catch (error) {
+      console.warn('Firestore保存状態の確認に失敗しました:', error);
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    if (messageId) {
+      setStatus('動画をFirestoreへ保存しています…');
+    }
+    await new Promise(resolve => setTimeout(resolve, Math.min(1000, remainingMs)));
+  }
+
+  return {
+    ok: false,
+    reason: 'firestore-save-timeout',
+    message: 'Firestoreへの保存確認がタイムアウトしました。動画はサーバー上に共有されています。'
+  };
+}
+
 async function uploadPendingMediaViaHttp(messageId, media) {
   if (!messageId || !media) return { ok: false, reason: 'invalid' };
 
@@ -581,7 +633,15 @@ async function uploadPendingMedia(messageId, media) {
           resolve(response?.ok ? response : { ok: false, reason: response?.reason || 'upload-failed' });
         });
       });
-      if (result?.ok) return result;
+      if (result?.ok) {
+      if (result?.media?.persistent === true) return result;
+      const persistence = await waitForMediaPersistence(result?.media?.id, messageId);
+      if (persistence.ok) {
+        result.media = { ...result.media, persistent: true };
+        return result;
+      }
+      return { ...persistence, media: result.media };
+    }
     }
     return uploadPendingMediaViaHttp(messageId, media);
   }
@@ -589,19 +649,38 @@ async function uploadPendingMedia(messageId, media) {
   // 動画はまずHTTPで送ります。Socket.IOの大きなバイナリ転送に依存しないため、
   // サムネイル作成後の「共有に失敗しました」を防ぎます。
   const httpResult = await uploadPendingMediaViaHttp(messageId, media);
-  if (httpResult?.ok) return httpResult;
+  if (httpResult?.ok) {
+    if (httpResult?.media?.persistent === true) return httpResult;
+    const persistence = await waitForMediaPersistence(httpResult?.media?.id, messageId);
+    if (persistence.ok) {
+      httpResult.media = { ...httpResult.media, persistent: true };
+      return httpResult;
+    }
+    return { ...persistence, media: httpResult.media };
+  }
 
   // HTTPが使えない環境ではSocket.IOへ戻します。
   if (!socket.connected) return httpResult;
   try {
     payload.video = await media.file.arrayBuffer();
     payload.videoType = media.file?.type || 'video/mp4';
-    return await new Promise(resolve => {
+    const socketResult = await new Promise(resolve => {
       socket.timeout(120000).emit('attach-media', payload, (err, response) => {
         if (err) return resolve(httpResult);
-        resolve(response?.ok ? response : httpResult);
+        if (!response?.ok) return resolve(httpResult);
+        resolve(response);
       });
     });
+    if (socketResult?.ok) {
+      if (socketResult?.media?.persistent === true) return socketResult;
+      const persistence = await waitForMediaPersistence(socketResult?.media?.id, messageId);
+      if (persistence.ok) {
+        socketResult.media = { ...socketResult.media, persistent: true };
+        return socketResult;
+      }
+      return { ...persistence, media: socketResult.media };
+    }
+    return socketResult;
   } catch (error) {
     console.error('Socket.IO動画共有に失敗しました:', error);
     return httpResult;
@@ -1195,7 +1274,9 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
     } else if (mediaResult?.ok) {
       setStatus(`投稿とメディアを共有しました。${mediaSaveNotice ? ` ${mediaSaveNotice}` : ''}`);
     } else if (mediaToSend) {
-      setStatus('投稿しましたが、メディアの共有に失敗しました。');
+      setStatus(mediaResult?.reason === 'firestore-save-failed' || mediaResult?.reason === 'firestore-save-timeout'
+        ? (mediaResult.message || '投稿は共有されましたが、Firestoreへの保存に失敗しました。')
+        : '投稿しましたが、メディアの共有に失敗しました。');
     } else if (result.geocodeError) {
       setStatus(`投稿しました。ただし${result.geocodeError}。`);
     } else {
