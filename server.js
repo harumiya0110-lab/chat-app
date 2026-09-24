@@ -368,6 +368,7 @@ async function analyzeMessage(text) {
 const messageOwners = new Map();
 
 const mediaStore = new Map();
+const mediaPersistenceStates = new Map();
 const MEDIA_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_MEDIA_ITEMS = 250;
 const MAX_MEDIA_TOTAL_BYTES = 300 * 1024 * 1024;
@@ -428,6 +429,27 @@ function buildMediaMeta(entry) {
     durationSec: Number.isFinite(Number(entry.durationSec)) ? Number(entry.durationSec) : 0
   };
 }
+
+app.get('/api/media/:id/persistence-status', async (req, res) => {
+  const id = String(req.params?.id || '').trim();
+  if (!id) return res.status(400).json({ ok: false, status: 'invalid' });
+
+  const state = mediaPersistenceStates.get(id);
+  if (state) return res.json({ ok: true, id, status: state.status, error: state.error || '' });
+
+  // サーバー再起動後でも、Firestoreに存在するか確認できるようにします。
+  try {
+    const persisted = await loadMediaAsset(id);
+    if (persisted) {
+      mediaPersistenceStates.set(id, { status: 'saved', updatedAt: Date.now() });
+      return res.json({ ok: true, id, status: 'saved' });
+    }
+  } catch (error) {
+    console.error('Firestore media persistence status check failed:', error);
+  }
+
+  return res.json({ ok: true, id, status: 'unknown' });
+});
 
 app.get('/api/media/:id/thumbnail', async (req, res) => {
   pruneMediaStore();
@@ -559,26 +581,49 @@ function findStoredMediaForMessage(messageId, ownerId) {
 async function finalizeMediaUpload(entry, socketServer) {
   if (!entry) return null;
 
-  // まずチャットへ共有し、Firestore保存はバックグラウンドで行います。
+  // チャットへの表示を止めない一方、保存状態はサーバー側で追跡します。
   entry.persistent = false;
+  mediaPersistenceStates.set(entry.id, {
+    status: 'pending',
+    updatedAt: Date.now(),
+    messageId: entry.messageId
+  });
+
   const media = buildMediaMeta(entry);
   media.persistent = false;
+  media.persistenceStatus = 'pending';
   socketServer.emit('message-media-attached', { messageId: entry.messageId, media });
 
   void saveMediaAsset(entry).then(persistent => {
     const latestEntry = mediaStore.get(entry.id);
     if (!latestEntry) return;
+
     latestEntry.persistent = persistent === true;
+    mediaPersistenceStates.set(entry.id, {
+      status: latestEntry.persistent ? 'saved' : 'failed',
+      updatedAt: Date.now(),
+      messageId: latestEntry.messageId,
+      error: latestEntry.persistent ? '' : 'Firestoreへの保存結果を確認できませんでした。'
+    });
+
     const updatedMedia = buildMediaMeta(latestEntry);
     updatedMedia.persistent = latestEntry.persistent;
+    updatedMedia.persistenceStatus = latestEntry.persistent ? 'saved' : 'failed';
     socketServer.emit('message-media-attached', {
       messageId: latestEntry.messageId,
       media: updatedMedia
     });
+
     if (!latestEntry.persistent) {
       console.error('Firestore media save failed: persistence was not confirmed.');
     }
   }).catch(error => {
+    mediaPersistenceStates.set(entry.id, {
+      status: 'failed',
+      updatedAt: Date.now(),
+      messageId: entry.messageId,
+      error: String(error?.message || 'Firestore保存中にエラーが発生しました。').slice(0, 300)
+    });
     console.error('Firestore media save failed:', error);
   });
 
