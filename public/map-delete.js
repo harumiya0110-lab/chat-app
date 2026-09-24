@@ -138,6 +138,78 @@
     actions.appendChild(block);
   }
 
+  function renderTrafficThanksStatus(actions, marker) {
+    const thanksUsers = Array.isArray(marker.__reactions?.thanks) ? marker.__reactions.thanks : [];
+    const me = String(currentUsername || '').trim();
+    const thanked = me && thanksUsers.includes(me);
+
+    const block = document.createElement('div');
+    block.className = 'map-traffic-thanks-block';
+
+    const description = document.createElement('div');
+    description.className = 'map-help-people';
+    description.textContent = '🙏 交通障害を知らせてくれた投稿者に、感謝を伝えられます。';
+    block.appendChild(description);
+
+    const count = document.createElement('div');
+    count.className = 'map-help-count';
+    count.textContent = `🙏 ありがとう：${thanksUsers.length}人`;
+    block.appendChild(count);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = thanked ? 'map-traffic-thanks-btn thanked' : 'map-traffic-thanks-btn';
+    button.textContent = thanked ? '✅ ありがとう済み' : '🙏 ありがとう';
+    button.title = thanked ? 'ありがとうを取り消す' : '交通情報を伝えてくれたことに感謝を伝える';
+    button.disabled = !me;
+
+    button.addEventListener('click', () => {
+      if (!me || !marker.__deleteMessageId) {
+        if (typeof setStatus === 'function') setStatus('ログインしてから「ありがとう」を送信してください。');
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = '送信中…';
+
+      socket.timeout(10000).emit('toggle-reaction', {
+        id: marker.__deleteMessageId,
+        reaction: 'thanks'
+      }, (err, result) => {
+        if (err || !result?.ok) {
+          button.disabled = false;
+          button.textContent = thanked ? '✅ ありがとう済み' : '🙏 ありがとう';
+          if (typeof setStatus === 'function') {
+            const message = result?.reason === 'not-found'
+              ? '投稿が見つかりません。'
+              : result?.reason === 'unauthorized'
+                ? 'ログインしてから「ありがとう」を送信してください。'
+                : '「ありがとう」の更新に失敗しました。';
+            setStatus(message);
+          }
+          return;
+        }
+
+        marker.__reactions = result.reactions && typeof result.reactions === 'object'
+          ? result.reactions
+          : { like: [], helpful: [], thanks: [] };
+        renderTrafficThanksStatus(actions, marker);
+
+        if (typeof setStatus === 'function') {
+          const active = Array.isArray(marker.__reactions.thanks) && marker.__reactions.thanks.includes(me);
+          setStatus(active ? '交通情報を知らせてくれた投稿者に「ありがとう」を伝えました。' : '「ありがとう」を取り消しました。');
+        }
+      });
+    });
+
+    if (!me) {
+      button.title = 'ログインすると「ありがとう」を送れます';
+    }
+
+    block.appendChild(button);
+    actions.appendChild(block);
+  }
+
   function renderHelpStatus(actions, marker) {
     // イベント投稿は「手伝える」ではなく「行ってみたい」を表示します。
     if (marker.__eventType === 'イベント') {
@@ -145,11 +217,11 @@
       return;
     }
 
-    // 交通障害のマップピンには「手伝える」機能を表示しません。
-    // 交通情報はルート案内・削除などの基本操作だけを残します。
+    // 交通障害のマップピンでは「手伝える」や「ルート案内」ではなく、
+    // 情報提供者への感謝を伝える「ありがとう」を表示します。
     if (marker.__eventType === '交通障害') {
-      // 交通障害のマップピンでは「手伝える」と「ルート案内」の両方を表示しません。
       actions.innerHTML = '';
+      renderTrafficThanksStatus(actions, marker);
       return;
     }
 
@@ -399,6 +471,12 @@
     .map-event-interest-btn:hover:not(:disabled){background:#fff0b8}
     .map-event-interest-btn.interested{border-color:#d6a83d;background:#fff2b8;color:#694d0b}
     .map-event-interest-btn:disabled{opacity:.65;cursor:wait}
+    .map-traffic-thanks-block{margin-top:8px;padding:9px 10px;border:1px solid #e1d7be;background:#fffaf0;border-radius:10px}
+    .map-traffic-thanks-block .map-help-count{margin-top:5px}
+    .map-traffic-thanks-btn{width:100%;border:1px solid #d6b36a;background:#fff3cd;color:#6b5117;border-radius:9px;padding:9px 10px;margin-top:7px;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+    .map-traffic-thanks-btn:hover:not(:disabled){background:#ffe7a4}
+    .map-traffic-thanks-btn.thanked{border-color:#c89b37;background:#ffe6a8;color:#60470d}
+    .map-traffic-thanks-btn:disabled{opacity:.6;cursor:wait}
     .map-route-share-popup{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
     .map-route-share-popup button{border:1px solid #bfcfc1;background:#fff;color:#294237;border-radius:9px;padding:8px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
     .map-route-share-popup button:hover:not(:disabled){background:#eef5ef}
@@ -416,6 +494,7 @@
     marker.__eventType = null;
     marker.__helpUsers = [];
     marker.__helpConfirmedUsers = [];
+    marker.__reactions = { like: [], helpful: [], thanks: [] };
     return marker;
   };
 
@@ -431,6 +510,9 @@
     marker.__deleteMessageText = typeof data.message === 'string' ? data.message : (typeof data.text === 'string' ? data.text : '');
     marker.__helpUsers = Array.isArray(data.helpUsers) ? data.helpUsers : [];
     marker.__helpConfirmedUsers = Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : [];
+    marker.__reactions = data.reactions && typeof data.reactions === 'object'
+      ? data.reactions
+      : { like: [], helpful: [], thanks: [] };
     ownerMarkers.add(marker);
     addDeleteControl(marker);
   }
@@ -441,6 +523,22 @@
     for (const data of Array.isArray(history) ? history : []) {
       decorateMarkerFromMessage(data);
     }
+  });
+
+  socket.on('message-reactions-updated', data => {
+    const id = typeof data?.id === 'string' ? data.id.trim() : '';
+    if (!id || typeof map === 'undefined') return;
+
+    const layer = window.ruralMarkerByMessageId?.get(id);
+    if (!layer) return;
+
+    layer.__reactions = data.reactions && typeof data.reactions === 'object'
+      ? data.reactions
+      : { like: [], helpful: [], thanks: [] };
+
+    const popup = layer.getPopup?.();
+    const popupElement = popup?.getElement?.();
+    if (popupElement?.querySelector?.('.map-pin-actions')) refreshPopupActions(layer);
   });
 
   socket.on('map-pin-help-updated', data => {
