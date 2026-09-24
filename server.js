@@ -629,7 +629,7 @@ io.on('connection', socket => {
       replyToUsername
     });
 
-    if (typeof ack === 'function') ack({ ok: true });
+    if (typeof ack === 'function') ack({ ok: true, messageId: locationMessageId });
   });
 
 
