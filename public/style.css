@@ -1934,3 +1934,8 @@ select:focus-visible{
 :where(.message-action-btn.active,.map-filter.active,.map-help-btn.helping){
   box-shadow:var(--ui-elevation-1);
 }
+
+
+/* イベント投稿の開催日時表示 */
+.message-event-schedule{display:block;margin:7px 0;padding:7px 10px;border:1px solid rgba(229,138,58,.35);border-radius:9px;background:#fff7ea;color:#7a4f1f;font-size:12px;font-weight:700;line-height:1.45}
+.map-event-schedule{display:inline-block;margin:6px 0 3px;padding:5px 8px;border:1px solid rgba(229,138,58,.35);border-radius:8px;background:#fff7ea;color:#7a4f1f;font-size:12px;font-weight:700;line-height:1.4}
