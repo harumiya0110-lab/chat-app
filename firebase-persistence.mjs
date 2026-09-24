@@ -173,7 +173,7 @@ async function firestoreRequest(path, options = {}) {
 
 
 
-const FIRESTORE_MEDIA_CHUNK_BYTES = 500 * 1024;
+const FIRESTORE_MEDIA_CHUNK_BYTES = 256 * 1024;
 
 function mediaAssetDocumentPath(id) {
   return '/mediaAssets/' + encodeURIComponent(String(id || '').trim());
@@ -190,11 +190,34 @@ function bufferFromValue(value) {
   return null;
 }
 
+async function firestoreMediaRequest(path, options = {}, label = 'media') {
+  const maxAttempts = 5;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await firestoreRequest(path, options);
+    } catch (error) {
+      lastError = error;
+      const status = Number(error?.status || 0);
+      const retryable = !status || status === 408 || status === 429 || status >= 500;
+      if (!retryable || attempt >= maxAttempts) break;
+      const waitMs = Math.min(4000, 300 * (2 ** (attempt - 1)));
+      console.warn(`[firebase] media ${label} write retry ${attempt}/${maxAttempts - 1}: status=${status || 'network'} wait=${waitMs}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError || new Error('Firestore media write failed');
+}
+
 async function saveMediaAsset(entry) {
   if (!enabled || !entry?.id) return false;
 
   const buffer = bufferFromValue(entry.buffer);
   if (!buffer?.length) return false;
+
+  const id = String(entry.id).trim().slice(0, 120);
+  const chunkCount = Math.ceil(buffer.length / FIRESTORE_MEDIA_CHUNK_BYTES);
+  console.log(`[firebase] media save start: id=${id} type=${entry.type} bytes=${buffer.length} chunks=${chunkCount}`);
 
   const id = String(entry.id).trim().slice(0, 120);
   const chunkCount = Math.ceil(buffer.length / FIRESTORE_MEDIA_CHUNK_BYTES);
@@ -214,26 +237,35 @@ async function saveMediaAsset(entry) {
   };
 
   const fields = Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key, firestoreValue(value)]));
-  await firestoreRequest(mediaAssetDocumentPath(id), {
+  await firestoreMediaRequest(mediaAssetDocumentPath(id), {
     method: 'PATCH',
     body: JSON.stringify({ fields })
-  });
+  }, `${id}/metadata`);
 
-  for (let index = 0; index < chunkCount; index += 1) {
-    const start = index * FIRESTORE_MEDIA_CHUNK_BYTES;
-    const chunk = buffer.subarray(start, Math.min(buffer.length, start + FIRESTORE_MEDIA_CHUNK_BYTES));
-    const chunkId = String(index).padStart(6, '0');
-    await firestoreRequest(mediaChunkCollectionPath(id) + '/' + chunkId, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        fields: {
-          index: firestoreValue(index),
-          dataBase64: firestoreValue(chunk.toString('base64'))
-        }
-      })
-    });
-  }
+  // 1本の巨大なFirestore書き込みに依存せず、256KB単位のチャンクを少数並列で保存します。
+  const concurrency = 6;
+  let nextIndex = 0;
+  const worker = async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= chunkCount) return;
+      const start = index * FIRESTORE_MEDIA_CHUNK_BYTES;
+      const chunk = buffer.subarray(start, Math.min(buffer.length, start + FIRESTORE_MEDIA_CHUNK_BYTES));
+      const chunkId = String(index).padStart(6, '0');
+      await firestoreMediaRequest(mediaChunkCollectionPath(id) + '/' + chunkId, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fields: {
+            index: firestoreValue(index),
+            dataBase64: firestoreValue(chunk.toString('base64'))
+          }
+        })
+      }, `${id}/chunk-${index}`);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, chunkCount) }, () => worker()));
 
+  console.log(`[firebase] media save complete: id=${id} bytes=${buffer.length} chunks=${chunkCount}`);
   return true;
 }
 
