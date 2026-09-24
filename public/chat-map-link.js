@@ -38,12 +38,28 @@
   }
 
   function attachMapLink(article) {
-    if (!article || article.dataset.mapLinkReady === 'true') return;
+    if (!article) return;
 
-    // 返信メッセージには「地図で見る」を表示しません。
-    // 返信元に場所情報があっても、返信本文は地図リンクの対象外です。
+    // 返信メッセージには地図リンクを一切付けません。
+    // データの受信順や再描画で一度リンク用クラスが付いてしまった場合も、
+    // ここで確実に解除して「🗺️ 地図で見る」を表示しないようにします。
     const replyToId = String(article.dataset.replyToId || '').trim();
-    if (replyToId) return;
+    const hasReplyElement = Boolean(article.querySelector(':scope > .message-reply'));
+    const isReplyMessage = Boolean(replyToId) || article.classList.contains('reply-message') || hasReplyElement;
+    if (isReplyMessage) {
+      article.classList.remove('has-map-link');
+      delete article.dataset.mapLinkReady;
+
+      const bubble = article.querySelector('.message-bubble');
+      if (bubble) {
+        bubble.removeAttribute('title');
+        bubble.removeAttribute('role');
+        bubble.removeAttribute('tabindex');
+      }
+      return;
+    }
+
+    if (article.dataset.mapLinkReady === 'true') return;
 
     // 地図情報を持つ通常投稿だけを対象にします。
     if (article.dataset.location !== '1') return;
