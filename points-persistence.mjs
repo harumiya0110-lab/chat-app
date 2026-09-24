@@ -494,4 +494,5 @@ SocketIOServer.prototype.on = function(eventName, listener) {
   return originalServerOn.call(this, eventName, wrappedListener);
 };
 
+export { getPoints };
 export const regionalPointsPersistenceEnabled = enabled;
