@@ -145,6 +145,14 @@
       return;
     }
 
+    // 交通障害のマップピンには「手伝える」機能を表示しません。
+    // 交通情報はルート案内・削除などの基本操作だけを残します。
+    if (marker.__eventType === '交通障害') {
+      actions.innerHTML = '';
+      appendRouteShareButtons(actions, marker);
+      return;
+    }
+
     const helpUsers = Array.isArray(marker.__helpUsers) ? marker.__helpUsers : [];
     const confirmedUsers = Array.isArray(marker.__helpConfirmedUsers) ? marker.__helpConfirmedUsers : [];
     const isOwner = marker.__deleteOwnerName === currentUsername;
