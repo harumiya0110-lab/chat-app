@@ -720,19 +720,37 @@ io.on('connection', socket => {
       bytes: buffer.length
     });
 
-    let persistent = false;
-    try {
-      persistent = await saveMediaAsset(mediaStore.get(mediaId));
-    } catch (error) {
-      console.error('Firestore media save failed:', error);
-    }
     const storedEntry = mediaStore.get(mediaId);
-    if (storedEntry) storedEntry.persistent = persistent;
+    if (!storedEntry) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'store-failed' });
+      return;
+    }
 
+    // 動画はFirestoreへの保存に時間がかかることがあるため、
+    // コメントを含む投稿を先にチャットへ表示し、永続保存はバックグラウンドで行います。
+    // これにより「サムネイルは作れるのに、コメントと一緒に送れない」状態を防ぎます。
+    storedEntry.persistent = false;
     const media = buildMediaMeta(storedEntry);
-    media.persistent = persistent;
+    media.persistent = false;
     socket.server.emit('message-media-attached', { messageId, media });
     if (typeof ack === 'function') ack({ ok: true, messageId, media });
+
+    void saveMediaAsset(storedEntry).then(persistent => {
+      const latestEntry = mediaStore.get(mediaId);
+      if (!latestEntry) return;
+      latestEntry.persistent = persistent === true;
+      const updatedMedia = buildMediaMeta(latestEntry);
+      updatedMedia.persistent = latestEntry.persistent;
+      socket.server.emit('message-media-attached', { messageId, media: updatedMedia });
+      if (!latestEntry.persistent) {
+        console.error('Firestore media save failed: persistence was not confirmed.');
+      }
+    }).catch(error => {
+      console.error('Firestore media save failed:', error);
+      const latestEntry = mediaStore.get(mediaId);
+      if (!latestEntry) return;
+      latestEntry.persistent = false;
+    });
   });
 
   socket.on('send-image', (data, ack) => {
