@@ -51,7 +51,7 @@ const GEOCODE_CACHE_TTL = 10 * 60 * 1000;
 const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
@@ -480,6 +480,147 @@ app.post('/api/messages', async (req, res) => {
     console.error('メッセージ処理に失敗しました:', error);
     return res.status(500).json({ error: '投稿処理に失敗しました。しばらくしてから再試行してください。' });
   }
+});
+
+
+function findStoredMediaForMessage(messageId, ownerId) {
+  const targetMessageId = String(messageId || '').trim();
+  const targetOwnerId = String(ownerId || '').trim();
+  if (!targetMessageId || !targetOwnerId) return null;
+
+  for (const entry of mediaStore.values()) {
+    if (
+      String(entry?.messageId || '').trim() === targetMessageId &&
+      String(entry?.ownerId || '').trim() === targetOwnerId
+    ) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+async function finalizeMediaUpload(entry, socketServer) {
+  if (!entry) return null;
+
+  // まずチャットへ共有し、Firestore保存はバックグラウンドで行います。
+  entry.persistent = false;
+  const media = buildMediaMeta(entry);
+  media.persistent = false;
+  socketServer.emit('message-media-attached', { messageId: entry.messageId, media });
+
+  void saveMediaAsset(entry).then(persistent => {
+    const latestEntry = mediaStore.get(entry.id);
+    if (!latestEntry) return;
+    latestEntry.persistent = persistent === true;
+    const updatedMedia = buildMediaMeta(latestEntry);
+    updatedMedia.persistent = latestEntry.persistent;
+    socketServer.emit('message-media-attached', {
+      messageId: latestEntry.messageId,
+      media: updatedMedia
+    });
+    if (!latestEntry.persistent) {
+      console.error('Firestore media save failed: persistence was not confirmed.');
+    }
+  }).catch(error => {
+    console.error('Firestore media save failed:', error);
+  });
+
+  return media;
+}
+
+// Socket.IOの動画転送でブラウザやネットワーク側の制限に当たった場合でも、
+// HTTP経由で動画を送れるようにします。
+app.post('/api/messages/:messageId/media', async (req, res) => {
+  const messageId = String(req.params?.messageId || '').trim();
+  const ownerId = String(req.body?.userId || '').trim();
+  const user = users[ownerId];
+  const type = req.body?.type === 'video' ? 'video' : req.body?.type === 'image' ? 'image' : '';
+
+  if (!user || !messageId || !ownerId || !type) {
+    return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  }
+
+  const owner = messageOwners.get(messageId);
+  if (!owner || owner.socketId !== ownerId) {
+    return res.status(403).json({ ok: false, reason: 'not-owner' });
+  }
+
+  const existing = findStoredMediaForMessage(messageId, ownerId);
+  if (existing) {
+    const media = buildMediaMeta(existing);
+    media.persistent = existing.persistent === true;
+    return res.json({ ok: true, messageId, media, alreadyStored: true });
+  }
+
+  const filename = typeof req.body?.filename === 'string'
+    ? req.body.filename.trim().slice(0, 200)
+    : '';
+  const durationSec = Math.max(0, Math.min(30, Number(req.body?.durationSec) || 0));
+
+  const thumb = decodeDataUrl(req.body?.thumbnailDataUrl);
+  if (thumb?.buffer?.length) {
+    if (!/^image\/(?:jpeg|png|webp)$/i.test(thumb.mime)) {
+      return res.status(400).json({ ok: false, reason: 'invalid-thumbnail' });
+    }
+    if (thumb.buffer.length > 300 * 1024) {
+      return res.status(413).json({ ok: false, reason: 'thumbnail-too-large' });
+    }
+  }
+
+  let buffer = null;
+  let mimeType = '';
+
+  if (type === 'image') {
+    const parsed = decodeDataUrl(req.body?.dataUrl);
+    mimeType = safeImageMime(parsed?.mime);
+    buffer = parsed?.buffer || null;
+    if (!buffer || !mimeType) {
+      return res.status(400).json({ ok: false, reason: 'invalid-format' });
+    }
+    if (buffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, reason: 'too-large' });
+    }
+  } else {
+    const base64 = typeof req.body?.videoBase64 === 'string'
+      ? req.body.videoBase64.replace(/^data:video\/[^;]+;base64,/i, '')
+      : '';
+    try {
+      buffer = base64 ? Buffer.from(base64, 'base64') : null;
+    } catch {
+      buffer = null;
+    }
+    mimeType = safeVideoMime(req.body?.videoType);
+    if (!buffer?.length || !mimeType) {
+      return res.status(400).json({ ok: false, reason: 'invalid-format' });
+    }
+    if (buffer.length > 15 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, reason: 'too-large' });
+    }
+    if (durationSec > 30) {
+      return res.status(400).json({ ok: false, reason: 'too-long' });
+    }
+  }
+
+  const mediaId = `media-${randomUUID()}`;
+  storeMedia({
+    id: mediaId,
+    messageId,
+    ownerId,
+    ownerUsername: user.username,
+    type,
+    filename,
+    mimeType,
+    buffer,
+    thumbnailBytes: thumb?.buffer || null,
+    thumbnailMime: thumb?.mime?.toLowerCase() || 'image/jpeg',
+    durationSec,
+    createdAt: Date.now(),
+    bytes: buffer.length
+  });
+
+  const entry = mediaStore.get(mediaId);
+  const media = await finalizeMediaUpload(entry, io);
+  return res.json({ ok: true, messageId, media });
 });
 
 
