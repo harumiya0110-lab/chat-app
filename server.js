@@ -52,6 +52,63 @@ const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
+
+// Leafletはブラウザから外部CDNへ直接アクセスせず、サーバー側で取得して同一オリジンから配信します。
+// これによりChrome/EdgeのTracking Preventionによるunpkg.comのストレージ警告を避けます。
+const leafletProxyCache = new Map();
+const LEAFLET_ASSETS = {
+  '/vendor/leaflet.css': {
+    url: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+    contentType: 'text/css; charset=utf-8'
+  },
+  '/vendor/leaflet.js': {
+    url: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    contentType: 'application/javascript; charset=utf-8'
+  }
+};
+
+app.get('/vendor/leaflet.css', async (_req, res) => {
+  const asset = LEAFLET_ASSETS['/vendor/leaflet.css'];
+  try {
+    let content = leafletProxyCache.get(asset.url);
+    if (!content) {
+      const response = await fetch(asset.url, {
+        headers: { 'User-Agent': 'machitsuna-map/1.0' }
+      });
+      if (!response.ok) throw new Error(`Leaflet CSS fetch failed: ${response.status}`);
+      content = await response.text();
+      leafletProxyCache.set(asset.url, content);
+    }
+    res.setHeader('Content-Type', asset.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(content);
+  } catch (error) {
+    console.error('Leaflet CSS proxy failed:', error);
+    res.status(502).type('text/plain').send('Leaflet CSSを読み込めませんでした。');
+  }
+});
+
+app.get('/vendor/leaflet.js', async (_req, res) => {
+  const asset = LEAFLET_ASSETS['/vendor/leaflet.js'];
+  try {
+    let content = leafletProxyCache.get(asset.url);
+    if (!content) {
+      const response = await fetch(asset.url, {
+        headers: { 'User-Agent': 'machitsuna-map/1.0' }
+      });
+      if (!response.ok) throw new Error(`Leaflet JS fetch failed: ${response.status}`);
+      content = await response.text();
+      leafletProxyCache.set(asset.url, content);
+    }
+    res.setHeader('Content-Type', asset.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(content);
+  } catch (error) {
+    console.error('Leaflet JS proxy failed:', error);
+    res.status(502).type('text/plain').send('Leaflet JSを読み込めませんでした。');
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
