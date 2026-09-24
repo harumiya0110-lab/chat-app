@@ -536,7 +536,7 @@ async function uploadPendingMediaViaHttp(messageId, media) {
   try {
     const backendBase = String(
       window.RURAL_BACKEND_URL || window.location.origin
-    ).replace(/\\/$/, '');
+    ).replace(/\/$/, '');
     const mediaUrl = backendBase + '/api/messages/' + encodeURIComponent(messageId) + '/media';
     const response = await fetch(mediaUrl, {
       method: 'POST',
