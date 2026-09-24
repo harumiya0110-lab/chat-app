@@ -148,8 +148,8 @@
     // 交通障害のマップピンには「手伝える」機能を表示しません。
     // 交通情報はルート案内・削除などの基本操作だけを残します。
     if (marker.__eventType === '交通障害') {
+      // 交通障害のマップピンでは「手伝える」と「ルート案内」の両方を表示しません。
       actions.innerHTML = '';
-      appendRouteShareButtons(actions, marker);
       return;
     }
 
