@@ -204,6 +204,9 @@ async function setPoints(username, points, extraFields = {}) {
   });
 }
 
+// デプロイ時にハルへの初回ボーナスを一度だけ反映します。
+await grantOneTimeHaruBonus();
+
 function getJapanDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Tokyo',
