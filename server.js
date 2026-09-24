@@ -1001,16 +1001,25 @@ io.on('connection', socket => {
     if (typeof ack === 'function') ack({ ok: true });
   });
 
-  socket.on('send-message', data => {
+    socket.on('send-message', (data, ack) => {
     const user = users[socket.id];
     const message = typeof data?.message === 'string' ? data.message.trim().slice(0, 2000) : '';
-    if (!user || !message) return;
+    if (!user || !message) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'unauthorized', message: 'チャットに参加してから投稿してください。' });
+      return;
+    }
     const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
     const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
     const replyToText = typeof data?.replyToText === 'string' ? data.replyToText.trim().slice(0, 200) : '';
     const normalMessageId = randomUUID();
-    messageOwners.set(normalMessageId, { socketId: socket.id });
-    io.emit('receive-message', {
+
+    // メディア添付の所有者確認に使うため、投稿IDと現在のSocketを紐付けます。
+    messageOwners.set(normalMessageId, {
+      socketId: socket.id,
+      username: user.username
+    });
+
+    const messageData = {
       id: normalMessageId,
       username: user.username,
       message,
@@ -1020,7 +1029,13 @@ io.on('connection', socket => {
       replyToId,
       replyToUsername,
       replyToText
-    });
+    };
+
+    io.emit('receive-message', messageData);
+
+    // 場所なし投稿でも、画像・動画添付処理が続けて実行できるよう
+    // 必ず投稿IDをクライアントへ返します。
+    if (typeof ack === 'function') ack({ ok: true, ...messageData });
   });
 
   socket.on('call-offer', (payload, ack) => {
