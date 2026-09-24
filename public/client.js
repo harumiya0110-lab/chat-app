@@ -127,7 +127,7 @@ function escapeHtml(value) {
 
 function formatEventStartAt(value) {
   const raw = String(value || '').trim();
-  const match = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})$/);
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return raw;
   return `${match[1]}年${Number(match[2])}月${Number(match[3])}日 ${match[4]}:${match[5]}`;
 }
