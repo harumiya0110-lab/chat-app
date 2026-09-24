@@ -39,6 +39,11 @@
           ${EVENT_TYPES.map(type => `<option value="${type}">${EVENT_LABELS[type]}</option>`).join('')}
         </select>
       </label>
+      <label id="map-location-post-event-time-field" class="map-location-post-field" hidden>
+        <span>開催日時（イベントのみ）</span>
+        <input id="map-location-post-event-start" type="datetime-local" aria-describedby="map-location-post-event-time-help">
+        <small id="map-location-post-event-time-help" class="map-location-post-event-time-help">祭り・催しなどの開始日時を入力してください。</small>
+      </label>
       <label class="map-location-post-field">
         <span>何が起きたか</span>
         <textarea id="map-location-post-message" maxlength="2000" rows="3" placeholder="例：この道で倒木があり、通行しにくくなっています。"></textarea>
@@ -57,6 +62,8 @@
   const form = toolbar.querySelector('#map-location-post-form');
   const coordsEl = toolbar.querySelector('#map-location-post-coords');
   const typeInput = toolbar.querySelector('#map-location-post-type');
+  const eventTimeField = toolbar.querySelector('#map-location-post-event-time-field');
+  const eventStartInput = toolbar.querySelector('#map-location-post-event-start');
   const messageInput = toolbar.querySelector('#map-location-post-message');
   const cancelBtn = toolbar.querySelector('#map-location-post-cancel');
   const submitBtn = toolbar.querySelector('#map-location-post-submit');
@@ -77,9 +84,10 @@
     .map-location-post-selected span{color:var(--theme-text-soft,#68776e)}
     .map-location-post-selected strong{color:var(--theme-text,#31513f);font-variant-numeric:tabular-nums}
     .map-location-post-field{display:grid;gap:5px;font-size:12px;color:var(--theme-text,#31513f);font-weight:700}
-    .map-location-post-field select,.map-location-post-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--theme-input,#bfccbb);border-radius:8px;background:var(--theme-panel,#fff);color:var(--theme-text,#21342c);padding:9px 10px;font:inherit;outline:none}
+    .map-location-post-field select,.map-location-post-field textarea,.map-location-post-field input[type="datetime-local"]{width:100%;box-sizing:border-box;border:1px solid var(--theme-input,#bfccbb);border-radius:8px;background:var(--theme-panel,#fff);color:var(--theme-text,#21342c);padding:9px 10px;font:inherit;outline:none}
     .map-location-post-field textarea{resize:vertical;min-height:72px;line-height:1.5}
-    .map-location-post-field select:focus,.map-location-post-field textarea:focus{border-color:var(--theme-main,#558266);box-shadow:0 0 0 3px color-mix(in srgb,var(--theme-main,#558266) 15%,transparent)}
+    .map-location-post-event-time-help{font-size:11px;font-weight:400;color:var(--theme-text-soft,#6d7a73);line-height:1.5}
+    .map-location-post-field select:focus,.map-location-post-field textarea:focus,.map-location-post-field input[type="datetime-local"]:focus{border-color:var(--theme-main,#558266);box-shadow:0 0 0 3px color-mix(in srgb,var(--theme-main,#558266) 15%,transparent)}
     .map-location-post-actions{display:flex;justify-content:flex-end;gap:8px}
     .map-location-post-secondary{background:var(--theme-panel,#fff);color:var(--theme-text,#31513f)}
     .map-location-post-submit{background:var(--theme-main,#2d8a57);color:#fff;border-color:var(--theme-main,#2d8a57)}
@@ -97,6 +105,13 @@
   let selectedLatLng = null;
   let selectedMarker = null;
   let sending = false;
+
+  function syncEventScheduleField() {
+    const isEvent = typeInput.value === 'イベント';
+    eventTimeField.hidden = !isEvent;
+    eventStartInput.required = isEvent;
+    if (!isEvent) eventStartInput.value = '';
+  }
 
   function setCursor(enabled) {
     const container = mapInstance.getContainer?.();
@@ -146,6 +161,10 @@
     mapInstance.panTo(selectedLatLng, { animate: true });
   });
 
+  syncEventScheduleField();
+
+  typeInput.addEventListener('change', syncEventScheduleField);
+
   modeBtn.addEventListener('click', () => {
     if (sending) return;
 
@@ -179,6 +198,7 @@
 
     const message = messageInput.value.trim();
     const eventType = typeInput.value;
+    const eventStartAt = eventType === 'イベント' ? String(eventStartInput.value || '').trim() : '';
     if (!message) {
       messageInput.focus();
       setStatus?.('その場所で起きたことを入力してください。');
@@ -186,6 +206,11 @@
     }
     if (!EVENT_TYPES.includes(eventType)) {
       setStatus?.('出来事の種類を選択してください。');
+      return;
+    }
+    if (eventType === 'イベント' && !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(eventStartAt)) {
+      eventStartInput.focus();
+      setStatus?.('イベントの開催日時を入力してください。');
       return;
     }
     if (typeof currentUsername === 'undefined' || !String(currentUsername || '').trim()) {
@@ -208,6 +233,7 @@
       lat: Number(selectedLatLng.lat),
       lng: Number(selectedLatLng.lng),
       eventType,
+      eventStartAt,
       message
     };
 
