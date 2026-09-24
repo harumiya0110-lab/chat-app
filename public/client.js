@@ -125,6 +125,13 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+function formatEventStartAt(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})$/);
+  if (!match) return raw;
+  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日 ${match[4]}:${match[5]}`;
+}
+
 function createGoogleMapsLocationUrl(lat, lng, mode = 'directions') {
   const latitude = Number(lat);
   const longitude = Number(lng);
@@ -530,6 +537,8 @@ function buildMessageElement(data) {
   const type = data.locationData?.eventType;
   const style = EVENT_STYLES[type];
   const badge = type && style ? `<span class="message-type-badge" style="background:${style.color}">${escapeHtml(type)}</span>` : '';
+  const eventStartAt = type === 'イベント' ? formatEventStartAt(data.locationData?.eventStartAt) : '';
+  const eventSchedule = eventStartAt ? `<div class="message-event-schedule">📅 開催日時：${escapeHtml(eventStartAt)}</div>` : '';
   const resolved = data.status === 'resolved' ? '<span class="message-resolved-badge">✅ 解決済み</span>' : '';
   const replyToId = String(data.replyToId || '').trim();
   const replyToUsername = String(data.replyToUsername || '投稿者').trim() || '投稿者';
@@ -537,12 +546,13 @@ function buildMessageElement(data) {
   const reply = replyToId
     ? `<div class="message-reply" data-reply-target="${escapeHtml(replyToId)}" role="button" tabindex="0" title="返信元の投稿を表示"><span class="message-reply-label">↩︎ ${escapeHtml(replyToUsername)}さんへの返信</span>${replyToText ? `<span class="message-reply-quote">${escapeHtml(replyToText)}</span>` : ''}</div>`
     : '';
-  item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-badges">${badge}${resolved}</div>${reply}<div class="message-bubble">${escapeHtml(data.message || data.text || '')}</div>`;
+  item.innerHTML = `<div class="message-header"><span>${escapeHtml(data.username || '投稿者')}</span><span>${escapeHtml(timestamp)}</span></div><div class="message-badges">${badge}${resolved}</div>${eventSchedule}${reply}<div class="message-bubble">${escapeHtml(data.message || data.text || '')}</div>`;
   item.dataset.messageId = typeof data.id === 'string' ? data.id : '';
   item.dataset.username = typeof data.username === 'string' ? data.username : '';
   item.dataset.userId = typeof data.userId === 'string' ? data.userId : '';
   item.dataset.location = data.locationData && !replyToId ? '1' : '0';
   item.dataset.eventType = typeof data.locationData?.eventType === 'string' ? data.locationData.eventType : '';
+  item.dataset.eventStartAt = typeof data.locationData?.eventStartAt === 'string' ? data.locationData.eventStartAt : '';
   item.dataset.helpUsers = JSON.stringify(Array.isArray(data.helpUsers) ? data.helpUsers : []);
   item.dataset.helpConfirmedUsers = JSON.stringify(Array.isArray(data.helpConfirmedUsers) ? data.helpConfirmedUsers : []);
   item.dataset.status = data.status === 'resolved' ? 'resolved' : 'open';
@@ -1405,7 +1415,9 @@ function addMarker(message) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
   const type = loc.eventType || 'その他';
   const style = EVENT_STYLES[type] || EVENT_STYLES['その他'];
-  const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong><br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
+  const eventStartAt = type === 'イベント' ? formatEventStartAt(loc.eventStartAt) : '';
+  const eventSchedule = eventStartAt ? `<div class="map-event-schedule">📅 開催日時：${escapeHtml(eventStartAt)}</div>` : '';
+  const popup = `<strong style="color:${style.color}">${escapeHtml(type)}</strong>${eventSchedule}<br><strong>${escapeHtml(loc.summary || '')}</strong><br><small>${escapeHtml(loc.locationName || '')}</small><hr>${escapeHtml(message.message || message.text || '')}`;
   const messageId = typeof message.id === 'string' ? message.id.trim() : '';
   if (messageId && ruralMarkerByMessageId.has(messageId)) {
     return ruralMarkerByMessageId.get(messageId);
