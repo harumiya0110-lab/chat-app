@@ -66,10 +66,14 @@ function normalizeLocationData(value) {
   const lat = Number(value.lat);
   const lng = Number(value.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const eventStartAt = typeof value.eventStartAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value.eventStartAt.trim())
+    ? value.eventStartAt.trim()
+    : '';
   return {
     lat,
     lng,
     eventType: typeof value.eventType === 'string' ? value.eventType : 'その他',
+    eventStartAt,
     summary: typeof value.summary === 'string' ? value.summary : '',
     locationName: typeof value.locationName === 'string' ? value.locationName : '',
     matchedLocation: typeof value.matchedLocation === 'string' ? value.matchedLocation : '',
