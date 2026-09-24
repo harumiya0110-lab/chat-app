@@ -706,7 +706,8 @@ function addMessage(data) {
   attachPendingReplies();
   if (!isHistoryLoading) {
     trimChatMessages();
-    scrollToBottom();
+    // 返信は親投稿のスレッド内へ移動するため、投稿後にチャット最下部へ自動スクロールしません。
+    if (!data?.replyToId) scrollToBottom();
   }
 }
 
