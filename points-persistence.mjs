@@ -213,6 +213,28 @@ function getJapanDateKey(date = new Date()) {
   }).format(date);
 }
 
+async function grantOneTimeHaruBonus() {
+  const username = 'ハル';
+  const BONUS_POINTS = 1000;
+  if (!enabled) return;
+
+  try {
+    const account = await getPointAccount(username);
+    if (account.haru1000BonusGranted === true) {
+      console.log('[regional points] ハルへの1000pt付与は既に完了しています。');
+      return;
+    }
+
+    const currentPoints = Math.max(0, Math.floor(Number(account.points || 0)));
+    const newPoints = currentPoints + BONUS_POINTS;
+    await setPoints(username, newPoints, { haru1000BonusGranted: true });
+
+    console.log(`[regional points] ハルへ1000ptを一度だけ付与しました。残高=${newPoints}pt`);
+  } catch (error) {
+    console.error('[regional points] ハルへの1000pt付与に失敗しました:', error);
+  }
+}
+
 async function awardDailyLoginPoints(username) {
   const account = await getPointAccount(username);
   const today = getJapanDateKey();
