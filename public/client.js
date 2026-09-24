@@ -504,8 +504,53 @@ async function handleSelectedVideo(file) {
   }
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('動画ファイルがありません。'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('動画ファイルを読み込めませんでした。'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPendingMediaViaHttp(messageId, media) {
+  if (!messageId || !media) return { ok: false, reason: 'invalid' };
+
+  const payload = {
+    userId: socket.id || '',
+    type: media.type,
+    filename: media.filename || '',
+    durationSec: media.durationSec || 0,
+    thumbnailDataUrl: media.thumbnailDataUrl || ''
+  };
+
+  if (media.type === 'image') {
+    payload.dataUrl = media.dataUrl || '';
+  } else {
+    // Socket.IOのバイナリ送信に失敗した場合の確実なフォールバック。
+    payload.videoBase64 = await readFileAsDataUrl(media.file);
+    payload.videoType = media.file?.type || 'video/mp4';
+  }
+
+  try {
+    const response = await fetch('/api/messages/' + encodeURIComponent(messageId) + '/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    return response.ok && result?.ok
+      ? result
+      : { ok: false, reason: result?.reason || 'http-upload-failed', message: result?.message || '' };
+  } catch (error) {
+    console.error('HTTPメディア共有に失敗しました:', error);
+    return { ok: false, reason: 'http-upload-failed' };
+  }
+}
+
 async function uploadPendingMedia(messageId, media) {
-  if (!messageId || !media || !socket.connected) return { ok: false, reason: 'unavailable' };
+  if (!messageId || !media) return { ok: false, reason: 'unavailable' };
 
   const payload = {
     messageId,
@@ -516,18 +561,39 @@ async function uploadPendingMedia(messageId, media) {
   };
 
   if (media.type === 'image') {
-    payload.dataUrl = media.dataUrl;
-  } else {
-    payload.video = await media.file.arrayBuffer();
-    payload.videoType = media.file.type || 'video/mp4';
+    if (socket.connected) {
+      payload.dataUrl = media.dataUrl;
+      const result = await new Promise(resolve => {
+        socket.timeout(30000).emit('attach-media', payload, (err, response) => {
+          if (err) return resolve({ ok: false, reason: 'timeout' });
+          resolve(response?.ok ? response : { ok: false, reason: response?.reason || 'upload-failed' });
+        });
+      });
+      if (result?.ok) return result;
+    }
+    return uploadPendingMediaViaHttp(messageId, media);
   }
 
-  return await new Promise(resolve => {
-    socket.timeout(media.type === 'video' ? 120000 : 30000).emit('attach-media', payload, (err, result) => {
-      if (err) return resolve({ ok: false, reason: 'timeout' });
-      resolve(result?.ok ? result : { ok: false, reason: result?.reason || 'upload-failed' });
+  // 動画はまずHTTPで送ります。Socket.IOの大きなバイナリ転送に依存しないため、
+  // サムネイル作成後の「共有に失敗しました」を防ぎます。
+  const httpResult = await uploadPendingMediaViaHttp(messageId, media);
+  if (httpResult?.ok) return httpResult;
+
+  // HTTPが使えない環境ではSocket.IOへ戻します。
+  if (!socket.connected) return httpResult;
+  try {
+    payload.video = await media.file.arrayBuffer();
+    payload.videoType = media.file?.type || 'video/mp4';
+    return await new Promise(resolve => {
+      socket.timeout(120000).emit('attach-media', payload, (err, response) => {
+        if (err) return resolve(httpResult);
+        resolve(response?.ok ? response : httpResult);
+      });
     });
-  });
+  } catch (error) {
+    console.error('Socket.IO動画共有に失敗しました:', error);
+    return httpResult;
+  }
 }
 
 function buildMessageElement(data) {
@@ -1094,7 +1160,9 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
     let mediaResult = null;
     if (mediaToSend && result.id) {
       mediaResult = await uploadPendingMedia(result.id, mediaToSend);
-      clearPendingMedia();
+      if (mediaResult?.ok) {
+        clearPendingMedia();
+      }
     }
 
     const mediaWasSavedToFirestore = mediaResult?.ok && mediaResult?.media?.persistent === true;
