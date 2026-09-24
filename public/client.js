@@ -534,7 +534,11 @@ async function uploadPendingMediaViaHttp(messageId, media) {
   }
 
   try {
-    const response = await fetch('/api/messages/' + encodeURIComponent(messageId) + '/media', {
+    const backendBase = String(
+      window.RURAL_BACKEND_URL || window.location.origin
+    ).replace(/\\/$/, '');
+    const mediaUrl = backendBase + '/api/messages/' + encodeURIComponent(messageId) + '/media';
+    const response = await fetch(mediaUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -542,10 +546,18 @@ async function uploadPendingMediaViaHttp(messageId, media) {
     const result = await response.json().catch(() => ({}));
     return response.ok && result?.ok
       ? result
-      : { ok: false, reason: result?.reason || 'http-upload-failed', message: result?.message || '' };
+      : {
+        ok: false,
+        reason: result?.reason || 'http-upload-failed',
+        message: result?.message || `HTTP ${response.status}`
+      };
   } catch (error) {
     console.error('HTTPメディア共有に失敗しました:', error);
-    return { ok: false, reason: 'http-upload-failed' };
+    return {
+      ok: false,
+      reason: 'http-upload-failed',
+      message: error?.message || ''
+    };
   }
 }
 
