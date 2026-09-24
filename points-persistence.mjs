@@ -189,7 +189,16 @@ async function setPoints(username, points, extraFields = {}) {
   for (const [key, value] of Object.entries(extraFields)) {
     fields[key] = firestoreValue(value);
   }
-  await firestoreRequest(`/regionalPoints/${safeUsername}`, {
+
+  // Firestore RESTのPATCHはupdateMaskがないと、送信したfields以外を
+  // 既存ドキュメントから消してしまいます。
+  // 地域ポイント更新のたびに、交換済みテーマまで消えないように
+  // 今回変更するフィールドだけを更新します。
+  const updateMask = Object.keys(fields)
+    .map(key => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
+    .join('&');
+
+  await firestoreRequest(`/regionalPoints/${safeUsername}?${updateMask}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields })
   });
