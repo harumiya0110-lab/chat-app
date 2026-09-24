@@ -218,9 +218,6 @@ async function saveMediaAsset(entry) {
   const id = String(entry.id).trim().slice(0, 120);
   const chunkCount = Math.ceil(buffer.length / FIRESTORE_MEDIA_CHUNK_BYTES);
   console.log(`[firebase] media save start: id=${id} type=${entry.type} bytes=${buffer.length} chunks=${chunkCount}`);
-
-  const id = String(entry.id).trim().slice(0, 120);
-  const chunkCount = Math.ceil(buffer.length / FIRESTORE_MEDIA_CHUNK_BYTES);
   const thumbnailBuffer = bufferFromValue(entry.thumbnailBytes);
   const metadata = {
     messageId: String(entry.messageId || '').trim().slice(0, 120),
