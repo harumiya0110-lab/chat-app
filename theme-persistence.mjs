@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { getPoints } from './points-persistence.mjs';
 
 const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 let serviceAccount = null;
@@ -277,6 +278,14 @@ async function exchangeTheme(socket, themeId, ack) {
     console.log(`[theme-exchange] exchange-theme start user=${username} theme=${themeId}`);
     try {
       const state = await loadState(username);
+      // ポイント機能側がログイン・投稿などで残高を更新すると、
+      // テーマ側のキャッシュに古い残高が残ることがあります。
+      // 交換直前はポイント機能の最新残高を正として判定します。
+      try {
+        state.points = Math.max(0, Math.floor(Number(await getPoints(username) || 0)));
+      } catch (error) {
+        console.error('[theme-exchange] latest points load failed:', error.message);
+      }
       if (state.themes.includes(themeId)) {
         state.currentTheme = themeId;
         queueSave(username, state);
@@ -336,6 +345,12 @@ async function exchangeChatColor(socket, colorId, ack) {
     console.log(`[theme-exchange] exchange-chat-color start user=${username} color=${colorId}`);
     try {
       const state = await loadState(username);
+      // チャット色交換でも、交換直前の最新地域ポイントを利用します。
+      try {
+        state.points = Math.max(0, Math.floor(Number(await getPoints(username) || 0)));
+      } catch (error) {
+        console.error('[theme-exchange] latest points load failed:', error.message);
+      }
       if (state.chatColors.includes(colorId)) {
         state.currentChatColor = colorId;
         queueSave(username, state);
