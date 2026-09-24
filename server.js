@@ -24,6 +24,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const eventTypes = ['鳥獣目撃', '道路障害', '交通障害', '助け合い', 'イベント', 'その他'];
+
+function normalizeEventStartAt(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || hour > 23 || minute > 59) return '';
+  const probe = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day || probe.getUTCHours() !== hour || probe.getUTCMinutes() !== minute) return '';
+  return raw;
+}
 const PORT = Number(process.env.PORT) || 3000;
 // 「ハル」専用管理者パスワード。未設定の場合、ハルという名前は管理者として利用できません。
 const HARU_ADMIN_PASSWORD = String(process.env.HARU_ADMIN_PASSWORD || '').trim();
@@ -572,6 +587,7 @@ io.on('connection', socket => {
     const lat = Number(data?.lat);
     const lng = Number(data?.lng);
     const eventType = eventTypes.includes(data?.eventType) ? data.eventType : 'その他';
+    const eventStartAt = eventType === 'イベント' ? normalizeEventStartAt(data?.eventStartAt) : '';
     const message = typeof data?.message === 'string' ? data.message.trim().slice(0, 2000) : '';
     const replyToId = typeof data?.replyToId === 'string' ? data.replyToId.trim().slice(0, 120) : '';
     const replyToUsername = typeof data?.replyToUsername === 'string' ? data.replyToUsername.trim().slice(0, 50) : '';
@@ -584,11 +600,16 @@ io.on('connection', socket => {
       if (typeof ack === 'function') ack({ ok: false, reason: 'empty-message', message: 'その場所で起きたことを入力してください。' });
       return;
     }
+    if (eventType === 'イベント' && !eventStartAt) {
+      if (typeof ack === 'function') ack({ ok: false, reason: 'invalid-event-time', message: 'イベントの開催日時を正しく入力してください。' });
+      return;
+    }
 
     const locationData = {
       lat,
       lng,
       eventType,
+      eventStartAt,
       summary: message.slice(0, 100),
       locationName: '地図で選択した地点',
       matchedLocation: 'ユーザーが地図上で選択',
