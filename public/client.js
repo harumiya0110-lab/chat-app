@@ -1227,7 +1227,7 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
   sendBtn.disabled = true;
   setStatus(mediaToSend
     ? '投稿を送信してメディアを添付しています…'
-    : (replyTarget?.id ? '返信を投稿しています…' : 'AIが場所とイベント種別を解析しています…'));
+    : (replyTarget?.id ? '返信を投稿しています…' : '投稿しています…'));
 
   try {
     const response = await fetch('/api/messages', {
@@ -1341,7 +1341,7 @@ socket.on('chat-history-end', () => {
   window.__ruralHistoryLoading = false;
   trimChatMessages();
   scrollToBottom();
-  setStatus('場所を含む投稿はAIが解析して地図に表示します。');
+  setStatus('投稿を読み込みました。地図への投稿はマップ上で場所を選択して作成できます。');
 });
 
 function clearAllDisplayedPosts() {
