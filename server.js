@@ -500,38 +500,20 @@ app.get('/api/media/:id', async (req, res) => {
 
 app.post('/api/messages', async (req, res) => {
   const { text, userId, replyToId, replyToUsername, replyToText } = req.body || {};
-  if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
+  if (typeof text !== 'string' || !text.trim() || text.length > 2000 || typeof userId !== 'string' || !userId.trim()) {
+    return res.status(400).json({ error: 'text（1〜2000文字）とuserIdは必須です' });
+  }
+
   const cleanText = text.trim();
   const cleanUserId = userId.trim().slice(0, 200);
   const cleanReplyToId = typeof replyToId === 'string' ? replyToId.trim().slice(0, 120) : '';
   const cleanReplyToUsername = typeof replyToUsername === 'string' ? replyToUsername.trim().slice(0, 50) : '';
   const cleanReplyToText = typeof replyToText === 'string' ? replyToText.trim().slice(0, 200) : '';
-  const isReply = Boolean(cleanReplyToId);
+
   try {
-    let analysis = null;
-    let aiError = null;
-
-    // 返信は通常のコメント欄として扱い、場所らしい文字が含まれていても
-    // AI解析・ジオコーディングを行わず、地図ピンを作らない。
-    if (!isReply) {
-      try {
-        analysis = await analyzeMessage(cleanText);
-      } catch (error) {
-        aiError = error;
-        console.error('AI解析に失敗したため簡易解析へ切り替えます:', error);
-        analysis = fallbackAnalyzeMessage(cleanText);
-      }
-    }
-
-    let locationData = null;
-    let geocodeError = null;
-    if (!isReply && analysis?.hasLocation) {
-      try {
-        const coordinates = await geocodeLocation(analysis.locationName, analysis.locationCandidates, cleanText);
-        if (coordinates) locationData = { lat: coordinates.lat, lng: coordinates.lng, eventType: analysis.eventType, summary: analysis.summary, locationName: analysis.locationName, matchedLocation: coordinates.displayName, matchedQuery: coordinates.matchedQuery };
-        else geocodeError = '場所を地図上で特定できませんでした';
-      } catch (error) { console.error('ジオコーディング失敗:', error); geocodeError = '地図検索サービスに接続できませんでした'; }
-    }
+    // 通常のチャット投稿からは場所を自動判定・自動地図化しません。
+    // 地図付き投稿は、マップ上でユーザーが地点を選択する専用UIから作成します。
+    const locationData = null;
     const message = {
       text: cleanText,
       userId: cleanUserId,
@@ -542,6 +524,7 @@ app.post('/api/messages', async (req, res) => {
       replyToUsername: cleanReplyToUsername,
       replyToText: cleanReplyToText
     };
+
     messageOwners.set(message.id, { socketId: cleanUserId });
     io.emit('receive-message', {
       id: message.id,
@@ -554,7 +537,14 @@ app.post('/api/messages', async (req, res) => {
       replyToUsername: message.replyToUsername,
       replyToText: message.replyToText
     });
-    return res.json({ ...message, analysis, geocodeError, aiFallback: Boolean(aiError), isReply });
+
+    return res.json({
+      ...message,
+      analysis: null,
+      geocodeError: null,
+      aiFallback: false,
+      isReply: Boolean(cleanReplyToId)
+    });
   } catch (error) {
     console.error('メッセージ処理に失敗しました:', error);
     return res.status(500).json({ error: '投稿処理に失敗しました。しばらくしてから再試行してください。' });
