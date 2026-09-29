@@ -1263,24 +1263,14 @@ async function sendTextMessage(overrideText = null, overrideReplyTarget = undefi
         ? 'サーバーには共有しましたが、Firestore保存を確認できませんでした。'
         : '';
 
-    if (result.locationData) {
-      setStatus(
-        mediaResult?.ok
-          ? `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加し、メディアも共有しました。${mediaSaveNotice ? ` ${mediaSaveNotice}` : ''}`
-          : mediaToSend
-            ? `${result.locationData.locationName} にピンを追加しましたが、メディアの共有に失敗しました。`
-            : `${result.locationData.locationName} に「${result.locationData.eventType}」のピンを追加しました。`
-      );
-    } else if (mediaResult?.ok) {
+    if (mediaResult?.ok) {
       setStatus(`投稿とメディアを共有しました。${mediaSaveNotice ? ` ${mediaSaveNotice}` : ''}`);
     } else if (mediaToSend) {
       setStatus(mediaResult?.reason === 'firestore-save-failed' || mediaResult?.reason === 'firestore-save-timeout'
         ? (mediaResult.message || '投稿は共有されましたが、Firestoreへの保存に失敗しました。')
         : '投稿しましたが、メディアの共有に失敗しました。');
-    } else if (result.geocodeError) {
-      setStatus(`投稿しました。ただし${result.geocodeError}。`);
     } else {
-      setStatus('投稿しました。場所を特定できない投稿はチャットのみ表示します。');
+      setStatus('投稿しました。');
     }
 
     return true;
